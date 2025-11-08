@@ -4,9 +4,14 @@ const BACKEND = process.env.NIEMR_BACKEND_URL;
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
 const REFRESH_COOKIE = process.env.REFRESH_COOKIE || "niemr_refresh";
 
+function withTrailingSlash(p) {
+  return p.endsWith("/") ? p : p + "/";
+}
+
 async function forward(req, access) {
   const url = new URL(req.url);
-  const path = url.pathname.replace(/^\/api\/proxy/, "/api");
+  const rawPath = url.pathname.replace(/^\/api\/proxy/, "/api");
+  const path = withTrailingSlash(rawPath);              // <- enforce slash here
   const target = `${BACKEND}${path}${url.search}`;
 
   const headers = {};
@@ -42,7 +47,6 @@ async function handler(req) {
   let r = await forward(req, access);
   if (r.status !== 401) return pipe(r);
 
-  // Try one refresh
   const refresh = req.cookies.get(REFRESH_COOKIE)?.value || null;
   if (!refresh) return pipe(r);
 
@@ -52,7 +56,6 @@ async function handler(req) {
   });
   if (!refreshRes.ok) return pipe(r);
 
-  // Retry after refresh (cookie updated by refresh route)
   const retry = await forward(req, req.cookies.get(ACCESS_COOKIE)?.value || null);
   return pipe(retry);
 }
