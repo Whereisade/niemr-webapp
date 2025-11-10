@@ -21,7 +21,7 @@ export default function FacilityLoginPage() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             <Building2 className="h-3.5 w-3.5" />
-            Hospital / Facility Portal
+            Healthcare Facility Portal
           </div>
 
           <h1 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">
@@ -68,7 +68,7 @@ export default function FacilityLoginPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
-                    Facility Sign In
+                    Healthcare Facility Sign In
                   </h2>
                   <p className="text-xs text-slate-500">
                     Use your administrator or staff account.
@@ -77,7 +77,7 @@ export default function FacilityLoginPage() {
               </div>
             </div>
 
-            <AuthForm role="Hospital / Facility" redirectTo="/facility" />
+            <AuthForm role="Healthcare Facility" redirectTo="/facility" />
 
             <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
               <span className="inline-flex items-center gap-1">

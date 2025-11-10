@@ -17,7 +17,7 @@ export default function LoginChooser() {
   const cards = [
     {
       href: "/login/facility",
-      title: "Hospital / Facility",
+      title: "Healthcare Facility",
       desc: "For healthcare facilities and clinics that manage multiple providers, appointments, and records securely.",
       icon: Building2,
       accent: "from-blue-600/10 to-blue-600/20 text-blue-700",
