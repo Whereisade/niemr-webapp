@@ -1,87 +1,59 @@
-export const dynamic = "force-dynamic";
+"use client";
 
-function qs(obj) {
-  const u = new URLSearchParams();
-  Object.entries(obj).forEach(([k, v]) => (v ?? v === "" ? u.set(k, String(v)) : null));
-  const s = u.toString();
-  return s ? `?${s}` : "";
-}
+import { useSearchParams } from "next/navigation";
+import { useAppointments } from "@/lib/useAppointments";
 
-async function fetchList(path) {
-  try {
-    const r = await fetch(`/api/proxy${path}`, { cache: "no-store" });
-    if (!r.ok) return { items: [], next: null, prev: null };
-    const data = await r.json();
-    const items = Array.isArray(data) ? data : Array.isArray(data.results) ? data.results : [];
-    const next = data?.next ? Number(new URL(data.next).searchParams.get("page")) : null;
-    const prev = data?.previous ? Number(new URL(data.previous).searchParams.get("page")) : null;
-    return { items, next, prev };
-  } catch {
-    return { items: [], next: null, prev: null };
-  }
-}
+/**
+ * Provider list pulls your own (“mine”) appointments.
+ * You’ll now see /api/proxy/appointments/?mine=true... in DevTools and Django logs.
+ */
+export default function ProviderAppointmentsPage() {
+  const sp = useSearchParams();
+  const page   = Number(sp.get("page") || 1);
+  const limit  = Number(sp.get("limit") || 10);
+  const status = sp.get("status") || "";
+  const date   = sp.get("date")   || "today";
+  const q      = sp.get("q")      || "";
 
-export default async function ProviderAppointmentsPage({ searchParams: spPromise }) {
-  const sp = await spPromise; // 🔑 unwrap the promise
-  const page   = Number(sp?.page ?? 1);
-  const date   = sp?.date ?? "today";
-  const status = sp?.status ?? "";
-  const q      = sp?.q ?? "";
+  const { data, error, isLoading } = useAppointments({
+    page, limit, status, date, q, mine: "true",
+  });
 
-  const { items, next, prev } = await fetchList(`/appointments/${qs({ mine: true, page, limit: 20, date, status, q })}`);
+  if (isLoading) return <div className="p-6">Loading appointments…</div>;
+  if (error)     return <div className="p-6 text-red-600">Failed to load: {String(error.message || error)}</div>;
+
+  const rows = data?.results || [];
+  const total = data?.count || 0;
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">My Appointments</h1>
-        <p className="mt-1 text-slate-600">Provider view • filtered by your schedule.</p>
-      </header>
+    <div className="p-6">
+      <h1 className="text-xl font-semibold">Appointments</h1>
+      <p className="text-slate-600 text-sm mt-1">Total: {total}</p>
 
-      <form className="mb-5 grid gap-3 md:grid-cols-4" method="GET">
-        <input name="q" defaultValue={q} placeholder="Search reason/patient" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input name="date" defaultValue={date} placeholder="Date (e.g. today or 2025-11-10)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <select name="status" defaultValue={status} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">All statuses</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="checked_in">Checked in</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="no_show">No Show</option>
-        </select>
-        <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Apply</button>
-      </form>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-700">
-            <tr>
-              <th className="px-4 py-3">Patient</th>
-              <th className="px-4 py-3">Reason</th>
-              <th className="px-4 py-3">Time</th>
-              <th className="px-4 py-3">Status</th>
+      {/* TODO: replace this block with your existing table/list UI */}
+      <div className="mt-4 rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-slate-600">
+              <th className="p-3 text-left">Patient</th>
+              <th className="p-3 text-left">Date/Time</th>
+              <th className="p-3 text-left">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {items.length ? items.map(a => (
-              <tr key={a.id}>
-                <td className="px-4 py-3">{a.patient_name || a.patient?.full_name || "Patient"}</td>
-                <td className="px-4 py-3">{a.reason || "Consultation"}</td>
-                <td className="px-4 py-3">{a.start_time || a.time || "—"}</td>
-                <td className="px-4 py-3 capitalize">{a.status || "scheduled"}</td>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a.id} className="border-t">
+                <td className="p-3">{a.patient_name || a.patient || "—"}</td>
+                <td className="p-3">{a.scheduled_for || a.start_time || a.date || "—"}</td>
+                <td className="p-3">{a.status || "—"}</td>
               </tr>
-            )) : (
-              <tr><td className="px-4 py-6 text-slate-600" colSpan={4}>No appointments found.</td></tr>
+            ))}
+            {!rows.length && (
+              <tr><td className="p-3 text-slate-500" colSpan={3}>No appointments.</td></tr>
             )}
           </tbody>
         </table>
       </div>
-
-      <nav className="mt-4 flex items-center justify-between">
-        <a href={`?${new URLSearchParams({ q, date, status, page: String(Math.max(1, prev || 1)) }).toString()}`}
-           className={`text-sm ${prev ? "text-blue-700 hover:underline" : "text-slate-400 pointer-events-none"}`}>← Previous</a>
-        <a href={`?${new URLSearchParams({ q, date, status, page: String(next || page) }).toString()}`}
-           className={`text-sm ${next ? "text-blue-700 hover:underline" : "text-slate-400 pointer-events-none"}`}>Next →</a>
-      </nav>
-    </main>
+    </div>
   );
 }

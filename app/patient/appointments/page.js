@@ -1,87 +1,166 @@
-export const dynamic = "force-dynamic";
+"use client";
 
-function qs(obj) {
-  const u = new URLSearchParams();
-  Object.entries(obj).forEach(([k, v]) => (v ?? v === "" ? u.set(k, String(v)) : null));
-  const s = u.toString();
-  return s ? `?${s}` : "";
-}
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useAppointments } from "@/lib/useAppointments";
+import StatusBadge from "@/components/StatusBadge";
+import Paginator from "@/components/Paginator";
 
-async function fetchList(path) {
+function formatDateTime(value) {
+  if (!value) return "—";
   try {
-    const r = await fetch(`/api/proxy${path}`, { cache: "no-store" });
-    if (!r.ok) return { items: [], next: null, prev: null };
-    const data = await r.json();
-    const items = Array.isArray(data) ? data : Array.isArray(data.results) ? data.results : [];
-    const next = data?.next ? Number(new URL(data.next).searchParams.get("page")) : null;
-    const prev = data?.previous ? Number(new URL(data.previous).searchParams.get("page")) : null;
-    return { items, next, prev };
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString();
   } catch {
-    return { items: [], next: null, prev: null };
+    return String(value);
   }
 }
 
-export default async function PatientAppointmentsPage({ searchParams: spPromise }) {
-  const sp = await spPromise; // 🔑 unwrap the promise
-  const page   = Number(sp?.page ?? 1);
-  const date   = sp?.date ?? "";
-  const status = sp?.status ?? "";
-  const q      = sp?.q ?? "";
+export default function PatientAppointmentsPage() {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const { items, next, prev } = await fetchList(`/appointments/${qs({ mine: true, page, limit: 20, date, status, q })}`);
+  const page   = Number(sp.get("page") || 1);
+  const limit  = Number(sp.get("limit") || 10);
+  const status = sp.get("status") || "";
+  const q      = sp.get("q")      || "";
+
+  // Backend already scopes by PATIENT user, so no need for mine=true
+  const { data, error, isLoading } = useAppointments({
+    page,
+    limit,
+    status,
+    q,
+  });
+
+  const rows = Array.isArray(data?.results)
+    ? data.results
+    : Array.isArray(data)
+    ? data
+    : [];
+  const total = Number(data?.count ?? rows.length);
+
+  const updateQuery = (patch) => {
+    const params = new URLSearchParams(sp?.toString() || "");
+    Object.entries(patch).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") {
+        params.delete(k);
+      } else {
+        params.set(k, String(v));
+      }
+    });
+    // reset page on filter changes
+    if ("status" in patch || "q" in patch) {
+      params.set("page", "1");
+    }
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  if (isLoading && !data) {
+    return (
+      <main className="mx-auto max-w-7xl p-6 md:p-10">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+          My Appointments
+        </h1>
+        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
+          Loading appointments…
+        </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-7xl p-6 md:p-10">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+          My Appointments
+        </h1>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          Failed to load: {error.message || "Unknown error"}
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">My Appointments</h1>
-        <p className="mt-1 text-slate-600">Patient view • your upcoming and past visits.</p>
+    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
+      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+            My Appointments
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            View your upcoming and past appointments.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            type="search"
+            placeholder="Search reason or notes…"
+            defaultValue={q}
+            onBlur={(e) => updateQuery({ q: e.target.value })}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
+          />
+          <select
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
+            value={status}
+            onChange={(e) => updateQuery({ status: e.target.value })}
+          >
+            <option value="">All statuses</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="checked_in">Checked In</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="no_show">No-show</option>
+          </select>
+        </div>
       </header>
 
-      <form className="mb-5 grid gap-3 md:grid-cols-4" method="GET">
-        <input name="q" defaultValue={q} placeholder="Search reason/provider" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input name="date" defaultValue={date} placeholder="Date (e.g. 2025-11-10)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <select name="status" defaultValue={status} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">All statuses</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="checked_in">Checked in</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="no_show">No Show</option>
-        </select>
-        <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Apply</button>
-      </form>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-700">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-4 py-3">Provider</th>
-              <th className="px-4 py-3">Reason</th>
-              <th className="px-4 py-3">Time</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Doctor / Provider
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                When
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Status
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {items.length ? items.map(a => (
-              <tr key={a.id}>
-                <td className="px-4 py-3">{a.provider_name || a.provider?.full_name || "Provider"}</td>
-                <td className="px-4 py-3">{a.reason || "Consultation"}</td>
-                <td className="px-4 py-3">{a.start_time || a.time || "—"}</td>
-                <td className="px-4 py-3 capitalize">{a.status || "scheduled"}</td>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {rows.map((a) => (
+              <tr key={a.id} className="hover:bg-slate-50">
+                <td className="p-3 text-sm text-slate-800">
+                  {a.provider_name || a.provider || "—"}
+                </td>
+                <td className="p-3 text-sm text-slate-800">
+                  {formatDateTime(a.start_at || a.scheduled_for || a.date)}
+                </td>
+                <td className="p-3 text-sm">
+                  <StatusBadge value={a.status} />
+                </td>
               </tr>
-            )) : (
-              <tr><td className="px-4 py-6 text-slate-600" colSpan={4}>No appointments found.</td></tr>
+            ))}
+
+            {!rows.length && (
+              <tr>
+                <td className="p-4 text-center text-sm text-slate-500" colSpan={3}>
+                  No appointments found.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <nav className="mt-4 flex items-center justify-between">
-        <a href={`?${new URLSearchParams({ q, date, status, page: String(Math.max(1, prev || 1)) }).toString()}`}
-           className={`text-sm ${prev ? "text-blue-700 hover:underline" : "text-slate-400 pointer-events-none"}`}>← Previous</a>
-        <a href={`?${new URLSearchParams({ q, date, status, page: String(next || page) }).toString()}`}
-           className={`text-sm ${next ? "text-blue-700 hover:underline" : "text-slate-400 pointer-events-none"}`}>Next →</a>
-      </nav>
+      <Paginator page={page} total={total} perPage={limit} />
     </main>
   );
 }
