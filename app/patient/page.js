@@ -1,6 +1,7 @@
 // app/patient/page.js
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import {
   CalendarRange,
   BellRing,
@@ -8,6 +9,8 @@ import {
   ArrowRight,
   ChevronRight,
   UserRound,
+  FileText,
+  Plus,
 } from "lucide-react";
 
 async function safeFetchJSON(path, fallback) {
@@ -49,13 +52,36 @@ export default async function PatientDashboard() {
   ];
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10">
+    <main className="relative mx-auto max-w-7xl p-6 md:p-10">
+      {/* soft background accents for consistency */}
+      <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100 blur-3xl opacity-60" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100 blur-3xl opacity-60" />
+
       {/* Header */}
-      <header className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-          Patient Home
-        </h1>
-        <p className="mt-1 text-slate-600">Upcoming visits and recent messages.</p>
+      <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
+            Patient Portal
+          </div>
+          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+            Patient Home
+          </h1>
+          <p className="mt-1 text-slate-600">Upcoming visits and recent messages.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/patient/encounters"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+          >
+            My Encounters
+          </Link>
+          <Link
+            href="/patient/vitals"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+          >
+            My Vitals
+          </Link>
+        </div>
       </header>
 
       {/* Stat tiles + CTA */}
@@ -83,7 +109,7 @@ export default async function PatientDashboard() {
           </a>
         ))}
 
-        {/* Appointments shortcut (kept your link, upgraded UI) */}
+        {/* Appointments shortcut */}
         <a
           href="/patient/appointments"
           className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
@@ -96,9 +122,7 @@ export default async function PatientDashboard() {
                 <ClipboardList className="h-5 w-5 text-slate-700" />
               </div>
             </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
-              View all
-            </div>
+            <div className="mt-2 text-lg font-semibold text-slate-900">View all</div>
             <div className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-700">
               Go to list
               <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -107,65 +131,103 @@ export default async function PatientDashboard() {
         </a>
       </section>
 
-      {/* Upcoming appointments */}
-      <section className="mb-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <CardHead
-          title="My Upcoming Appointments"
-          href="/patient/appointments"
-          icon={CalendarRange}
-          actionLabel="View all"
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-700">
-              <tr>
-                <Th>Provider</Th>
-                <Th>Reason</Th>
-                <Th>Time</Th>
-                <Th>Status</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {appts.length ? (
-                appts.map((a) => (
-                  <tr key={a.id}>
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
-                          <UserRound className="h-4 w-4 text-blue-700" />
-                        </span>
-                        <span>{a.provider_name || a.provider?.full_name || "Provider"}</span>
-                      </div>
-                    </Td>
-                    <Td className="text-slate-600">{a.reason || "Consultation"}</Td>
-                    <Td>
-                      <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                        {a.start_time || a.time || "—"}
-                      </span>
-                    </Td>
-                    <Td className="capitalize">{a.status || "scheduled"}</Td>
-                  </tr>
-                ))
-              ) : (
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Upcoming appointments */}
+        <section className="lg:col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHead
+            title="My Upcoming Appointments"
+            href="/patient/appointments"
+            icon={CalendarRange}
+            actionLabel="View all"
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-700">
                 <tr>
-                  <td colSpan={4}>
-                    <EmptyState
-                      icon={CalendarRange}
-                      title="No upcoming appointments"
-                      subtitle="Booked visits will appear here automatically."
-                      ctaHref="/patient/appointments"
-                      ctaLabel="View appointments"
-                    />
-                  </td>
+                  <Th>Provider</Th>
+                  <Th>Reason</Th>
+                  <Th>Time</Th>
+                  <Th>Status</Th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {appts.length ? (
+                  appts.map((a) => (
+                    <tr key={a.id} className="transition hover:bg-slate-50/60">
+                      <Td>
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
+                            <UserRound className="h-4 w-4 text-blue-700" />
+                          </span>
+                          <span className="font-medium text-slate-900">
+                            {a.provider_name || a.provider?.full_name || "Provider"}
+                          </span>
+                        </div>
+                      </Td>
+                      <Td className="text-slate-600">{a.reason || "Consultation"}</Td>
+                      <Td>
+                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                          {a.start_time || a.time || "—"}
+                        </span>
+                      </Td>
+                      <Td>
+                        <StatusPill value={a.status || "scheduled"} />
+                      </Td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4}>
+                      <EmptyState
+                        icon={CalendarRange}
+                        title="No upcoming appointments"
+                        subtitle="Booked visits will appear here automatically."
+                        ctaHref="/patient/appointments"
+                        ctaLabel="View appointments"
+                      />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Right rail: quick actions + records shortcut */}
+        <aside className="space-y-6">
+          {/* Quick actions */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+            <div className="p-5">
+              <h3 className="text-slate-900 font-medium">Quick Actions</h3>
+              <p className="mt-1 text-sm text-slate-600">Get things done faster.</p>
+              <div className="mt-4 grid gap-2">
+                <QuickLink href="/appointments/new" icon={Plus} label="Book Appointment" />
+                <QuickLink href="/records" icon={FileText} label="View Records" />
+                <QuickLink href="/profile" icon={UserRound} label="Update Profile" />
+              </div>
+            </div>
+          </div>
+
+          {/* Records highlight (dummy) */}
+          <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
+            <div className="text-slate-900 font-semibold">Download recent results</div>
+            <p className="mt-1 text-sm text-slate-600">
+              Get your latest labs, imaging, and prescriptions in one place.
+            </p>
+            <Link
+              href="/records"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+            >
+              Open Records
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </aside>
+      </div>
 
       {/* Notifications */}
-      <section>
+      <section className="mt-10">
         <CardHead
           title="Recent Notifications"
           href="/patient/notifications"
@@ -244,4 +306,36 @@ function Th({ children }) {
 }
 function Td({ children, className = "" }) {
   return <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>;
+}
+
+function StatusPill({ value }) {
+  const v = String(value || "").toUpperCase();
+  const map = {
+    SCHEDULED: "bg-slate-50 text-slate-700 ring-slate-200",
+    CHECK_IN: "bg-blue-50 text-blue-700 ring-blue-200",
+    COMPLETE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
+  };
+  const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
+  const label = (v || "—").replaceAll("_", " ");
+  return (
+    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function QuickLink({ href, icon: Icon, label }) {
+  return (
+    <Link
+      href={href}
+      className="group inline-flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 hover:border-blue-200 hover:text-blue-700"
+    >
+      <span className="inline-flex items-center gap-2">
+        <Icon className="h-4 w-4" />
+        {label}
+      </span>
+      <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+    </Link>
+  );
 }

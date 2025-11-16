@@ -4,6 +4,15 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
 import StatusBadge from "@/components/StatusBadge";
 import Paginator from "@/components/Paginator";
+import {
+  CalendarRange,
+  Search,
+  Filter,
+  RefreshCw,
+  Users2,
+  Stethoscope,
+  ChevronRight,
+} from "lucide-react";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -26,13 +35,8 @@ export default function FacilityAppointmentsPage() {
   const status = sp.get("status") || "";
   const q      = sp.get("q")      || "";
 
-  // For facility logins, backend auto-filters by facility_id on the user
-  const { data, error, isLoading } = useAppointments({
-    page,
-    limit,
-    status,
-    q,
-  });
+  // Facility logins auto-scope by user.facility_id on the backend
+  const { data, error, isLoading } = useAppointments({ page, limit, status, q });
 
   const rows = Array.isArray(data?.results)
     ? data.results
@@ -44,128 +48,239 @@ export default function FacilityAppointmentsPage() {
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
     Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") {
-        params.delete(k);
-      } else {
-        params.set(k, String(v));
-      }
+      if (v === undefined || v === null || v === "") params.delete(k);
+      else params.set(k, String(v));
     });
-    if ("status" in patch || "q" in patch) {
+    if ("status" in patch || "q" in patch || "limit" in patch) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  if (isLoading && !data) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          Facility Appointments
-        </h1>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
-          Loading appointments…
-        </div>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          Facility Appointments
-        </h1>
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
+    <main className="relative mx-auto max-w-7xl p-6 md:p-10 space-y-6">
+      {/* soft bg accents to match the rest of the app */}
+      <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100 blur-3xl opacity-60" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100 blur-3xl opacity-60" />
+
+      {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
+            <CalendarRange className="h-3.5 w-3.5" />
+            Facility · Appointments
+          </div>
+          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
             Facility Appointments
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-600">
             All appointments scheduled for this facility.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="search"
-            placeholder="Search reason or notes…"
-            defaultValue={q}
-            onBlur={(e) => updateQuery({ q: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
+        {/* quick stats */}
+        <div className="flex flex-wrap gap-2">
+          <Chip icon={CalendarRange} label="Total" value={total} />
+          <Chip icon={Users2} label="Page" value={page} />
+          <button
+            onClick={() => updateQuery({})}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-blue-200 hover:text-blue-700"
           >
-            <option value="">All statuses</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="checked_in">Checked In</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="no_show">No-show</option>
-          </select>
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
         </div>
       </header>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Patient
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Provider
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                When
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((a) => (
-              <tr key={a.id} className="hover:bg-slate-50">
-                <td className="p-3 text-sm text-slate-800">
-                  {a.patient_name || a.patient || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {a.provider_name || a.provider || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {formatDateTime(a.start_at || a.scheduled_for || a.date)}
-                </td>
-                <td className="p-3 text-sm">
-                  <StatusBadge value={a.status} />
-                </td>
-              </tr>
-            ))}
+      {/* Toolbar */}
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+        <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+          {/* search */}
+          <div className="relative w-full md:max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="search"
+              placeholder="Search patient / reason / notes…"
+              defaultValue={q}
+              onKeyDown={(e) => e.key === "Enter" && updateQuery({ q: e.currentTarget.value })}
+              onBlur={(e) => updateQuery({ q: e.currentTarget.value })}
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
 
-            {!rows.length && (
+          {/* filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <Filter className="h-4 w-4 text-slate-400" />
+              <span className="text-slate-600">Filters</span>
+            </div>
+
+            <select
+              value={status}
+              onChange={(e) => updateQuery({ status: e.target.value })}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            >
+              <option value="">All statuses</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="checked_in">Checked In</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="no_show">No-show</option>
+            </select>
+
+            <select
+              value={String(limit)}
+              onChange={(e) => updateQuery({ limit: e.target.value })}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            >
+              <option value="10">Show 10</option>
+              <option value="20">Show 20</option>
+              <option value="50">Show 50</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Table card */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <CardHead
+          title="All Appointments"
+          subtitle={`Showing ${rows.length} of ${total}`}
+        />
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-700">
               <tr>
-                <td className="p-4 text-center text-sm text-slate-500" colSpan={4}>
-                  No appointments found.
-                </td>
+                <Th>Patient</Th>
+                <Th>Provider</Th>
+                <Th>When</Th>
+                <Th>Status</Th>
+                <Th className="text-right">Action</Th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading && !data ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-slate-600">Loading appointments…</td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-rose-700 bg-rose-50">
+                    Failed to load: {error.message || "Unknown error"}
+                  </td>
+                </tr>
+              ) : rows.length ? (
+                rows.map((a) => (
+                  <tr key={a.id} className="transition hover:bg-slate-50/60">
+                    <Td className="font-medium text-slate-900">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
+                          <Users2 className="h-4 w-4 text-blue-700" />
+                        </span>
+                        {a.patient_name || a.patient || "—"}
+                      </span>
+                    </Td>
+                    <Td className="text-slate-700">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100">
+                          <Stethoscope className="h-4 w-4 text-slate-700" />
+                        </span>
+                        {a.provider_name || a.provider || "—"}
+                      </span>
+                    </Td>
+                    <Td>
+                      <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                        {formatDateTime(a.start_at || a.scheduled_for || a.date)}
+                      </span>
+                    </Td>
+                    <Td>
+                      <StatusBadge value={a.status} />
+                    </Td>
+                    <Td className="text-right">
+                      <a
+                        href={`/facility/appointments/${a.id}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                      >
+                        Open
+                        <ChevronRight className="h-4 w-4" />
+                      </a>
+                    </Td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="p-8">
+                    <EmptyState
+                      title="No appointments found"
+                      subtitle="Try adjusting your search or status filters."
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      <Paginator page={page} total={total} perPage={limit} />
+        {/* Footer pager */}
+        <div className="border-t border-slate-100 px-4 py-3">
+          <Paginator page={page} total={total} perPage={limit} />
+        </div>
+      </section>
     </main>
+  );
+}
+
+/* ─────────────── UI helpers ─────────────── */
+
+function CardHead({ title, subtitle }) {
+  return (
+    <div className="flex items-center justify-between p-5 border-b border-slate-200/70">
+      <div>
+        <div className="flex items-center gap-2">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
+            <CalendarRange className="h-5 w-5 text-slate-700" />
+          </div>
+          <h2 className="text-slate-900 font-medium">{title}</h2>
+        </div>
+        {subtitle ? (
+          <div className="ml-11 text-xs text-slate-500">{subtitle}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function Th({ children, className = "" }) {
+  return (
+    <th className={`px-4 py-3 text-xs font-medium uppercase tracking-wide ${className}`}>
+      {children}
+    </th>
+  );
+}
+function Td({ children, className = "" }) {
+  return <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>;
+}
+
+function EmptyState({ title, subtitle }) {
+  return (
+    <div className="py-8 text-center">
+      <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+        <CalendarRange className="h-6 w-6 text-slate-400" />
+      </div>
+      <div className="text-sm font-medium text-slate-900">{title}</div>
+      {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
+    </div>
+  );
+}
+
+function Chip({ icon: Icon, label, value }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+      {Icon ? <Icon className="h-4 w-4 text-slate-400" /> : null}
+      <span className="text-slate-600">{label}</span>
+      <span className="font-semibold text-slate-900">{value}</span>
+    </div>
   );
 }
