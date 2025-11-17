@@ -102,6 +102,12 @@ export default async function ProviderDashboard() {
           >
             View Lab Orders
           </Link>
+          <Link
+            href="/provider/imaging"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            View Imaging Requests
+          </Link>
         </div>
       </header>
 
