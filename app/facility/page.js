@@ -123,6 +123,13 @@ export default async function FacilityDashboard() {
           >
             Facility Notifications
           </Link>
+
+          <Link
+            href="/facility/billing"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            Facility Billing
+          </Link>
         </div>
       </header>
 

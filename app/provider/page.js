@@ -252,6 +252,13 @@ export default async function ProviderDashboard() {
                 >
                   Notifications
                 </Link>
+
+                <Link
+                  href="/provider/billing"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Billing – Charges
+                </Link>
               </div>
             </div>
           </div>
