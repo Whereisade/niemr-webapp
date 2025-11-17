@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCharges } from "@/lib/useCharges";
+import { useBillingLedger } from "@/lib/useBillingLedger";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -18,7 +19,10 @@ function formatMoney(v) {
   if (v === null || v === undefined) return "—";
   const n = Number(v);
   if (Number.isNaN(n)) return String(v);
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function FacilityBillingPage() {
@@ -39,6 +43,17 @@ export default function FacilityBillingPage() {
     patient,
     s,
   });
+
+  const hasPatient = Boolean(patient);
+
+  const {
+    data: ledger,
+    error: ledgerError,
+    isLoading: ledgerLoading,
+  } = useBillingLedger(
+    hasPatient ? { patient } : {},
+    { enabled: hasPatient }
+  );
 
   const rows = Array.isArray(data?.results)
     ? data.results
@@ -61,6 +76,14 @@ export default function FacilityBillingPage() {
     }
     router.push(`${pathname}?${params.toString()}`);
   };
+
+  const rawCharges =
+    ledger?.charges_total ??
+    (ledger && ledger["charges...al"]) ??
+    0;
+  const rawPayments = ledger?.payments_total ?? 0;
+  const rawBalance =
+    ledger?.balance ?? (Number(rawCharges) - Number(rawPayments));
 
   if (isLoading && !data) {
     return (
@@ -90,13 +113,14 @@ export default function FacilityBillingPage() {
 
   return (
     <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
+      {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
             Facility Billing – Charges
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Charges raised for all patients in this facility.
+            Charges raised for all patients in this facility. Enter a patient to view their balance.
           </p>
         </div>
 
@@ -138,6 +162,50 @@ export default function FacilityBillingPage() {
         </div>
       </header>
 
+      {/* Ledger summary */}
+      {hasPatient ? (
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Patient Charges
+            </p>
+            <p className="mt-2 text-xl font-semibold text-slate-900">
+              {ledgerLoading ? "…" : `₦${formatMoney(rawCharges)}`}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Patient Payments
+            </p>
+            <p className="mt-2 text-xl font-semibold text-emerald-700">
+              {ledgerLoading ? "…" : `₦${formatMoney(rawPayments)}`}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Patient Balance
+            </p>
+            <p
+              className={`mt-2 text-xl font-semibold ${
+                Number(rawBalance) > 0 ? "text-rose-600" : "text-emerald-700"
+              }`}
+            >
+              {ledgerLoading ? "…" : `₦${formatMoney(rawBalance)}`}
+            </p>
+            {ledgerError && (
+              <p className="mt-1 text-xs text-rose-600">
+                {ledgerError.message}
+              </p>
+            )}
+          </div>
+        </section>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Enter a <span className="font-semibold">patient ID</span> to view their running balance.
+        </div>
+      )}
+
+      {/* Charges table (same as before) */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
@@ -194,6 +262,7 @@ export default function FacilityBillingPage() {
         </table>
       </div>
 
+      {/* Pager */}
       <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
         <div>
           Page {page} · {total} total
