@@ -223,6 +223,20 @@ export default async function PatientDashboard() {
                 >
                   My Lab Tests
                 </Link>
+
+                <Link
+                  href="/patient/pharmacy"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  My Prescriptions
+                </Link>
+
+                <Link
+                  href="/patient/notifications"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  My Notifications
+                </Link>
               </div>
             </div>
           </div>

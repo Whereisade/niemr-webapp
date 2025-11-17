@@ -238,6 +238,20 @@ export default async function ProviderDashboard() {
                 <QuickLink href="/labs/new" icon={FileText} label="Order Lab" />
                 <QuickLink href="/imaging/new" icon={ClipboardList} label="Request Imaging" />
                 <QuickLink href="/pharmacy/prescriptions/new" icon={Pill} label="Write e-Rx" />
+
+                <Link
+                  href="/provider/pharmacy"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  View Prescriptions
+                </Link>
+
+                <Link
+                  href="/provider/notifications"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Notifications
+                </Link>
               </div>
             </div>
           </div>
