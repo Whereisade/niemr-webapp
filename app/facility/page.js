@@ -2,6 +2,8 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { cookies } from "next/headers";
+import GreetingLine from "@/components/GreetingLine";
 import {
   CalendarRange,
   Users2,
@@ -18,26 +20,72 @@ import {
   Plus,
 } from "lucide-react";
 
+const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
+const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
+
 async function safeFetchJSON(path, fallback) {
   try {
-    const r = await fetch(`/api/proxy${path.endsWith("/") ? path : path + "/"}`, { cache: "no-store" });
-    if (!r.ok) return fallback;
-    return await r.json();
+    const res = await fetch(`/api/proxy${path}`, { cache: "no-store" });
+    if (!res.ok) return fallback;
+    return await res.json();
   } catch {
     return fallback;
   }
 }
 
-export default async function FacilityDashboard() {
-  const [notifications, todaysAppointments, providers] = await Promise.all([
-    safeFetchJSON("/notifications/items/?since=7d", []),
-    safeFetchJSON("/appointments/?date=today&limit=10", []),
-    safeFetchJSON("/providers/?limit=5", []), // harmless if perms required
-  ]);
+async function fetchMe() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ACCESS_COOKIE)?.value;
+  if (!token) return null;
 
-  const notifList = Array.isArray(notifications) ? notifications : (notifications?.results || []);
-  const appts     = Array.isArray(todaysAppointments) ? todaysAppointments : (todaysAppointments?.results || []);
-  const provs     = Array.isArray(providers) ? providers : (providers?.results || []);
+  try {
+    const res = await fetch(`${BACKEND}/api/accounts/me/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export default async function FacilityDashboard() {
+  const [notifications, todaysAppointments, providers, me] = await Promise.all(
+    [
+      safeFetchJSON("/notifications/items/?since=7d", []),
+      safeFetchJSON("/appointments/?date=today&limit=10", []),
+      safeFetchJSON("/providers/?limit=5", []),
+      fetchMe(),
+    ]
+  );
+
+  const notifList = Array.isArray(notifications)
+    ? notifications
+    : notifications?.results || [];
+
+  const appts = Array.isArray(todaysAppointments)
+    ? todaysAppointments
+    : todaysAppointments?.results || [];
+
+  const provs = Array.isArray(providers)
+    ? providers
+    : providers?.results || [];
+
+  const greetingName =
+    [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
+    me?.email ||
+    "";
+
+  const facilityName = me?.facility?.name || "";
+
+  const greetingTarget = facilityName
+    ? greetingName
+      ? `${greetingName} · ${facilityName}`
+      : facilityName
+    : greetingName;
 
   const stats = [
     {
@@ -79,9 +127,10 @@ export default async function FacilityDashboard() {
             <Building2 className="h-3.5 w-3.5" />
             Facility Workspace
           </div>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Facility Home
-          </h1>
+          <GreetingLine
+            name={greetingTarget}
+            className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
+          />
           <p className="mt-1 text-slate-600">Snapshot across your clinic.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -156,7 +205,9 @@ export default async function FacilityDashboard() {
                   <Icon className="h-5 w-5 text-slate-700" />
                 </div>
               </div>
-              <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
+              <div className="mt-2 text-3xl font-semibold text-slate-900">
+                {value}
+              </div>
               <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-blue-700">
                 {cta}
                 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -234,12 +285,21 @@ export default async function FacilityDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {appts.length ? (
                   appts.map((a) => (
-                    <tr key={a.id} className="transition hover:bg-slate-50/60">
+                    <tr
+                      key={a.id}
+                      className="transition hover:bg-slate-50/60"
+                    >
                       <Td className="font-medium text-slate-900">
                         {a.patient_name || a.patient?.full_name || "Patient"}
                       </Td>
-                      <Td>{a.provider_name || a.provider?.full_name || "Provider"}</Td>
-                      <Td className="text-slate-600">{a.reason || "Consultation"}</Td>
+                      <Td>
+                        {a.provider_name ||
+                          a.provider?.full_name ||
+                          "Provider"}
+                      </Td>
+                      <Td className="text-slate-600">
+                        {a.reason || "Consultation"}
+                      </Td>
                       <Td>
                         <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           {a.start_time || a.time || "—"}
@@ -275,12 +335,26 @@ export default async function FacilityDashboard() {
             <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
             <div className="p-5">
               <h3 className="text-slate-900 font-medium">Quick Actions</h3>
-              <p className="mt-1 text-sm text-slate-600">Jump into common workflows.</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Jump into common workflows.
+              </p>
               <div className="mt-4 grid gap-2">
-                <QuickLink href="/encounters/new" icon={Stethoscope} label="New Encounter" />
-                <QuickLink href="/facility/appointments/new" icon={CalendarRange} label="Schedule Appointment" />
+                <QuickLink
+                  href="/encounters/new"
+                  icon={Stethoscope}
+                  label="New Encounter"
+                />
+                <QuickLink
+                  href="/facility/appointments/new"
+                  icon={CalendarRange}
+                  label="Schedule Appointment"
+                />
                 <QuickLink href="/labs/new" icon={FileText} label="Order Lab" />
-                <QuickLink href="/imaging/new" icon={ClipboardList} label="Request Imaging" />
+                <QuickLink
+                  href="/imaging/new"
+                  icon={ClipboardList}
+                  label="Request Imaging"
+                />
               </div>
             </div>
           </div>
@@ -296,14 +370,21 @@ export default async function FacilityDashboard() {
             <ul className="divide-y divide-slate-100">
               {provs.length ? (
                 provs.map((p, i) => (
-                  <li key={p.id || i} className="flex items-center justify-between p-4">
+                  <li
+                    key={p.id || i}
+                    className="flex items-center justify-between p-4"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
                         <Stethoscope className="h-5 w-5 text-slate-700" />
                       </div>
                       <div>
-                        <div className="font-medium text-slate-900">{p.full_name || p.name || "Provider"}</div>
-                        <div className="text-xs text-slate-500">{p.provider_type || "—"}</div>
+                        <div className="font-medium text-slate-900">
+                          {p.full_name || p.name || "Provider"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {p.provider_type || "—"}
+                        </div>
                       </div>
                     </div>
                     <Link
@@ -316,7 +397,9 @@ export default async function FacilityDashboard() {
                 ))
               ) : (
                 <li className="p-6">
-                  <div className="text-sm text-slate-600">No providers to show.</div>
+                  <div className="text-sm text-slate-600">
+                    No providers to show.
+                  </div>
                 </li>
               )}
             </ul>
@@ -331,14 +414,24 @@ export default async function FacilityDashboard() {
                   <ShieldCheck className="h-5 w-5 text-emerald-700" />
                 </div>
                 <div>
-                  <h3 className="text-slate-900 font-medium">Compliance & Backups</h3>
-                  <p className="text-xs text-slate-500">Auto-backups enabled; data retention set to 24 months.</p>
+                  <h3 className="text-slate-900 font-medium">
+                    Compliance & Backups
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Auto-backups enabled; data retention set to 24 months.
+                  </p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <span className="rounded-lg border border-slate-200 px-3 py-2">Last backup: <b>02:40</b></span>
-                <span className="rounded-lg border border-slate-200 px-3 py-2">Retention: <b>24 mo</b></span>
-                <span className="rounded-lg border border-slate-200 px-3 py-2 col-span-2">Encryption: <b>AES-256 at rest</b></span>
+                <span className="rounded-lg border border-slate-200 px-3 py-2">
+                  Last backup: <b>02:40</b>
+                </span>
+                <span className="rounded-lg border border-slate-200 px-3 py-2">
+                  Retention: <b>24 mo</b>
+                </span>
+                <span className="rounded-lg border border-slate-200 px-3 py-2 col-span-2">
+                  Encryption: <b>AES-256 at rest</b>
+                </span>
               </div>
             </div>
           </div>
@@ -361,12 +454,16 @@ export default async function FacilityDashboard() {
                   <div className="font-medium text-slate-900">
                     {n.title || n.kind || "Notification"}
                   </div>
-                  <div className="text-slate-600">{n.body || n.message || ""}</div>
+                  <div className="text-slate-600">
+                    {n.body || n.message || ""}
+                  </div>
                 </li>
               ))
             ) : (
               <li className="p-6">
-                <div className="text-sm text-slate-600">No recent notifications.</div>
+                <div className="text-sm text-slate-600">
+                  No recent notifications.
+                </div>
               </li>
             )}
           </ul>
@@ -378,9 +475,12 @@ export default async function FacilityDashboard() {
         <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
           <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
             <div>
-              <h3 className="text-slate-900 font-semibold">Need to add a new service?</h3>
+              <h3 className="text-slate-900 font-semibold">
+                Need to add a new service?
+              </h3>
               <p className="text-sm text-slate-600">
-                Expand your catalog for orders, imaging, pharmacy, and billing in a few clicks.
+                Expand your catalog for orders, imaging, pharmacy, and billing in
+                a few clicks.
               </p>
             </div>
             <Link
@@ -408,7 +508,10 @@ function CardHead({ title, href, icon: Icon, actionLabel }) {
         </div>
         <h2 className="font-medium text-slate-900">{title}</h2>
       </div>
-      <a className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline" href={href}>
+      <a
+        className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline"
+        href={href}
+      >
         {actionLabel}
         <ArrowRight className="h-4 w-4" />
       </a>
@@ -423,7 +526,9 @@ function EmptyState({ icon: Icon, title, subtitle, ctaHref, ctaLabel }) {
         <Icon className="h-6 w-6 text-slate-400" />
       </div>
       <div className="text-sm font-medium text-slate-900">{title}</div>
-      {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
+      {subtitle ? (
+        <div className="mt-1 text-sm text-slate-500">{subtitle}</div>
+      ) : null}
       {ctaHref && ctaLabel ? (
         <div className="mt-4">
           <a
@@ -446,8 +551,15 @@ function Th({ children }) {
     </th>
   );
 }
+
 function Td({ children, className = "" }) {
-  return <td className={`px-4 py-3 align-middle text-sm text-slate-700 ${className}`}>{children}</td>;
+  return (
+    <td
+      className={`px-4 py-3 align-middle text-sm text-slate-700 ${className}`}
+    >
+      {children}
+    </td>
+  );
 }
 
 function StatusPill({ value }) {
@@ -461,7 +573,9 @@ function StatusPill({ value }) {
   const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
   const label = (v || "—").replaceAll("_", " ");
   return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+    >
       {label}
     </span>
   );

@@ -2,6 +2,8 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { cookies } from "next/headers";
+import GreetingLine from "@/components/GreetingLine";
 import {
   CalendarRange,
   BellRing,
@@ -13,24 +15,57 @@ import {
   Plus,
 } from "lucide-react";
 
+const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
+const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
+
 async function safeFetchJSON(path, fallback) {
   try {
-    const r = await fetch(`/api/proxy${path.endsWith("/") ? path : path + "/"}`, { cache: "no-store" });
-    if (!r.ok) return fallback;
-    return await r.json();
+    const res = await fetch(`/api/proxy${path}`, { cache: "no-store" });
+    if (!res.ok) return fallback;
+    return await res.json();
   } catch {
     return fallback;
   }
 }
 
+async function fetchMe() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ACCESS_COOKIE)?.value;
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${BACKEND}/api/accounts/me/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export default async function PatientDashboard() {
-  const [myAppointments, notifications] = await Promise.all([
+  const [myAppointments, notifications, me] = await Promise.all([
     safeFetchJSON("/appointments/?mine=true&limit=10", []),
     safeFetchJSON("/notifications/items/?since=7d", []),
+    fetchMe(),
   ]);
 
-  const appts     = Array.isArray(myAppointments) ? myAppointments : (myAppointments?.results || []);
-  const notifList = Array.isArray(notifications) ? notifications : (notifications?.results || []);
+  const appts = Array.isArray(myAppointments)
+    ? myAppointments
+    : myAppointments?.results || [];
+
+  const notifList = Array.isArray(notifications)
+    ? notifications
+    : notifications?.results || [];
+
+  const greetingName =
+    [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
+    me?.email ||
+    "";
 
   const stats = [
     {
@@ -53,7 +88,7 @@ export default async function PatientDashboard() {
 
   return (
     <main className="relative mx-auto max-w-7xl p-6 md:p-10">
-      {/* soft background accents for consistency */}
+      {/* soft background accents */}
       <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100 blur-3xl opacity-60" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100 blur-3xl opacity-60" />
 
@@ -63,10 +98,13 @@ export default async function PatientDashboard() {
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             Patient Portal
           </div>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Patient Home
-          </h1>
-          <p className="mt-1 text-slate-600">Upcoming visits and recent messages.</p>
+          <GreetingLine
+            name={greetingName}
+            className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
+          />
+          <p className="mt-1 text-slate-600">
+            Upcoming visits and recent messages.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
@@ -112,7 +150,9 @@ export default async function PatientDashboard() {
                   <Icon className="h-5 w-5 text-slate-700" />
                 </div>
               </div>
-              <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
+              <div className="mt-2 text-3xl font-semibold text-slate-900">
+                {value}
+              </div>
               <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-blue-700">
                 {cta}
                 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -134,7 +174,9 @@ export default async function PatientDashboard() {
                 <ClipboardList className="h-5 w-5 text-slate-700" />
               </div>
             </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">View all</div>
+            <div className="mt-2 text-lg font-semibold text-slate-900">
+              View all
+            </div>
             <div className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-700">
               Go to list
               <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -165,18 +207,25 @@ export default async function PatientDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {appts.length ? (
                   appts.map((a) => (
-                    <tr key={a.id} className="transition hover:bg-slate-50/60">
+                    <tr
+                      key={a.id}
+                      className="transition hover:bg-slate-50/60"
+                    >
                       <Td>
                         <div className="flex items-center gap-2">
                           <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
                             <UserRound className="h-4 w-4 text-blue-700" />
                           </span>
                           <span className="font-medium text-slate-900">
-                            {a.provider_name || a.provider?.full_name || "Provider"}
+                            {a.provider_name ||
+                              a.provider?.full_name ||
+                              "Provider"}
                           </span>
                         </div>
                       </Td>
-                      <Td className="text-slate-600">{a.reason || "Consultation"}</Td>
+                      <Td className="text-slate-600">
+                        {a.reason || "Consultation"}
+                      </Td>
                       <Td>
                         <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           {a.start_time || a.time || "—"}
@@ -212,9 +261,15 @@ export default async function PatientDashboard() {
             <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
             <div className="p-5">
               <h3 className="text-slate-900 font-medium">Quick Actions</h3>
-              <p className="mt-1 text-sm text-slate-600">Get things done faster.</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Get things done faster.
+              </p>
               <div className="mt-4 grid gap-2">
-                <QuickLink href="/appointments/new" icon={Plus} label="Book Appointment" />
+                <QuickLink
+                  href="/appointments/new"
+                  icon={Plus}
+                  label="Book Appointment"
+                />
                 <QuickLink href="/records" icon={FileText} label="View Records" />
                 <QuickLink href="/profile" icon={UserRound} label="Update Profile" />
                 <Link
@@ -257,7 +312,9 @@ export default async function PatientDashboard() {
 
           {/* Records highlight (dummy) */}
           <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
-            <div className="text-slate-900 font-semibold">Download recent results</div>
+            <div className="text-slate-900 font-semibold">
+              Download recent results
+            </div>
             <p className="mt-1 text-sm text-slate-600">
               Get your latest labs, imaging, and prescriptions in one place.
             </p>
@@ -295,7 +352,9 @@ export default async function PatientDashboard() {
               ))
             ) : (
               <li className="p-6">
-                <div className="text-sm text-slate-600">No recent notifications.</div>
+                <div className="text-sm text-slate-600">
+                  No recent notifications.
+                </div>
               </li>
             )}
           </ul>
@@ -316,7 +375,10 @@ function CardHead({ title, href, icon: Icon, actionLabel }) {
         </div>
         <h2 className="text-slate-900 font-medium">{title}</h2>
       </div>
-      <a className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline" href={href}>
+      <a
+        className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline"
+        href={href}
+      >
         {actionLabel}
         <ArrowRight className="h-4 w-4" />
       </a>
@@ -331,7 +393,9 @@ function EmptyState({ icon: Icon, title, subtitle, ctaHref, ctaLabel }) {
         <Icon className="h-6 w-6 text-slate-400" />
       </div>
       <div className="text-sm font-medium text-slate-900">{title}</div>
-      {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
+      {subtitle ? (
+        <div className="mt-1 text-sm text-slate-500">{subtitle}</div>
+      ) : null}
       {ctaHref && ctaLabel ? (
         <div className="mt-4">
           <a
@@ -348,8 +412,13 @@ function EmptyState({ icon: Icon, title, subtitle, ctaHref, ctaLabel }) {
 }
 
 function Th({ children }) {
-  return <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide">{children}</th>;
+  return (
+    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide">
+      {children}
+    </th>
+  );
 }
+
 function Td({ children, className = "" }) {
   return <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>;
 }
@@ -365,7 +434,9 @@ function StatusPill({ value }) {
   const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
   const label = (v || "—").replaceAll("_", " ");
   return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+    >
       {label}
     </span>
   );
