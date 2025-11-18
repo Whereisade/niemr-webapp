@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCharges } from "@/lib/useCharges";
 import { useBillingLedger } from "@/lib/useBillingLedger";
+import { downloadReport } from "@/lib/reports";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -159,6 +160,32 @@ export default function FacilityBillingPage() {
             <option value="50">Show 50</option>
             <option value="100">Show 100</option>
           </select>
+          <button
+            type="button"
+            disabled={!hasPatient || ledgerLoading}
+            onClick={async () => {
+              try {
+                if (!patient) {
+                  alert("Enter a patient ID first.");
+                  return;
+                }
+                await downloadReport({
+                  report_type: "BILLING",
+                  ref_id: Number(patient),
+                  as_pdf: true,
+                  save_as_attachment: false,
+                });
+              } catch (err) {
+                alert(
+                  err?.message ||
+                    "Failed to generate billing statement. Please try again."
+                );
+              }
+            }}
+            className="w-full rounded-lg border border-sky-600 bg-sky-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:opacity-60 sm:w-48"
+          >
+            Download Patient Statement
+          </button>
         </div>
       </header>
 

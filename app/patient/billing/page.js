@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCharges } from "@/lib/useCharges";
 import { useBillingLedger } from "@/lib/useBillingLedger";
+import { downloadReport } from "@/lib/reports";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -140,6 +141,34 @@ export default function PatientBillingPage() {
             <option value="20">Show 20</option>
             <option value="50">Show 50</option>
           </select>
+          <button
+            type="button"
+            disabled={!ledger || ledgerLoading}
+            onClick={async () => {
+              try {
+                const pid = ledger?.patient_id;
+                if (!pid) {
+                  alert("Unable to determine your patient ID for billing report.");
+                  return;
+                }
+                await downloadReport({
+                  report_type: "BILLING",
+                  ref_id: pid,
+                  as_pdf: true,
+                  save_as_attachment: false,
+                  // start/end can be added later for date-range statements
+                });
+              } catch (err) {
+                alert(
+                  err?.message ||
+                    "Failed to generate billing statement. Please try again."
+                );
+              }
+            }}
+            className="w-full rounded-lg border border-sky-600 bg-sky-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:opacity-60 sm:w-48"
+          >
+            Download Statement (PDF)
+          </button>
         </div>
       </header>
 
