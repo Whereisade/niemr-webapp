@@ -20,6 +20,37 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
+const COUNTRY_CHOICES = [{ value: "nigeria", label: "Nigeria" }];
+const NIGERIA_STATES = [
+  { value: "", label: "-- Select state --" },
+  { value: "abia", label: "Abia" }, { value: "adamawa", label: "Adamawa" },
+  { value: "akwa_ibom", label: "Akwa Ibom" }, { value: "anambra", label: "Anambra" },
+  { value: "bauchi", label: "Bauchi" }, { value: "bayelsa", label: "Bayelsa" },
+  { value: "benue", label: "Benue" }, { value: "borno", label: "Borno" },
+  { value: "cross_river", label: "Cross River" }, { value: "delta", label: "Delta" },
+  { value: "ebonyi", label: "Ebonyi" }, { value: "edo", label: "Edo" },
+  { value: "ekiti", label: "Ekiti" }, { value: "enugu", label: "Enugu" },
+  { value: "gombe", label: "Gombe" }, { value: "imo", label: "Imo" },
+  { value: "jigawa", label: "Jigawa" }, { value: "kaduna", label: "Kaduna" },
+  { value: "kano", label: "Kano" }, { value: "katsina", label: "Katsina" },
+  { value: "kebbi", label: "Kebbi" }, { value: "kogi", label: "Kogi" },
+  { value: "kwara", label: "Kwara" }, { value: "lagos", label: "Lagos" },
+  { value: "nasarawa", label: "Nasarawa" }, { value: "niger", label: "Niger" },
+  { value: "ogun", label: "Ogun" }, { value: "ondo", label: "Ondo" },
+  { value: "osun", label: "Osun" }, { value: "oyo", label: "Oyo" },
+  { value: "plateau", label: "Plateau" }, { value: "rivers", label: "Rivers" },
+  { value: "sokoto", label: "Sokoto" }, { value: "taraba", label: "Taraba" },
+  { value: "yobe", label: "Yobe" }, { value: "zamfara", label: "Zamfara" },
+  { value: "fct", label: "FCT (Abuja)" },
+];
+
+const GENDER_CHOICES = [
+  { value: "", label: "-- Select gender --" },
+  { value: "female", label: "Female" },
+  { value: "male", label: "Male" },
+  { value: "other", label: "Other" },
+];
+
 export default function PatientRegisterPage() {
   const [form, setForm] = useState({
     email: "", password: "",
@@ -112,8 +143,20 @@ export default function PatientRegisterPage() {
             {/* Address */}
             <SectionHead icon={Home} title="Address" subtitle="Where you live." />
             <div className="grid md:grid-cols-3 gap-4">
-              <Field label="Country" value={form.country} onChange={(e)=>upd("country", e.target.value)} icon={Globe2} placeholder="Nigeria" />
-              <Field label="State" value={form.state} onChange={(e)=>upd("state", e.target.value)} icon={MapPin} placeholder="Lagos" />
+              <Select
+                label="Country"
+                value={form.country}
+                onChange={(e) => upd("country", e.target.value)}
+                options={[{ value: "", label: "-- Select country --" }, ...COUNTRY_CHOICES]}
+                icon={Globe2}
+              />
+              <Select
+                label="State"
+                value={form.state}
+                onChange={(e) => upd("state", e.target.value)}
+                options={NIGERIA_STATES}
+                icon={MapPin}
+              />
               <Field label="LGA" value={form.lga} onChange={(e)=>upd("lga", e.target.value)} placeholder="Ikeja" />
             </div>
             <Field as="textarea" rows={2} label="Address" value={form.address} onChange={(e)=>upd("address", e.target.value)} />
@@ -121,7 +164,7 @@ export default function PatientRegisterPage() {
             {/* Clinical */}
             <SectionHead icon={HeartPulse} title="Clinical (optional)" subtitle="These help your providers give better care." />
             <div className="grid md:grid-cols-3 gap-4">
-              <Field label="Gender" value={form.gender} onChange={(e)=>upd("gender", e.target.value)} placeholder="Female / Male / Other" />
+              <Select label="Gender" value={form.gender} onChange={(e)=>upd("gender", e.target.value)} options={GENDER_CHOICES} />
               <Select label="Blood Group" value={form.blood_group} onChange={(e)=>upd("blood_group", e.target.value)} options={[{value:"",label:"--"}, ...BLOOD_GROUPS]} icon={Droplets} />
               <Select label="Genotype" value={form.genotype} onChange={(e)=>upd("genotype", e.target.value)} options={[{value:"",label:"--"}, ...GENOTYPES]} icon={Dna} />
             </div>
