@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
+import { downloadReport } from "@/lib/reports"; // New import
 import {
   Stethoscope,
   Search,
@@ -163,41 +164,60 @@ export default function ProviderEncountersPage() {
           <thead className="bg-slate-50">
             <tr>
               <Th>Patient</Th>
-              <Th>When</Th>
+              <Th>Type</Th> {/* New column */}
               <Th>Status</Th>
-              <Th>Chief Complaint</Th>
+              <Th>Started</Th>
+              <Th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Report</Th> {/* New column */}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((enc) => (
-              <tr key={enc.id} className="transition hover:bg-slate-50/60">
+              <tr key={enc.id} className="hover:bg-slate-50">
                 <Td>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-50">
-                      <UserRound className="h-4 w-4 text-slate-700" />
-                    </span>
-                    <span className="text-slate-900">
-                      {enc.patient || "—"}
-                    </span>
-                  </span>
+                  {enc.patient_name || enc.patient || "—"}
                 </Td>
                 <Td>
-                  <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                    {formatDateTime(enc.occurred_at || enc.created_at)}
-                  </span>
+                  {enc.encounter_type || enc.type || "—"} {/* New cell */}
                 </Td>
-                <Td><StatusPill value={enc.status} /></Td>
                 <Td>
-                  <span className="line-clamp-2 text-slate-800">
-                    {enc.chief_complaint || "—"}
-                  </span>
+                  <StatusPill value={enc.status} />
+                </Td>
+                <Td>
+                  {formatDateTime(enc.started_at || enc.created_at || "—")}
+                </Td>
+                <Td className="p-3 text-right text-sm"> {/* New cell */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (!enc.id) {
+                          alert("Missing encounter id for report.");
+                          return;
+                        }
+                        await downloadReport({
+                          report_type: "ENCOUNTER",
+                          ref_id: enc.id,
+                          as_pdf: true,
+                          save_as_attachment: false,
+                        });
+                      } catch (err) {
+                        alert(
+                          err?.message ||
+                          "Failed to generate encounter report. Please try again."
+                        );
+                      }
+                    }}
+                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  >
+                    View PDF
+                  </button>
                 </Td>
               </tr>
             ))}
 
             {!rows.length && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center">
+                <td colSpan={5} className="px-4 py-10 text-center"> {/* Update colSpan to 5 */}
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>

@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
+import { downloadReport } from "@/lib/reports";
 import {
   Stethoscope,
   Building2,
@@ -168,6 +169,9 @@ export default function PatientEncountersPage() {
               <Th>When</Th>
               <Th>Status</Th>
               <Th>Summary</Th>
+              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Report
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -202,12 +206,40 @@ export default function PatientEncountersPage() {
                     {enc.chief_complaint || enc.summary || "—"}
                   </span>
                 </Td>
+
+                <td className="p-3 text-right text-sm">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (!enc.id) {
+                          alert("Missing encounter id for report.");
+                          return;
+                        }
+                        await downloadReport({
+                          report_type: "ENCOUNTER",
+                          ref_id: enc.id,
+                          as_pdf: true,
+                          save_as_attachment: false,
+                        });
+                      } catch (err) {
+                        alert(
+                          err?.message ||
+                            "Failed to generate encounter report. Please try again."
+                        );
+                      }
+                    }}
+                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  >
+                    View PDF
+                  </button>
+                </td>
               </tr>
             ))}
 
             {!rows.length && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center">
+                <td colSpan={6} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>
