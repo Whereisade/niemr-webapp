@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import GreetingLine from "@/components/GreetingLine";
+import NotificationsBell from "@/components/notifications/NotificationsBell";
 import {
   CalendarRange,
   BellRing,
@@ -121,31 +122,35 @@ export default async function ProviderDashboard() {
             Today’s schedule and recent updates.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/provider/encounters"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-          >
-            View Encounters
-          </Link>
-          <Link
-            href="/provider/vitals"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-          >
-            View Vitals
-          </Link>
-          <Link
-            href="/provider/labs"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            View Lab Orders
-          </Link>
-          <Link
-            href="/provider/imaging"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            View Imaging Requests
-          </Link>
+
+        <div className="flex items-center gap-3">
+          <NotificationsBell href="/provider/notifications" />
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/provider/encounters"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+            >
+              View Encounters
+            </Link>
+            <Link
+              href="/provider/vitals"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+            >
+              View Vitals
+            </Link>
+            <Link
+              href="/provider/labs"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              View Lab Orders
+            </Link>
+            <Link
+              href="/provider/imaging"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              View Imaging Requests
+            </Link>
+          </div>
         </div>
       </header>
 
