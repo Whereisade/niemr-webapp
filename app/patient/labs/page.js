@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
+import { downloadReport } from "@/lib/reports";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -23,7 +24,6 @@ export default function PatientLabOrdersPage() {
   const limit = Number(sp.get("limit") || 20);
   const status = sp.get("status") || "";
 
-  
   const { data, error, isLoading } = useLabOrders({
     page,
     limit,
@@ -127,6 +127,9 @@ export default function PatientLabOrdersPage() {
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Ordered At
               </th>
+              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Result
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -145,6 +148,33 @@ export default function PatientLabOrdersPage() {
                 <td className="p-3 text-sm text-slate-800">
                   {formatDateTime(order.ordered_at || order.created_at)}
                 </td>
+                <td className="p-3 text-right text-sm">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (!order.id) {
+                          alert("Missing lab id for report.");
+                          return;
+                        }
+                        await downloadReport({
+                          report_type: "LAB",
+                          ref_id: order.id,
+                          as_pdf: true,
+                          save_as_attachment: false,
+                        });
+                      } catch (err) {
+                        alert(
+                          err?.message ||
+                            "Failed to generate lab result report. Please try again."
+                        );
+                      }
+                    }}
+                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  >
+                    View PDF
+                  </button>
+                </td>
               </tr>
             ))}
 
@@ -152,7 +182,7 @@ export default function PatientLabOrdersPage() {
               <tr>
                 <td
                   className="p-4 text-center text-sm text-slate-500"
-                  colSpan={3}
+                  colSpan={4}
                 >
                   No lab tests found.
                 </td>

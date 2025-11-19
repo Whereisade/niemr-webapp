@@ -121,76 +121,58 @@ export default async function FacilityDashboard() {
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100 blur-3xl opacity-60" />
 
       {/* Header */}
-      <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
+      <header className="mb-6 flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             <Building2 className="h-3.5 w-3.5" />
             Facility Workspace
           </div>
           <GreetingLine
             name={greetingTarget}
-            className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
+            className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
           />
-          <p className="mt-1 text-slate-600">Snapshot across your clinic.</p>
+          <p className="text-sm text-slate-600">
+            Snapshot across your clinic. Monitor visits, orders, and messages
+            in one place.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/facility/encounters"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-          >
-            Facility Encounters
-          </Link>
-          <Link
-            href="/facility/vitals"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-          >
-            Facility Vitals
-          </Link>
-          <Link
-            href="/facility/labs"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            Facility Lab Orders
-          </Link>
-          <Link
-            href="/facility/imaging"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            Facility Imaging Requests
-          </Link>
 
-          <Link
-            href="/facility/pharmacy"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            Facility Prescriptions
-          </Link>
-
-          <Link
-            href="/facility/notifications"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            Facility Notifications
-          </Link>
-
-          <Link
-            href="/facility/billing"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            Facility Billing
-          </Link>
-
-          <Link
-            href="/facility/payments"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            Facility Payments
-          </Link>
+        {/* compact “today” snapshot instead of big tiles crowding the top */}
+        <div className="grid w-full max-w-sm grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm backdrop-blur">
+          <MiniStat label="Today’s appts" value={appts.length} />
+          <MiniStat label="Providers" value={provs.length} />
+          <MiniStat label="Notifications" value={notifList.length} />
         </div>
       </header>
 
+      {/* Facility modules / navigation strip */}
+      <section className="mb-8 rounded-2xl border border-slate-200 bg-white/70 p-3 shadow-sm">
+        <div className="flex items-center justify-between gap-2 px-1 pb-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Facility modules
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Jump into a specific workflow
+          </p>
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          <TopChip href="/facility/encounters" label="Facility Encounters" />
+          <TopChip href="/facility/vitals" label="Facility Vitals" />
+          <TopChip href="/facility/labs" label="Facility Lab Orders" />
+          <TopChip
+            href="/facility/imaging"
+            label="Facility Imaging Requests"
+          />
+          <TopChip href="/facility/pharmacy" label="Facility Prescriptions" />
+          <TopChip href="/facility/notifications" label="Facility Notifications" />
+          <TopChip href="/facility/billing" label="Facility Billing" />
+          <TopChip href="/facility/payments" label="Facility Payments" />
+        </div>
+      </section>
+
       {/* Stat tiles */}
-      <section className="grid gap-4 md:grid-cols-3 mb-8">
+      <section className="mb-8 grid gap-4 md:grid-cols-3">
         {stats.map(({ label, value, icon: Icon, accent, href, cta }) => (
           <a
             key={label}
@@ -429,7 +411,7 @@ export default async function FacilityDashboard() {
                 <span className="rounded-lg border border-slate-200 px-3 py-2">
                   Retention: <b>24 mo</b>
                 </span>
-                <span className="rounded-lg border border-slate-200 px-3 py-2 col-span-2">
+                <span className="col-span-2 rounded-lg border border-slate-200 px-3 py-2">
                   Encryption: <b>AES-256 at rest</b>
                 </span>
               </div>
@@ -479,8 +461,8 @@ export default async function FacilityDashboard() {
                 Need to add a new service?
               </h3>
               <p className="text-sm text-slate-600">
-                Expand your catalog for orders, imaging, pharmacy, and billing in
-                a few clicks.
+                Expand your catalog for orders, imaging, pharmacy, and billing
+                in a few clicks.
               </p>
             </div>
             <Link
@@ -498,6 +480,26 @@ export default async function FacilityDashboard() {
 }
 
 /* ────────────────────────── UI helpers (UI-only) ────────────────────────── */
+
+function MiniStat({ label, value }) {
+  return (
+    <div className="rounded-xl bg-slate-50 px-3 py-2">
+      <div className="text-[11px] text-slate-500">{label}</div>
+      <div className="text-lg font-semibold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function TopChip({ href, label }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+    >
+      {label}
+    </Link>
+  );
+}
 
 function CardHead({ title, href, icon: Icon, actionLabel }) {
   return (
@@ -608,7 +610,7 @@ function DummyMiniChart({ title, icon: Icon, gradient, hint }) {
           </div>
         </div>
         {/* Dummy chart bars */}
-        <div className="grid grid-cols-12 items-end gap-1.5 h-20">
+        <div className="grid h-20 grid-cols-12 items-end gap-1.5">
           {Array.from({ length: 12 }).map((_, i) => (
             <div
               key={i}
