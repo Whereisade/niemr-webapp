@@ -12,6 +12,10 @@ import {
   Stethoscope,
   ChevronRight,
 } from "lucide-react";
+import {
+  postAppointmentAction,
+  APPT_STATUS,
+} from "@/lib/appointmentsActions";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -29,25 +33,61 @@ export default function PatientAppointmentsPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const page   = Number(sp.get("page") || 1);
-  const limit  = Number(sp.get("limit") || 10);
+  const page = Number(sp.get("page") || 1);
+  const limit = Number(sp.get("limit") || 10);
   const status = sp.get("status") || "";
-  const q      = sp.get("q")      || "";
+  const q = sp.get("q") || "";
 
   // Backend already scopes to the authenticated PATIENT
-  const { data, error, isLoading } = useAppointments({ page, limit, status, q });
+  const { data, error, isLoading, mutate } = useAppointments({
+    page,
+    limit,
+    status,
+    q,
+  });
 
-  const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data?.results)
+    ? data.results
+    : Array.isArray(data)
+    ? data
+    : [];
   const total = Number(data?.count ?? rows.length);
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
     Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") params.delete(k);
+      if (v === undefined || v === null || v === "")
+        params.delete(k);
       else params.set(k, String(v));
     });
-    if ("status" in patch || "q" in patch || "limit" in patch) params.set("page", "1");
+    if ("status" in patch || "q" in patch || "limit" in patch)
+      params.set("page", "1");
     router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // For patients: only allow Cancel on SCHEDULED
+  const getPatientActions = (status) => {
+    if (
+      status === APPT_STATUS.SCHEDULED ||
+      status === "SCHEDULED" ||
+      status === "scheduled"
+    ) {
+      return ["cancel"];
+    }
+    return [];
+  };
+
+  const handleAction = async (apptId, action) => {
+    try {
+      await postAppointmentAction(apptId, action);
+      await mutate();
+    } catch (err) {
+      console.error("Failed to update appointment", err);
+      alert(
+        err?.message ||
+          "Failed to update appointment status. Please try again."
+      );
+    }
   };
 
   return (
@@ -89,7 +129,10 @@ export default function PatientAppointmentsPage() {
               type="search"
               placeholder="Search reason or notes…"
               defaultValue={q}
-              onKeyDown={(e) => e.key === "Enter" && updateQuery({ q: e.currentTarget.value })}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                updateQuery({ q: e.currentTarget.value })
+              }
               onBlur={(e) => updateQuery({ q: e.currentTarget.value })}
               className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />
@@ -142,50 +185,85 @@ export default function PatientAppointmentsPage() {
                 <Th>Doctor / Provider</Th>
                 <Th>When</Th>
                 <Th>Status</Th>
-                <Th className="text-right">Action</Th>
+                <Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading && !data ? (
                 <tr>
-                  <td colSpan={4} className="p-6 text-slate-600">Loading appointments…</td>
+                  <td colSpan={4} className="p-6 text-slate-600">
+                    Loading appointments…
+                  </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={4} className="p-6 text-rose-700 bg-rose-50">
-                    Failed to load: {error.message || "Unknown error"}
+                  <td
+                    colSpan={4}
+                    className="p-6 text-rose-700 bg-rose-50"
+                  >
+                    Failed to load:{" "}
+                    {error.message || "Unknown error"}
                   </td>
                 </tr>
               ) : rows.length ? (
-                rows.map((a) => (
-                  <tr key={a.id} className="transition hover:bg-slate-50/60">
-                    <Td className="font-medium text-slate-900">
-                      <span className="inline-flex items-center gap-2">
-                        <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
-                          <Stethoscope className="h-4 w-4 text-blue-700" />
+                rows.map((a) => {
+                  const status = a.status || "SCHEDULED";
+                  const actions = getPatientActions(status);
+
+                  return (
+                    <tr
+                      key={a.id}
+                      className="transition hover:bg-slate-50/60"
+                    >
+                      <Td className="font-medium text-slate-900">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
+                            <Stethoscope className="h-4 w-4 text-blue-700" />
+                          </span>
+                          {a.provider_name || a.provider || "—"}
                         </span>
-                        {a.provider_name || a.provider || "—"}
-                      </span>
-                    </Td>
-                    <Td>
-                      <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                        {formatDateTime(a.start_at || a.scheduled_for || a.date)}
-                      </span>
-                    </Td>
-                    <Td>
-                      <StatusBadge value={a.status} />
-                    </Td>
-                    <Td className="text-right">
-                      <a
-                        href={`/patient/appointments/${a.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
-                      >
-                        View
-                        <ChevronRight className="h-4 w-4" />
-                      </a>
-                    </Td>
-                  </tr>
-                ))
+                      </Td>
+                      <Td>
+                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                          {formatDateTime(
+                            a.start_at || a.scheduled_for || a.date
+                          )}
+                        </span>
+                      </Td>
+                      <Td>
+                        <StatusBadge value={a.status} />
+                      </Td>
+                      <Td className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {actions.length > 0 && (
+                            <div className="inline-flex flex-wrap justify-end gap-1">
+                              {actions.map((action) => (
+                                <button
+                                  key={action}
+                                  type="button"
+                                  onClick={() =>
+                                    handleAction(a.id, action)
+                                  }
+                                  className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  Cancel
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          <a
+                            href={`/patient/appointments/${a.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg.white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                          >
+                            View
+                            <ChevronRight className="h-4 w-4" />
+                          </a>
+                        </div>
+                      </Td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={4} className="p-8">
@@ -222,7 +300,9 @@ function TableHead({ title, subtitle }) {
           <h2 className="text-slate-900 font-medium">{title}</h2>
         </div>
         {subtitle ? (
-          <div className="ml-11 text-xs text-slate-500">{subtitle}</div>
+          <div className="ml-11 text-xs text-slate-500">
+            {subtitle}
+          </div>
         ) : null}
       </div>
     </div>
@@ -231,14 +311,18 @@ function TableHead({ title, subtitle }) {
 
 function Th({ children, className = "" }) {
   return (
-    <th className={`px-4 py-3 text-xs font-medium uppercase tracking-wide ${className}`}>
+    <th
+      className={`px-4 py-3 text-xs font-medium uppercase tracking-wide ${className}`}
+    >
       {children}
     </th>
   );
 }
 
 function Td({ children, className = "" }) {
-  return <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>;
+  return (
+    <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>
+  );
 }
 
 function EmptyState({ title, subtitle }) {
@@ -247,8 +331,14 @@ function EmptyState({ title, subtitle }) {
       <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
         <CalendarRange className="h-6 w-6 text-slate-400" />
       </div>
-      <div className="text-sm font-medium text-slate-900">{title}</div>
-      {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
+      <div className="text-sm font.medium text-slate-900">
+        {title}
+      </div>
+      {subtitle ? (
+        <div className="mt-1 text-sm text-slate-500">
+          {subtitle}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -256,7 +346,9 @@ function EmptyState({ title, subtitle }) {
 function Chip({ icon: Icon, label, value }) {
   return (
     <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-      {Icon ? <Icon className="h-4 w-4 text-slate-400" /> : null}
+      {Icon ? (
+        <Icon className="h-4 w-4 text-slate-400" />
+      ) : null}
       <span className="text-slate-600">{label}</span>
       <span className="font-semibold text-slate-900">{value}</span>
     </div>

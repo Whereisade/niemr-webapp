@@ -1,7 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
+import {
+  postAppointmentAction,
+  getAvailableActions,
+  APPT_ACTION_LABELS,
+} from "@/lib/appointmentsActions";
 import {
   CalendarRange,
   Search,
@@ -26,7 +32,7 @@ export default function ProviderAppointmentsPage() {
   const date   = sp.get("date")   || "today";
   const q      = sp.get("q")      || "";
 
-  const { data, error, isLoading } = useAppointments({
+  const { data, error, isLoading, mutate } = useAppointments({
     page, limit, status, date, q, mine: "true",
   });
 
@@ -45,6 +51,19 @@ export default function ProviderAppointmentsPage() {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const handleAction = async (apptId, action) => {
+    try {
+      await postAppointmentAction(apptId, action);
+      await mutate(); // refresh list after status change
+    } catch (err) {
+      console.error("Failed to update appointment", err);
+      alert(
+        err?.message ||
+          "Failed to update appointment status. Please try again."
+      );
+    }
   };
 
   return (
@@ -66,8 +85,14 @@ export default function ProviderAppointmentsPage() {
           </p>
         </div>
 
-        {/* Quick summary chips */}
-        <div className="flex flex-wrap gap-2">
+        {/* Quick summary chips + primary action */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/provider/appointments/new"
+            className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            New appointment
+          </Link>
           <StatChip label="Total" value={total} />
           <StatChip label="Page" value={page} />
           <button
@@ -161,7 +186,7 @@ export default function ProviderAppointmentsPage() {
                   <Th>Reason</Th>
                   <Th>Time</Th>
                   <Th>Status</Th>
-                  <Th className="text-right">Action</Th>
+                  <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -169,6 +194,9 @@ export default function ProviderAppointmentsPage() {
                   rows.map((a) => {
                     const time =
                       a.scheduled_for || a.start_time || a.date || a.time || "—";
+                    const status = a.status || "SCHEDULED";
+                    const actions = getAvailableActions(status);
+
                     return (
                       <tr key={a.id} className="transition hover:bg-slate-50/60">
                         <Td>
@@ -181,23 +209,54 @@ export default function ProviderAppointmentsPage() {
                             </span>
                           </div>
                         </Td>
-                        <Td className="text-slate-600">{a.reason || "Consultation"}</Td>
+                        <Td className="text-slate-600">
+                          {a.reason || "Consultation"}
+                        </Td>
                         <Td>
                           <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                             {time}
                           </span>
                         </Td>
                         <Td>
-                          <StatusPill value={a.status || "SCHEDULED"} />
+                          <StatusPill value={status} />
                         </Td>
                         <Td className="text-right">
-                          <a
-                            href={`/provider/appointments/${a.id}`}
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
-                          >
-                            Open
-                            <ChevronRight className="h-4 w-4" />
-                          </a>
+                          {actions.length === 0 ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-xs text-slate-400">
+                                No actions
+                              </span>
+                              <a
+                                href={`/provider/appointments/${a.id}`}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                              >
+                                Open
+                                <ChevronRight className="h-4 w-4" />
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="inline-flex flex-wrap justify-end gap-1">
+                                {actions.map((action) => (
+                                  <button
+                                    key={action}
+                                    type="button"
+                                    onClick={() => handleAction(a.id, action)}
+                                    className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                  >
+                                    {APPT_ACTION_LABELS[action] || action}
+                                  </button>
+                                ))}
+                              </div>
+                              <a
+                                href={`/provider/appointments/${a.id}`}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                              >
+                                Open
+                                <ChevronRight className="h-4 w-4" />
+                              </a>
+                            </div>
+                          )}
                         </Td>
                       </tr>
                     );

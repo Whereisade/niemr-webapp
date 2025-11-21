@@ -1,8 +1,11 @@
+// app/provider/encounters/page.js
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
-import { downloadReport } from "@/lib/reports"; // New import
+import { downloadReport } from "@/lib/reports";
+import AttachmentList from "@/components/attachments/AttachmentList";
 import {
   Stethoscope,
   Search,
@@ -30,16 +33,22 @@ export default function ProviderEncountersPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const page   = Number(sp.get("page") || 1);
-  const limit  = Number(sp.get("limit") || 10);
+  const page = Number(sp.get("page") || 1);
+  const limit = Number(sp.get("limit") || 10);
   const status = sp.get("status") || "";
-  const s      = sp.get("s")      || "";
+  const s = sp.get("s") || "";
 
   // Provider sees facility encounters (scoped by facility_id on user)
   const { data, error, isLoading } = useEncounters({ page, limit, status, s });
 
-  const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data?.results)
+    ? data.results
+    : Array.isArray(data)
+    ? data
+    : [];
   const total = Number(data?.count ?? rows.length);
+
+  const [attachmentsFor, setAttachmentsFor] = useState(null); // { id, label } or null
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -54,11 +63,11 @@ export default function ProviderEncountersPage() {
   if (isLoading && !data) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           Encounters
         </h1>
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 -mt-6 mb-4 rounded-t-xl" />
+          <div className="mb-4 -mt-6 h-1.5 w-full rounded-t-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
           <p className="text-slate-500">Loading encounters…</p>
         </div>
       </main>
@@ -68,7 +77,7 @@ export default function ProviderEncountersPage() {
   if (error) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           Encounters
         </h1>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
@@ -79,12 +88,18 @@ export default function ProviderEncountersPage() {
   }
 
   // simple page stats (from current page items)
-  const openCount   = rows.filter(r => (r.status || "").toUpperCase() === "OPEN").length;
-  const closedCount = rows.filter(r => (r.status || "").toUpperCase() === "CLOSED").length;
-  const crossedOut  = rows.filter(r => (r.status || "").toUpperCase() === "CROSSED_OUT").length;
+  const openCount = rows.filter(
+    (r) => (r.status || "").toUpperCase() === "OPEN"
+  ).length;
+  const closedCount = rows.filter(
+    (r) => (r.status || "").toUpperCase() === "CLOSED"
+  ).length;
+  const crossedOut = rows.filter(
+    (r) => (r.status || "").toUpperCase() === "CROSSED_OUT"
+  ).length;
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
+    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
       {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
@@ -92,7 +107,7 @@ export default function ProviderEncountersPage() {
             <Stethoscope className="h-3.5 w-3.5" />
             Provider Workspace
           </div>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
             Encounters
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -108,14 +123,14 @@ export default function ProviderEncountersPage() {
               placeholder="Search complaint / diagnosis / plan…"
               defaultValue={s}
               onBlur={(e) => updateQuery({ s: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-72"
+              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-72"
             />
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           </div>
 
           <div className="relative">
             <select
-              className="w-full appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-44"
+              className="w-full appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-44"
               value={status}
               onChange={(e) => updateQuery({ status: e.target.value })}
             >
@@ -164,65 +179,95 @@ export default function ProviderEncountersPage() {
           <thead className="bg-slate-50">
             <tr>
               <Th>Patient</Th>
-              <Th>Type</Th> {/* New column */}
+              <Th>Type</Th>
               <Th>Status</Th>
               <Th>Started</Th>
-              <Th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Report</Th> {/* New column */}
+              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Report
+              </th>
+              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Files
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((enc) => (
-              <tr key={enc.id} className="hover:bg-slate-50">
-                <Td>
-                  {enc.patient_name || enc.patient || "—"}
-                </Td>
-                <Td>
-                  {enc.encounter_type || enc.type || "—"} {/* New cell */}
-                </Td>
-                <Td>
-                  <StatusPill value={enc.status} />
-                </Td>
-                <Td>
-                  {formatDateTime(enc.started_at || enc.created_at || "—")}
-                </Td>
-                <Td className="p-3 text-right text-sm"> {/* New cell */}
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        if (!enc.id) {
-                          alert("Missing encounter id for report.");
-                          return;
+            {rows.map((enc) => {
+              const patientName = enc.patient_name || enc.patient || "Patient";
+              const typeLabel =
+                enc.encounter_type || enc.type || "Encounter";
+
+              return (
+                <tr key={enc.id} className="hover:bg-slate-50">
+                  <Td>{patientName}</Td>
+                  <Td>{typeLabel}</Td>
+                  <Td>
+                    <StatusPill value={enc.status} />
+                  </Td>
+                  <Td>
+                    {formatDateTime(
+                      enc.started_at || enc.created_at || "—"
+                    )}
+                  </Td>
+                  <td className="p-3 text-right text-sm">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (!enc.id) {
+                            alert("Missing encounter id for report.");
+                            return;
+                          }
+                          await downloadReport({
+                            report_type: "ENCOUNTER",
+                            ref_id: enc.id,
+                            as_pdf: true,
+                            save_as_attachment: false,
+                          });
+                        } catch (err) {
+                          alert(
+                            err?.message ||
+                              "Failed to generate encounter report. Please try again."
+                          );
                         }
-                        await downloadReport({
-                          report_type: "ENCOUNTER",
-                          ref_id: enc.id,
-                          as_pdf: true,
-                          save_as_attachment: false,
-                        });
-                      } catch (err) {
-                        alert(
-                          err?.message ||
-                          "Failed to generate encounter report. Please try again."
-                        );
+                      }}
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      View PDF
+                    </button>
+                  </td>
+                  <td className="p-3 text-right text-sm">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachmentsFor({
+                          id: enc.id,
+                          label: `${patientName} · ${typeLabel} #${enc.id}`,
+                        })
                       }
-                    }}
-                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                  >
-                    View PDF
-                  </button>
-                </Td>
-              </tr>
-            ))}
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Attachments
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
 
             {!rows.length && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center"> {/* Update colSpan to 5 */}
+                <td
+                  colSpan={6}
+                  className="px-4 py-10 text-center"
+                >
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>
-                  <div className="text-sm font-medium text-slate-900">No encounters found</div>
-                  <div className="mt-1 text-sm text-slate-500">Try adjusting search or status.</div>
+                  <div className="text-sm font-medium text-slate-900">
+                    No encounters found
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    Try adjusting search or status.
+                  </div>
                 </td>
               </tr>
             )}
@@ -230,9 +275,45 @@ export default function ProviderEncountersPage() {
         </table>
       </div>
 
+      {/* Attachments modal */}
+      {attachmentsFor && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Encounter attachments
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {attachmentsFor.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachmentsFor(null)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <span className="sr-only">Close</span>
+                ✕
+              </button>
+            </div>
+
+            <div className="px-4 py-3">
+              <AttachmentList
+                refType="ENCOUNTER"
+                refId={attachmentsFor.id}
+                canUpload={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pager */}
       <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>Page {page} · {total} total</div>
+        <div>
+          Page {page} · {total} total
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
@@ -271,7 +352,9 @@ function StatTile({ icon: Icon, label, value, gradient }) {
             <Icon className="h-5 w-5 text-slate-700" />
           </div>
         </div>
-        <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
+        <div className="mt-2 text-3xl font-semibold text-slate-900">
+          {value}
+        </div>
       </div>
     </div>
   );
@@ -280,14 +363,16 @@ function StatTile({ icon: Icon, label, value, gradient }) {
 function StatusPill({ value }) {
   const v = String(value || "").toUpperCase();
   const map = {
-    OPEN:        "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CLOSED:      "bg-slate-50 text-slate-700 ring-slate-200",
+    OPEN: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    CLOSED: "bg-slate-50 text-slate-700 ring-slate-200",
     CROSSED_OUT: "bg-rose-50 text-rose-700 ring-rose-200",
   };
   const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
   const label = v || "—";
   return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+    >
       {label.replaceAll("_", " ")}
     </span>
   );
@@ -300,6 +385,7 @@ function Th({ children }) {
     </th>
   );
 }
+
 function Td({ children }) {
   return <td className="p-3 text-sm text-slate-800">{children}</td>;
 }

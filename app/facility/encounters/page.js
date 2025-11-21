@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
 import { downloadReport } from "@/lib/reports";
+import AttachmentList from "@/components/attachments/AttachmentList";
 import {
   Building2,
   Users2,
@@ -32,16 +34,27 @@ export default function FacilityEncountersPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const page   = Number(sp.get("page") || 1);
-  const limit  = Number(sp.get("limit") || 10);
+  const page = Number(sp.get("page") || 1);
+  const limit = Number(sp.get("limit") || 10);
   const status = sp.get("status") || "";
-  const s      = sp.get("s")      || "";
+  const s = sp.get("s") || "";
 
   // Backend scopes by user.facility_id for staff roles
-  const { data, error, isLoading } = useEncounters({ page, limit, status, s });
+  const { data, error, isLoading } = useEncounters({
+    page,
+    limit,
+    status,
+    s,
+  });
 
-  const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data?.results)
+    ? data.results
+    : Array.isArray(data)
+    ? data
+    : [];
   const total = Number(data?.count ?? rows.length);
+
+  const [attachmentsFor, setAttachmentsFor] = useState(null); // { id, label } | null
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -81,9 +94,15 @@ export default function FacilityEncountersPage() {
   }
 
   // Quick counts based on current page items
-  const openCount   = rows.filter(r => (r.status || "").toUpperCase() === "OPEN").length;
-  const closedCount = rows.filter(r => (r.status || "").toUpperCase() === "CLOSED").length;
-  const crossedOut  = rows.filter(r => (r.status || "").toUpperCase() === "CROSSED_OUT").length;
+  const openCount = rows.filter(
+    (r) => (r.status || "").toUpperCase() === "OPEN"
+  ).length;
+  const closedCount = rows.filter(
+    (r) => (r.status || "").toUpperCase() === "CLOSED"
+  ).length;
+  const crossedOut = rows.filter(
+    (r) => (r.status || "").toUpperCase() === "CROSSED_OUT"
+  ).length;
 
   return (
     <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
@@ -173,78 +192,109 @@ export default function FacilityEncountersPage() {
               <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Report
               </th>
+              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Files
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((enc) => (
-              <tr key={enc.id} className="transition hover:bg-slate-50/60">
-                <Td>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-50">
-                      <UserRound className="h-4 w-4 text-slate-700" />
-                    </span>
-                    <span className="text-slate-900">
-                      {enc.patient_name || enc.patient || "—"}
-                    </span>
-                  </span>
-                </Td>
-                <Td>
-                  <span className="text-slate-800">
-                    {enc.provider_name || enc.provider || "—"}
-                  </span>
-                </Td>
-                <Td>
-                  <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                    {formatDateTime(enc.occurred_at || enc.created_at)}
-                  </span>
-                </Td>
-                <Td>
-                  <StatusPill value={enc.status} />
-                </Td>
-                <Td>
-                  <span className="line-clamp-2 text-slate-800">
-                    {enc.chief_complaint || enc.summary || "—"}
-                  </span>
-                </Td>
+            {rows.map((enc) => {
+              const patientName = enc.patient_name || enc.patient || "—";
+              const providerName = enc.provider_name || enc.provider || "—";
+              const whenLabel = formatDateTime(enc.occurred_at || enc.created_at);
 
-                <td className="p-3 text-right text-sm">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        if (!enc.id) {
-                          alert("Missing encounter id for report.");
-                          return;
+              return (
+                <tr
+                  key={enc.id}
+                  className="transition hover:bg-slate-50/60"
+                >
+                  <Td>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-50">
+                        <UserRound className="h-4 w-4 text-slate-700" />
+                      </span>
+                      <span className="text-slate-900">
+                        {patientName}
+                      </span>
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="text-slate-800">
+                      {providerName}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                      {whenLabel}
+                    </span>
+                  </Td>
+                  <Td>
+                    <StatusPill value={enc.status} />
+                  </Td>
+                  <Td>
+                    <span className="line-clamp-2 text-slate-800">
+                      {enc.chief_complaint || enc.summary || "—"}
+                    </span>
+                  </Td>
+
+                  <td className="p-3 text-right text-sm">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (!enc.id) {
+                            alert("Missing encounter id for report.");
+                            return;
+                          }
+                          await downloadReport({
+                            report_type: "ENCOUNTER",
+                            ref_id: enc.id,
+                            as_pdf: true,
+                            save_as_attachment: false,
+                          });
+                        } catch (err) {
+                          alert(
+                            err?.message ||
+                              "Failed to generate encounter report. Please try again."
+                          );
                         }
-                        await downloadReport({
-                          report_type: "ENCOUNTER",
-                          ref_id: enc.id,
-                          as_pdf: true,
-                          save_as_attachment: false,
-                        });
-                      } catch (err) {
-                        alert(
-                          err?.message ||
-                            "Failed to generate encounter report. Please try again."
-                        );
+                      }}
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      View PDF
+                    </button>
+                  </td>
+
+                  <td className="p-3 text-right text-sm">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachmentsFor({
+                          id: enc.id,
+                          label: `${patientName} · ${providerName} #${enc.id}`,
+                        })
                       }
-                    }}
-                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                  >
-                    View PDF
-                  </button>
-                </td>
-              </tr>
-            ))}
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Attachments
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
 
             {!rows.length && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center">
+                <td colSpan={7} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>
-                  <div className="text-sm font-medium text-slate-900">No encounters found</div>
-                  <div className="mt-1 text-sm text-slate-500">Try adjusting search or status.</div>
+                  <div className="text-sm font-medium text-slate-900">
+                    No encounters found
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    Try adjusting search or status.
+                  </div>
                 </td>
               </tr>
             )}
@@ -254,7 +304,9 @@ export default function FacilityEncountersPage() {
 
       {/* Pager */}
       <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>Page {page} · {total} total</div>
+        <div>
+          Page {page} · {total} total
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
@@ -276,6 +328,40 @@ export default function FacilityEncountersPage() {
           </button>
         </div>
       </div>
+
+      {/* Attachments modal (facility can upload/remove) */}
+      {attachmentsFor && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Encounter attachments
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {attachmentsFor.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachmentsFor(null)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <span className="sr-only">Close</span>
+                ✕
+              </button>
+            </div>
+
+            <div className="px-4 py-3">
+              <AttachmentList
+                refType="ENCOUNTER"
+                refId={attachmentsFor.id}
+                canUpload={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -293,7 +379,9 @@ function StatTile({ icon: Icon, label, value, gradient }) {
             <Icon className="h-5 w-5 text-slate-700" />
           </div>
         </div>
-        <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
+        <div className="mt-2 text-3xl font-semibold text-slate-900">
+          {value}
+        </div>
       </div>
     </div>
   );
@@ -302,14 +390,16 @@ function StatTile({ icon: Icon, label, value, gradient }) {
 function StatusPill({ value }) {
   const v = String(value || "").toUpperCase();
   const map = {
-    OPEN:        "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CLOSED:      "bg-slate-50 text-slate-700 ring-slate-200",
+    OPEN: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    CLOSED: "bg-slate-50 text-slate-700 ring-slate-200",
     CROSSED_OUT: "bg-rose-50 text-rose-700 ring-rose-200",
   };
   const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
   const label = v || "—";
   return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+    >
       {label.replaceAll("_", " ")}
     </span>
   );
