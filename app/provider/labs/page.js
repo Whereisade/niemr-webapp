@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
-import { downloadReport } from "@/lib/reports";
+import { downloadLabPdf } from "@/lib/reports";
 import {
   FlaskConical,
   Filter,
@@ -52,6 +53,8 @@ export default function ProviderLabOrdersPage() {
     : [];
   const total = Number(data?.count ?? rows.length);
 
+  const [downloadingId, setDownloadingId] = useState(null);
+
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
     Object.entries(patch).forEach(([k, v]) => {
@@ -63,6 +66,25 @@ export default function ProviderLabOrdersPage() {
     }
     router.push(`${pathname}?${params.toString()}`);
   };
+
+  async function handleDownload(order) {
+    if (!order?.id) {
+      alert("Missing lab id for report.");
+      return;
+    }
+    try {
+      setDownloadingId(order.id);
+      await downloadLabPdf(order.id);
+    } catch (err) {
+      console.error("Download lab report failed", err);
+      alert(
+        err?.message ||
+          "Failed to download lab report. Please try again."
+      );
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   if (isLoading && !data) {
     return (
@@ -253,28 +275,11 @@ export default function ProviderLabOrdersPage() {
                 <td className="p-3 text-right text-sm">
                   <button
                     type="button"
-                    onClick={async () => {
-                      try {
-                        if (!order.id) {
-                          alert("Missing lab id for report.");
-                          return;
-                        }
-                        await downloadReport({
-                          report_type: "LAB",
-                          ref_id: order.id,
-                          as_pdf: true,
-                          save_as_attachment: false,
-                        });
-                      } catch (err) {
-                        alert(
-                          err?.message ||
-                            "Failed to generate lab result report. Please try again."
-                        );
-                      }
-                    }}
-                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    onClick={() => handleDownload(order)}
+                    disabled={downloadingId === order.id}
+                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    View PDF
+                    {downloadingId === order.id ? "Generating…" : "PDF"}
                   </button>
                 </td>
               </tr>

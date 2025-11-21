@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
-import { downloadReport } from "@/lib/reports";
+import { downloadEncounterPdf } from "@/lib/reports";
 import AttachmentList from "@/components/attachments/AttachmentList";
 import {
   Stethoscope,
@@ -49,6 +49,7 @@ export default function ProviderEncountersPage() {
   const total = Number(data?.count ?? rows.length);
 
   const [attachmentsFor, setAttachmentsFor] = useState(null); // { id, label } or null
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -97,6 +98,19 @@ export default function ProviderEncountersPage() {
   const crossedOut = rows.filter(
     (r) => (r.status || "").toUpperCase() === "CROSSED_OUT"
   ).length;
+
+  async function handleDownload(enc) {
+    if (!enc?.id) return;
+    try {
+      setDownloadingId(enc.id);
+      await downloadEncounterPdf(enc.id);
+    } catch (err) {
+      console.error("Download failed", err);
+      alert(err?.message || "Failed to download encounter report.");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
@@ -211,28 +225,11 @@ export default function ProviderEncountersPage() {
                   <td className="p-3 text-right text-sm">
                     <button
                       type="button"
-                      onClick={async () => {
-                        try {
-                          if (!enc.id) {
-                            alert("Missing encounter id for report.");
-                            return;
-                          }
-                          await downloadReport({
-                            report_type: "ENCOUNTER",
-                            ref_id: enc.id,
-                            as_pdf: true,
-                            save_as_attachment: false,
-                          });
-                        } catch (err) {
-                          alert(
-                            err?.message ||
-                              "Failed to generate encounter report. Please try again."
-                          );
-                        }
-                      }}
-                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                      onClick={() => handleDownload(enc)}
+                      disabled={downloadingId === enc.id}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      View PDF
+                      {downloadingId === enc.id ? "Generating…" : "PDF"}
                     </button>
                   </td>
                   <td className="p-3 text-right text-sm">

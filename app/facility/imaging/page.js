@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useImagingRequests } from "@/lib/useImagingRequests";
+import { downloadImagingPdf } from "@/lib/reports";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -19,11 +21,13 @@ export default function FacilityImagingRequestsPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const page    = Number(sp.get("page") || 1);
-  const limit   = Number(sp.get("limit") || 20);
-  const status  = sp.get("status") || "";
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  const page = Number(sp.get("page") || 1);
+  const limit = Number(sp.get("limit") || 20);
+  const status = sp.get("status") || "";
   const patient = sp.get("patient") || "";
-  const s       = sp.get("s")      || "";
+  const s = sp.get("s") || "";
 
   // Backend scopes requests by user.facility_id for staff roles
   const { data, error, isLoading } = useImagingRequests({
@@ -56,10 +60,23 @@ export default function FacilityImagingRequestsPage() {
     router.push(`${pathname}?${params.toString()}`);
   };
 
+  async function handleDownload(req) {
+    if (!req?.id) return;
+    try {
+      setDownloadingId(req.id);
+      await downloadImagingPdf(req.id);
+    } catch (err) {
+      console.error("Download imaging report failed", err);
+      alert(err?.message || "Failed to download imaging report.");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
   if (isLoading && !data) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           Facility Imaging Requests
         </h1>
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
@@ -72,7 +89,7 @@ export default function FacilityImagingRequestsPage() {
   if (error) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           Facility Imaging Requests
         </h1>
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
@@ -83,10 +100,10 @@ export default function FacilityImagingRequestsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
+    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
             Facility Imaging Requests
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -148,6 +165,9 @@ export default function FacilityImagingRequestsPage() {
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Scheduled For
               </th>
+              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Report
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -165,6 +185,16 @@ export default function FacilityImagingRequestsPage() {
                 <td className="p-3 text-sm text-slate-800">
                   {formatDateTime(req.scheduled_for || req.created_at)}
                 </td>
+                <td className="p-3 text-right text-sm">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(req)}
+                    disabled={downloadingId === req.id}
+                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {downloadingId === req.id ? "Generating…" : "PDF"}
+                  </button>
+                </td>
               </tr>
             ))}
 
@@ -172,7 +202,7 @@ export default function FacilityImagingRequestsPage() {
               <tr>
                 <td
                   className="p-4 text-center text-sm text-slate-500"
-                  colSpan={4}
+                  colSpan={5}
                 >
                   No imaging requests found.
                 </td>

@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useImagingRequests } from "@/lib/useImagingRequests";
+import { downloadImagingPdf } from "@/lib/reports";
 import {
   ScanLine,
   Filter,
@@ -36,6 +38,8 @@ export default function ProviderImagingRequestsPage() {
   const patient = sp.get("patient") || "";
   const s = sp.get("s") || "";
 
+  const [downloadingId, setDownloadingId] = useState(null);
+
   // Backend scopes by facility / role in ImagingRequestViewSet.get_queryset()
   const { data, error, isLoading } = useImagingRequests({
     page,
@@ -58,11 +62,29 @@ export default function ProviderImagingRequestsPage() {
       if (v === undefined || v === null || v === "") params.delete(k);
       else params.set(k, String(v));
     });
-    if ("status" in patch || "patient" in patch || "s" in patch || "limit" in patch) {
+    if (
+      "status" in patch ||
+      "patient" in patch ||
+      "s" in patch ||
+      "limit" in patch
+    ) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
   };
+
+  async function handleDownload(req) {
+    if (!req?.id) return;
+    try {
+      setDownloadingId(req.id);
+      await downloadImagingPdf(req.id);
+    } catch (err) {
+      console.error("Download imaging report failed", err);
+      alert(err?.message || "Failed to download imaging report.");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   if (isLoading && !data) {
     return (
@@ -193,6 +215,7 @@ export default function ProviderImagingRequestsPage() {
               <Th>Procedure</Th>
               <Th>Status</Th>
               <Th>Scheduled For</Th>
+              <Th>Report</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -237,12 +260,24 @@ export default function ProviderImagingRequestsPage() {
                     {formatDateTime(req.scheduled_for || req.created_at)}
                   </span>
                 </Td>
+                <Td>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(req)}
+                      disabled={downloadingId === req.id}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {downloadingId === req.id ? "Generating…" : "PDF"}
+                    </button>
+                  </div>
+                </Td>
               </tr>
             ))}
 
             {!rows.length && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center">
+                <td colSpan={5} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <ScanLine className="h-6 w-6 text-slate-400" />
                   </div>
@@ -260,7 +295,7 @@ export default function ProviderImagingRequestsPage() {
       </div>
 
       {/* Pager – mirrored from ProviderVitalsPage */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
+      <div className="flex items-center justify_between pt-2 text-sm text-slate-600">
         <div>
           Page {page} · {total} total
         </div>

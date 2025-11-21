@@ -2,7 +2,8 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
-import { downloadReport } from "@/lib/reports";
+import { useState } from "react";
+import { downloadLabPdf } from "@/lib/reports";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -20,11 +21,11 @@ export default function FacilityLabOrdersPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const page    = Number(sp.get("page") || 1);
-  const limit   = Number(sp.get("limit") || 20);
-  const status  = sp.get("status") || "";
+  const page = Number(sp.get("page") || 1);
+  const limit = Number(sp.get("limit") || 20);
+  const status = sp.get("status") || "";
   const patient = sp.get("patient") || "";
-  const s       = sp.get("s")      || "";
+  const s = sp.get("s") || "";
 
   // Backend scopes by user.facility_id for staff roles
   const { data, error, isLoading } = useLabOrders({
@@ -34,6 +35,8 @@ export default function FacilityLabOrdersPage() {
     patient,
     s,
   });
+
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const rows = Array.isArray(data?.results)
     ? data.results
@@ -51,16 +54,34 @@ export default function FacilityLabOrdersPage() {
         params.set(k, String(v));
       }
     });
-    if ("status" in patch || "patient" in patch || "s" in patch || "limit" in patch) {
+    if (
+      "status" in patch ||
+      "patient" in patch ||
+      "s" in patch ||
+      "limit" in patch
+    ) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
   };
 
+  async function handleDownload(order) {
+    if (!order?.id) return;
+    try {
+      setDownloadingId(order.id);
+      await downloadLabPdf(order.id);
+    } catch (err) {
+      console.error("Download lab report failed", err);
+      alert(err?.message || "Failed to download lab report.");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
   if (isLoading && !data) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           Facility Lab Orders
         </h1>
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
@@ -73,7 +94,7 @@ export default function FacilityLabOrdersPage() {
   if (error) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           Facility Lab Orders
         </h1>
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
@@ -84,10 +105,10 @@ export default function FacilityLabOrdersPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
+    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
             Facility Lab Orders
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -150,7 +171,7 @@ export default function FacilityLabOrdersPage() {
                 Ordered At
               </th>
               <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Result
+                Report
               </th>
             </tr>
           </thead>
@@ -163,7 +184,9 @@ export default function FacilityLabOrdersPage() {
                 <td className="p-3 text-sm text-slate-800">
                   {Array.isArray(order.items)
                     ? order.items
-                        .map((i) => i.test_name || i.test || i.code)
+                        .map(
+                          (i) => i.test_name || i.test || i.code
+                        )
                         .join(", ")
                     : order.tests_display || "—"}
                 </td>
@@ -176,28 +199,11 @@ export default function FacilityLabOrdersPage() {
                 <td className="p-3 text-right text-sm">
                   <button
                     type="button"
-                    onClick={async () => {
-                      try {
-                        if (!order.id) {
-                          alert("Missing lab id for report.");
-                          return;
-                        }
-                        await downloadReport({
-                          report_type: "LAB",
-                          ref_id: order.id,
-                          as_pdf: true,
-                          save_as_attachment: false,
-                        });
-                      } catch (err) {
-                        alert(
-                          err?.message ||
-                            "Failed to generate lab result report. Please try again."
-                        );
-                      }
-                    }}
-                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    onClick={() => handleDownload(order)}
+                    disabled={downloadingId === order.id}
+                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    View PDF
+                    {downloadingId === order.id ? "Generating…" : "PDF"}
                   </button>
                 </td>
               </tr>

@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCharges } from "@/lib/useCharges";
 import { useBillingLedger } from "@/lib/useBillingLedger";
-import { downloadReport } from "@/lib/reports";
+import { downloadReport, downloadBillingPdf } from "@/lib/reports";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -31,11 +32,11 @@ export default function ProviderBillingChargesPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const page    = Number(sp.get("page") || 1);
-  const limit   = Number(sp.get("limit") || 20);
-  const status  = sp.get("status") || "";
+  const page = Number(sp.get("page") || 1);
+  const limit = Number(sp.get("limit") || 20);
+  const status = sp.get("status") || "";
   const patient = sp.get("patient") || "";
-  const s       = sp.get("s")      || "";
+  const s = sp.get("s") || "";
 
   const { data, error, isLoading } = useCharges({
     page,
@@ -56,6 +57,24 @@ export default function ProviderBillingChargesPage() {
     { enabled: hasPatient }
   );
 
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  async function handleReceiptDownload(ch) {
+    if (!ch?.id) return;
+    try {
+      setDownloadingId(ch.id);
+      // For now we treat the charge ID as the billing ref_id
+      await downloadBillingPdf(ch.id);
+    } catch (err) {
+      console.error("Failed to download billing receipt", err);
+      alert(
+        err?.message || "Failed to download receipt. Please try again."
+      );
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
   const rows = Array.isArray(data?.results)
     ? data.results
     : Array.isArray(data)
@@ -72,7 +91,12 @@ export default function ProviderBillingChargesPage() {
         params.set(k, String(v));
       }
     });
-    if ("status" in patch || "patient" in patch || "s" in patch || "limit" in patch) {
+    if (
+      "status" in patch ||
+      "patient" in patch ||
+      "s" in patch ||
+      "limit" in patch
+    ) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
@@ -122,7 +146,8 @@ export default function ProviderBillingChargesPage() {
             Billing – Charges
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            All charges raised for patients in this facility. Select a patient to see their balance.
+            All charges raised for patients in this facility. Select a
+            patient to see their balance.
           </p>
         </div>
 
@@ -167,12 +192,12 @@ export default function ProviderBillingChargesPage() {
             onClick={async () => {
               try {
                 if (!patient) {
-                  alert("Enter a patient ID first.");
+                  alert("Select a patient ID first.");
                   return;
                 }
                 await downloadReport({
                   report_type: "BILLING",
-                  ref_id: Number(patient),
+                  ref_id: patient,
                   as_pdf: true,
                   save_as_attachment: false,
                 });
@@ -183,137 +208,140 @@ export default function ProviderBillingChargesPage() {
                 );
               }
             }}
-            className="w-full rounded-lg border border-sky-600 bg-sky-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:opacity-60 sm:w-48"
+            className="inline-flex items-center justify-center rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Download Patient Statement
+            Download Patient Statement (PDF)
           </button>
         </div>
       </header>
 
-      {/* Ledger summary (only when patient filter is set) */}
-      {hasPatient ? (
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Patient Charges
-            </p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">
-              {ledgerLoading ? "…" : `₦${formatMoney(rawCharges)}`}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Patient Payments
-            </p>
-            <p className="mt-2 text-xl font-semibold text-emerald-700">
-              {ledgerLoading ? "…" : `₦${formatMoney(rawPayments)}`}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Patient Balance
-            </p>
-            <p
-              className={`mt-2 text-xl font-semibold ${
-                Number(rawBalance) > 0 ? "text-rose-600" : "text-emerald-700"
-              }`}
-            >
-              {ledgerLoading ? "…" : `₦${formatMoney(rawBalance)}`}
-            </p>
-            {ledgerError && (
-              <p className="mt-1 text-xs text-rose-600">
-                {ledgerError.message}
+      {/* Ledger summary (if patient selected) */}
+      {hasPatient && (
+        <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">
+                Patient Billing Summary
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Charges, payments, and balance for patient ID:{" "}
+                <span className="font-mono">{patient}</span>
               </p>
-            )}
+              {ledgerError && (
+                <p className="mt-1 text-xs text-rose-600">
+                  Failed to load ledger summary:{" "}
+                  {ledgerError.message || "Unknown error"}
+                </p>
+              )}
+            </div>
+            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                <dt className="text-xs font-medium text-slate-500">
+                  Charges
+                </dt>
+                <dd className="text-sm font-semibold text-slate-900">
+                  {formatMoney(rawCharges)}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                <dt className="text-xs font-medium text-slate-500">
+                  Payments
+                </dt>
+                <dd className="text-sm font-semibold text-slate-900">
+                  {formatMoney(rawPayments)}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                <dt className="text-xs font-medium text-slate-500">
+                  Balance
+                </dt>
+                <dd className="text-sm font-semibold text-slate-900">
+                  {formatMoney(rawBalance)}
+                </dd>
+              </div>
+            </dl>
           </div>
         </section>
-      ) : (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Enter a <span className="font-semibold">patient ID</span> to view their running balance.
-        </div>
       )}
 
-      {/* Charges table (same as before) */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Patient
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Description
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Amount
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Created At
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((ch) => (
-              <tr key={ch.id} className="hover:bg-slate-50">
-                <td className="p-3 text-sm text-slate-800">
-                  {ch.patient || ch.patient_id || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {ch.description || `Service #${ch.service}` || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {ch.status || "—"}
-                </td>
-                <td className="p-3 text-sm text-right text-slate-800">
-                  {formatMoney(ch.amount)}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {formatDateTime(ch.created_at)}
-                </td>
-              </tr>
-            ))}
-
-            {!rows.length && (
+      {/* Table */}
+      <section className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-800">
+            Charges ({total})
+          </h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100 text-sm">
+            <thead className="bg-slate-50">
               <tr>
-                <td
-                  className="p-4 text-center text-sm text-slate-500"
-                  colSpan={5}
-                >
-                  No charges found.
-                </td>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Patient
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Description
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Status
+                </th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Amount
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Created At
+                </th>
+                {/* NEW Receipt column */}
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Receipt
+                </th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {rows.map((ch) => (
+                <tr key={ch.id} className="hover:bg-slate-50">
+                  <td className="p-3 text-sm text-slate-800">
+                    {ch.patient || ch.patient_id || "—"}
+                  </td>
+                  <td className="p-3 text-sm text-slate-800">
+                    {ch.description || `Service #${ch.service}` || "—"}
+                  </td>
+                  <td className="p-3 text-sm text-slate-800">
+                    {ch.status || "—"}
+                  </td>
+                  <td className="p-3 text-sm text-right text-slate-800">
+                    {formatMoney(ch.amount)}
+                  </td>
+                  <td className="p-3 text-sm text-slate-800">
+                    {formatDateTime(ch.created_at)}
+                  </td>
+                  {/* NEW Receipt cell */}
+                  <td className="p-3 text-sm text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleReceiptDownload(ch)}
+                      disabled={downloadingId === ch.id}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {downloadingId === ch.id ? "Generating…" : "PDF"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
 
-      {/* Pager */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
+              {!rows.length && (
+                <tr>
+                  <td
+                    className="p-4 text-center text-sm text-slate-500"
+                    colSpan={6}
+                  >
+                    No charges found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      </div>
+      </section>
     </main>
   );
 }
