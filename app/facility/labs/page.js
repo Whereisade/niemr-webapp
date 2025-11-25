@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
 import { useState } from "react";
@@ -106,7 +107,8 @@ export default function FacilityLabOrdersPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      {/* Header + primary action */}
+      <header className="mb-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
             Facility Lab Orders
@@ -116,43 +118,51 @@ export default function FacilityLabOrdersPage() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="search"
-            placeholder="Search tests / notes…"
-            defaultValue={s}
-            onBlur={(e) => updateQuery({ s: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <input
-            type="text"
-            placeholder="Filter by patient ID…"
-            defaultValue={patient}
-            onBlur={(e) => updateQuery({ patient: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
-          >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="COLLECTED">Collected</option>
-            <option value="REPORTED">Reported</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-32"
-            value={String(limit)}
-            onChange={(e) => updateQuery({ limit: e.target.value })}
-          >
-            <option value="20">Show 20</option>
-            <option value="50">Show 50</option>
-            <option value="100">Show 100</option>
-          </select>
-        </div>
+        <Link
+          href="/facility/labs/new"
+          className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        >
+          New lab order
+        </Link>
       </header>
+
+      {/* Filters / search */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          type="search"
+          placeholder="Search tests / notes…"
+          defaultValue={s}
+          onBlur={(e) => updateQuery({ s: e.target.value })}
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
+        />
+        <input
+          type="text"
+          placeholder="Filter by patient ID…"
+          defaultValue={patient}
+          onBlur={(e) => updateQuery({ patient: e.target.value })}
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
+        />
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
+          value={status}
+          onChange={(e) => updateQuery({ status: e.target.value })}
+        >
+          <option value="">All statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="COLLECTED">Collected</option>
+          <option value="REPORTED">Reported</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-32"
+          value={String(limit)}
+          onChange={(e) => updateQuery({ limit: e.target.value })}
+        >
+          <option value="20">Show 20</option>
+          <option value="50">Show 50</option>
+          <option value="100">Show 100</option>
+        </select>
+      </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-slate-200">

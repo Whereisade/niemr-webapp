@@ -1,6 +1,6 @@
-// app/provider/encounters/page.js
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
@@ -38,7 +38,6 @@ export default function ProviderEncountersPage() {
   const status = sp.get("status") || "";
   const s = sp.get("s") || "";
 
-  // Provider sees facility encounters (scoped by facility_id on user)
   const { data, error, isLoading } = useEncounters({ page, limit, status, s });
 
   const rows = Array.isArray(data?.results)
@@ -48,7 +47,7 @@ export default function ProviderEncountersPage() {
     : [];
   const total = Number(data?.count ?? rows.length);
 
-  const [attachmentsFor, setAttachmentsFor] = useState(null); // { id, label } or null
+  const [attachmentsFor, setAttachmentsFor] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
 
   const updateQuery = (patch) => {
@@ -88,7 +87,6 @@ export default function ProviderEncountersPage() {
     );
   }
 
-  // simple page stats (from current page items)
   const openCount = rows.filter(
     (r) => (r.status || "").toUpperCase() === "OPEN"
   ).length;
@@ -114,7 +112,6 @@ export default function ProviderEncountersPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
-      {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
@@ -204,6 +201,7 @@ export default function ProviderEncountersPage() {
               </th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((enc) => {
               const patientName = enc.patient_name || enc.patient || "Patient";
@@ -212,7 +210,17 @@ export default function ProviderEncountersPage() {
 
               return (
                 <tr key={enc.id} className="hover:bg-slate-50">
-                  <Td>{patientName}</Td>
+
+                  {/* 🔗 PATIENT CELL PATCHED HERE */}
+                  <td className="p-3 text-sm text-slate-800">
+                    <Link
+                      href={`/provider/encounters/${enc.id}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      {patientName}
+                    </Link>
+                  </td>
+
                   <Td>{typeLabel}</Td>
                   <Td>
                     <StatusPill value={enc.status} />
@@ -222,6 +230,7 @@ export default function ProviderEncountersPage() {
                       enc.started_at || enc.created_at || "—"
                     )}
                   </Td>
+
                   <td className="p-3 text-right text-sm">
                     <button
                       type="button"
@@ -232,6 +241,7 @@ export default function ProviderEncountersPage() {
                       {downloadingId === enc.id ? "Generating…" : "PDF"}
                     </button>
                   </td>
+
                   <td className="p-3 text-right text-sm">
                     <button
                       type="button"
@@ -252,10 +262,7 @@ export default function ProviderEncountersPage() {
 
             {!rows.length && (
               <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-10 text-center"
-                >
+                <td colSpan={6} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>
@@ -290,7 +297,6 @@ export default function ProviderEncountersPage() {
                 onClick={() => setAttachmentsFor(null)}
                 className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
-                <span className="sr-only">Close</span>
                 ✕
               </button>
             </div>
@@ -335,8 +341,6 @@ export default function ProviderEncountersPage() {
     </main>
   );
 }
-
-/* ───────────── UI helpers ───────────── */
 
 function StatTile({ icon: Icon, label, value, gradient }) {
   return (

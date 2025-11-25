@@ -1,10 +1,11 @@
-// app/facility/encounters/[id]/page.js
+// app/provider/encounters/[id]/page.js
 
 import EncounterDetailClient from "./EncounterDetailClient";
 
 async function fetchEncounter(id) {
   const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
   const res = await fetch(`${base}/api/bff/encounters/${id}`, {
+    // always fresh; this is clinical data
     cache: "no-store",
   });
 
@@ -22,7 +23,7 @@ async function fetchEncounter(id) {
   return { notFound: false, data };
 }
 
-export default async function FacilityEncounterDetailPage({ params }) {
+export default async function ProviderEncounterDetailPage({ params }) {
   const encounterId = params?.id;
   if (!encounterId) {
     return (

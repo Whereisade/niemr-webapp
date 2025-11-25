@@ -15,6 +15,8 @@ import {
   RefreshCw,
   ChevronRight,
   UserRound,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 
 /**
@@ -33,7 +35,12 @@ export default function ProviderAppointmentsPage() {
   const q      = sp.get("q")      || "";
 
   const { data, error, isLoading, mutate } = useAppointments({
-    page, limit, status, date, q, mine: "true",
+    page,
+    limit,
+    status,
+    date,
+    q,
+    mine: "true",
   });
 
   const rowsRaw = data?.results ?? (Array.isArray(data) ? data : []);
@@ -43,7 +50,7 @@ export default function ProviderAppointmentsPage() {
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
     Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "" ) params.delete(k);
+      if (v === undefined || v === null || v === "") params.delete(k);
       else params.set(k, String(v));
     });
     // reset page when changing filters/search/limit/date/status
@@ -66,12 +73,24 @@ export default function ProviderAppointmentsPage() {
     }
   };
 
+  const dateLabelMap = {
+    today: "Today",
+    tomorrow: "Tomorrow",
+    this_week: "This week",
+    next_7d: "Next 7 days",
+    all: "All dates",
+  };
+  const dateLabel = dateLabelMap[date] || "Custom";
+
+  const hasActiveFilters = Boolean(status || q || date !== "today");
+
   return (
     <main className="relative mx-auto max-w-7xl p-6 md:p-10 space-y-6">
       {/* soft background accents for design parity */}
       <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100 blur-3xl opacity-60" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100 blur-3xl opacity-60" />
 
+      {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
@@ -81,7 +100,7 @@ export default function ProviderAppointmentsPage() {
             Appointments
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Filter, search, and manage today’s visits.
+            Filter, search, and manage visits across <span className="font-medium">{dateLabel.toLowerCase()}</span>.
           </p>
         </div>
 
@@ -97,10 +116,10 @@ export default function ProviderAppointmentsPage() {
           <StatChip label="Page" value={page} />
           <button
             onClick={() => updateQuery({})}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-blue-200 hover:text-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
           >
             <RefreshCw className="h-4 w-4" />
-            Refresh
+            Reset filters
           </button>
         </div>
       </header>
@@ -122,13 +141,24 @@ export default function ProviderAppointmentsPage() {
               placeholder="Search patient / reason…"
               className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />
+            {q ? (
+              <div className="mt-1 text-xs text-slate-400">
+                Press <span className="rounded border border-slate-200 px-1">Enter</span> to apply search
+              </div>
+            ) : null}
           </div>
 
           {/* right: selects + quick date */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-              <Filter className="h-4 w-4 text-slate-400" />
-              <span className="text-slate-600">Filters</span>
+            <div
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                hasActiveFilters
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-slate-200 bg-white text-slate-600"
+              }`}
+            >
+              <Filter className="h-4 w-4" />
+              <span>Filters {hasActiveFilters ? "· Active" : ""}</span>
             </div>
 
             <select
@@ -138,9 +168,10 @@ export default function ProviderAppointmentsPage() {
             >
               <option value="">All statuses</option>
               <option value="SCHEDULED">Scheduled</option>
-              <option value="CHECK_IN">Check-in</option>
-              <option value="COMPLETE">Complete</option>
+              <option value="CHECKED_IN">Checked In</option>
+              <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No-show</option>
             </select>
 
             <select
@@ -152,7 +183,7 @@ export default function ProviderAppointmentsPage() {
               <option value="tomorrow">Tomorrow</option>
               <option value="this_week">This week</option>
               <option value="next_7d">Next 7 days</option>
-              <option value="all">All</option>
+              <option value="all">All dates</option>
             </select>
 
             <select
@@ -170,7 +201,7 @@ export default function ProviderAppointmentsPage() {
 
       {/* Table card */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <CardHead title="My Appointments" subtitle={`Total: ${total}`} />
+        <CardHead title="My Appointments" subtitle={`${dateLabel} · ${total} total`} />
         {isLoading ? (
           <div className="p-6 text-sm text-slate-600">Loading appointments…</div>
         ) : error ? (
@@ -194,8 +225,8 @@ export default function ProviderAppointmentsPage() {
                   rows.map((a) => {
                     const time =
                       a.scheduled_for || a.start_time || a.date || a.time || "—";
-                    const status = a.status || "SCHEDULED";
-                    const actions = getAvailableActions(status);
+                    const statusValue = a.status || "SCHEDULED";
+                    const actions = getAvailableActions(statusValue);
 
                     return (
                       <tr key={a.id} className="transition hover:bg-slate-50/60">
@@ -204,27 +235,37 @@ export default function ProviderAppointmentsPage() {
                             <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
                               <UserRound className="h-4 w-4 text-blue-700" />
                             </span>
-                            <span className="font-medium text-slate-900">
-                              {a.patient_name || a.patient || "—"}
-                            </span>
+                            <div>
+                              <div className="font-medium text-slate-900">
+                                {a.patient_name || a.patient || "—"}
+                              </div>
+                              {a.facility_name ? (
+                                <div className="text-xs text-slate-500">
+                                  {a.facility_name}
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         </Td>
                         <Td className="text-slate-600">
-                          {a.reason || "Consultation"}
+                          <span className="line-clamp-2">
+                            {a.reason || "Consultation"}
+                          </span>
                         </Td>
                         <Td>
-                          <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                            <CalendarRange className="h-3.5 w-3.5 text-slate-400" />
                             {time}
                           </span>
                         </Td>
                         <Td>
-                          <StatusPill value={status} />
+                          <StatusPill value={statusValue} />
                         </Td>
                         <Td className="text-right">
                           {actions.length === 0 ? (
                             <div className="flex flex-col items-end gap-1">
                               <span className="text-xs text-slate-400">
-                                No actions
+                                No quick actions
                               </span>
                               <a
                                 href={`/provider/appointments/${a.id}`}
@@ -268,6 +309,8 @@ export default function ProviderAppointmentsPage() {
                         title="No appointments"
                         subtitle="When you’re booked, visits will appear here automatically."
                         icon={CalendarRange}
+                        ctaHref="/provider/appointments/new"
+                        ctaLabel="Create appointment"
                       />
                     </td>
                   </tr>
@@ -279,23 +322,27 @@ export default function ProviderAppointmentsPage() {
 
         {/* Pager */}
         <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
-          <div>Page {page} · {total} total</div>
+          <div>
+            Page {page} · {total} total
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
               disabled={page <= 1}
               onClick={() => updateQuery({ page: page - 1 })}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
             >
+              <ArrowLeft className="h-4 w-4" />
               Previous
             </button>
             <button
               type="button"
               disabled={!rows.length || rows.length < limit}
               onClick={() => updateQuery({ page: page + 1 })}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
             >
               Next
+              <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -309,16 +356,19 @@ export default function ProviderAppointmentsPage() {
 function CardHead({ title, subtitle }) {
   return (
     <div className="flex items-center justify-between p-5 border-b border-slate-200/70">
-      <div>
-        <div className="flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-            <CalendarRange className="h-5 w-5 text-slate-700" />
-          </div>
-          <h2 className="text-slate-900 font-medium">{title}</h2>
+      <div className="flex items-center gap-3">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
+          <CalendarRange className="h-5 w-5 text-slate-700" />
         </div>
-        {subtitle ? (
-          <div className="ml-11 text-xs text-slate-500">{subtitle}</div>
-        ) : null}
+        <div>
+          <h2 className="text-sm font-medium text-slate-900">{title}</h2>
+          {subtitle ? (
+            <p className="text-xs text-slate-500">{subtitle}</p>
+          ) : null}
+        </div>
+      </div>
+      <div className="hidden text-xs text-slate-500 md:block">
+        Most recent first
       </div>
     </div>
   );
@@ -326,23 +376,43 @@ function CardHead({ title, subtitle }) {
 
 function Th({ children, className = "" }) {
   return (
-    <th className={`px-4 py-3 text-xs font-medium uppercase tracking-wide ${className}`}>
+    <th
+      className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 ${className}`}
+    >
       {children}
     </th>
   );
 }
+
 function Td({ children, className = "" }) {
-  return <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>;
+  return (
+    <td className={`px-4 py-3 align-middle text-sm text-slate-800 ${className}`}>
+      {children}
+    </td>
+  );
 }
 
-function EmptyState({ icon: Icon, title, subtitle }) {
+function EmptyState({ icon: Icon, title, subtitle, ctaHref, ctaLabel }) {
   return (
     <div className="py-10 text-center">
-      <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
         <Icon className="h-6 w-6 text-slate-400" />
       </div>
       <div className="text-sm font-medium text-slate-900">{title}</div>
-      {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
+      {subtitle ? (
+        <div className="mt-1 text-sm text-slate-500">{subtitle}</div>
+      ) : null}
+      {ctaHref && ctaLabel ? (
+        <div className="mt-4">
+          <Link
+            href={ctaHref}
+            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50"
+          >
+            {ctaLabel}
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -351,14 +421,19 @@ function StatusPill({ value }) {
   const v = String(value || "").toUpperCase();
   const map = {
     SCHEDULED: "bg-slate-50 text-slate-700 ring-slate-200",
-    CHECK_IN: "bg-blue-50 text-blue-700 ring-blue-200",
-    COMPLETE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    CHECKED_IN: "bg-blue-50 text-blue-700 ring-blue-200",
+    COMPLETED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
+    NO_SHOW: "bg-amber-50 text-amber-700 ring-amber-200",
   };
-  const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
+  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
   const label = (v || "—").replaceAll("_", " ");
+
   return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {label}
     </span>
   );
@@ -366,7 +441,7 @@ function StatusPill({ value }) {
 
 function StatChip({ label, value }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+    <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
       <span className="text-slate-600">{label}</span>
       <span className="font-semibold text-slate-900">{value}</span>
     </div>

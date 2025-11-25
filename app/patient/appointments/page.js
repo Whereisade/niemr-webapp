@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
 import StatusBadge from "@/components/StatusBadge";
@@ -56,8 +57,7 @@ export default function PatientAppointmentsPage() {
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
     Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "")
-        params.delete(k);
+      if (v === undefined || v === null || v === "") params.delete(k);
       else params.set(k, String(v));
     });
     if ("status" in patch || "q" in patch || "limit" in patch)
@@ -107,14 +107,23 @@ export default function PatientAppointmentsPage() {
             My Appointments
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            View your upcoming and past appointments.
+            View, cancel and download details of your bookings.
           </p>
         </div>
 
-        {/* mini stats */}
-        <div className="inline-flex items-center gap-2">
-          <Chip icon={CalendarRange} label="Total" value={total} />
-          <Chip icon={UserRound} label="Page" value={page} />
+        {/* Right side: Book button + mini stats */}
+        <div className="flex flex-col items-end gap-2 md:flex-row md:items-center md:gap-3">
+          <Link
+            href="/patient/appointments/new"
+            className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            Book appointment
+          </Link>
+
+          <div className="inline-flex items-center gap-2">
+            <Chip icon={CalendarRange} label="Total" value={total} />
+            <Chip icon={UserRound} label="Page" value={page} />
+          </div>
         </div>
       </header>
 
@@ -151,12 +160,11 @@ export default function PatientAppointmentsPage() {
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             >
               <option value="">All statuses</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="checked_in">Checked In</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="no_show">No-show</option>
+              <option value="SCHEDULED">Scheduled</option>
+              <option value="CHECKED_IN">Checked In</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No-show</option>
             </select>
 
             <select
@@ -197,18 +205,14 @@ export default function PatientAppointmentsPage() {
                 </tr>
               ) : error ? (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="p-6 text-rose-700 bg-rose-50"
-                  >
-                    Failed to load:{" "}
-                    {error.message || "Unknown error"}
+                  <td colSpan={4} className="p-6 text-rose-700 bg-rose-50">
+                    Failed to load: {error.message || "Unknown error"}
                   </td>
                 </tr>
               ) : rows.length ? (
                 rows.map((a) => {
-                  const status = a.status || "SCHEDULED";
-                  const actions = getPatientActions(status);
+                  const statusValue = a.status || "SCHEDULED";
+                  const actions = getPatientActions(statusValue);
 
                   return (
                     <tr
@@ -246,6 +250,7 @@ export default function PatientAppointmentsPage() {
                                   }
                                   className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                                 >
+                                  {/* For patients, only "Cancel" appears */}
                                   Cancel
                                 </button>
                               ))}
@@ -254,7 +259,7 @@ export default function PatientAppointmentsPage() {
 
                           <a
                             href={`/patient/appointments/${a.id}`}
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg.white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
                           >
                             View
                             <ChevronRight className="h-4 w-4" />
@@ -300,9 +305,7 @@ function TableHead({ title, subtitle }) {
           <h2 className="text-slate-900 font-medium">{title}</h2>
         </div>
         {subtitle ? (
-          <div className="ml-11 text-xs text-slate-500">
-            {subtitle}
-          </div>
+          <div className="ml-11 text-xs text-slate-500">{subtitle}</div>
         ) : null}
       </div>
     </div>
@@ -320,9 +323,7 @@ function Th({ children, className = "" }) {
 }
 
 function Td({ children, className = "" }) {
-  return (
-    <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>
-  );
+  return <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>;
 }
 
 function EmptyState({ title, subtitle }) {
@@ -331,13 +332,11 @@ function EmptyState({ title, subtitle }) {
       <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
         <CalendarRange className="h-6 w-6 text-slate-400" />
       </div>
-      <div className="text-sm font.medium text-slate-900">
+      <div className="text-sm font-medium text-slate-900">
         {title}
       </div>
       {subtitle ? (
-        <div className="mt-1 text-sm text-slate-500">
-          {subtitle}
-        </div>
+        <div className="mt-1 text-sm text-slate-500">{subtitle}</div>
       ) : null}
     </div>
   );
@@ -346,9 +345,7 @@ function EmptyState({ title, subtitle }) {
 function Chip({ icon: Icon, label, value }) {
   return (
     <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-      {Icon ? (
-        <Icon className="h-4 w-4 text-slate-400" />
-      ) : null}
+      {Icon ? <Icon className="h-4 w-4 text-slate-400" /> : null}
       <span className="text-slate-600">{label}</span>
       <span className="font-semibold text-slate-900">{value}</span>
     </div>

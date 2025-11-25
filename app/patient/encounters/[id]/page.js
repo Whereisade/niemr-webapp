@@ -1,4 +1,4 @@
-// app/facility/encounters/[id]/page.js
+// app/patient/encounters/[id]/page.js
 
 import EncounterDetailClient from "./EncounterDetailClient";
 
@@ -22,7 +22,7 @@ async function fetchEncounter(id) {
   return { notFound: false, data };
 }
 
-export default async function FacilityEncounterDetailPage({ params }) {
+export default async function PatientEncounterDetailPage({ params }) {
   const encounterId = params?.id;
   if (!encounterId) {
     return (

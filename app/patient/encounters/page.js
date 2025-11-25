@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
@@ -204,6 +205,10 @@ export default function PatientEncountersPage() {
               <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Files
               </th>
+              {/* NEW Details column */}
+              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Details
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -274,13 +279,24 @@ export default function PatientEncountersPage() {
                       Attachments
                     </button>
                   </td>
+
+                  {/* NEW Details cell */}
+                  <td className="p-3 text-right text-sm">
+                    <Link
+                      href={`/patient/encounters/${enc.id}`}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      View
+                    </Link>
+                  </td>
                 </tr>
               );
             })}
 
             {!rows.length && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center">
+                {/* bump colSpan from 7 → 8 to include Details */}
+                <td colSpan={8} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>
