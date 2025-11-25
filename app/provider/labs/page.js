@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
@@ -46,14 +47,25 @@ export default function ProviderLabOrdersPage() {
     s,
   });
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
-  const total = Number(data?.count ?? rows.length);
-
   const [downloadingId, setDownloadingId] = useState(null);
+
+  // 🔧 Normalize data into a proper rows array (handles BFF numeric-key object)
+  let rows = [];
+
+  if (Array.isArray(data?.results)) {
+    rows = data.results;
+  } else if (Array.isArray(data)) {
+    rows = data;
+  } else if (data && typeof data === "object") {
+    const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      rows = numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => data[k]);
+    }
+  }
+
+  const total = Number(data?.count ?? rows.length);
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -123,7 +135,7 @@ export default function ProviderLabOrdersPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
-      {/* Header */}
+      {/* Header + top actions */}
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
@@ -139,41 +151,51 @@ export default function ProviderLabOrdersPage() {
           </p>
         </div>
 
-        {/* Filters */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative">
-            <input
-              type="search"
-              placeholder="Search tests / notes…"
-              defaultValue={s}
-              onBlur={(e) => updateQuery({ s: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
-            />
-            <Activity className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Filter by patient ID…"
-              defaultValue={patient}
-              onBlur={(e) => updateQuery({ patient: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
-            />
-            <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
+          {/* New order button */}
+          <Link
+            href="/provider/labs/new"
+            className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="COLLECTED">Collected</option>
-            <option value="REPORTED">Reported</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+            New lab order
+          </Link>
         </div>
       </header>
+
+      {/* Filters */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative">
+          <input
+            type="search"
+            placeholder="Search tests / notes…"
+            defaultValue={s}
+            onBlur={(e) => updateQuery({ s: e.target.value })}
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
+          />
+          <Activity className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        </div>
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Filter by patient ID…"
+            defaultValue={patient}
+            onBlur={(e) => updateQuery({ patient: e.target.value })}
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
+          />
+          <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-40"
+          value={status}
+          onChange={(e) => updateQuery({ status: e.target.value })}
+        >
+          <option value="">All statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="COLLECTED">Collected</option>
+          <option value="REPORTED">Reported</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+      </div>
 
       {/* Quick stats */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -249,7 +271,11 @@ export default function ProviderLabOrdersPage() {
                           key={idx}
                           className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
                         >
-                          {i.test_name || i.test || i.code || "Test"}
+                          {i.test?.name ||
+                            i.test?.code ||
+                            i.test_name ||
+                            i.code ||
+                            "Test"}
                         </span>
                       ))}
                       {order.items.length > 4 && (
@@ -304,7 +330,7 @@ export default function ProviderLabOrdersPage() {
         </table>
       </div>
 
-      {/* Pager (same pattern as vitals) */}
+      {/* Pager */}
       <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
         <div>
           Page {page} · {total} total
@@ -334,7 +360,7 @@ export default function ProviderLabOrdersPage() {
   );
 }
 
-/* ─────────────── UI helpers (UI-only) ─────────────── */
+/* ─────────────── UI helpers ─────────────── */
 
 function StatTile({ icon: Icon, label, value, accent }) {
   return (

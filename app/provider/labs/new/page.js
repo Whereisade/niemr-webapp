@@ -16,7 +16,7 @@ export default function ProviderNewLabOrderPage() {
 
   // Form state
   const [patientId, setPatientId] = useState("");
-  const [testName, setTestName] = useState("");
+  const [testCode, setTestCode] = useState("");
   const [priority, setPriority] = useState("ROUTINE");
   const [notes, setNotes] = useState("");
 
@@ -33,7 +33,6 @@ export default function ProviderNewLabOrderPage() {
     async function fetchPatients() {
       try {
         setLoadingPatients(true);
-        // same pattern as provider/facility appointment forms
         const res = await apiFetch("/patients/?page=1&limit=50");
         if (cancelled) return;
         const items = Array.isArray(res) ? res : res?.results || [];
@@ -61,24 +60,45 @@ export default function ProviderNewLabOrderPage() {
 
     const patient = Number(patientId);
     if (!patient || Number.isNaN(patient)) {
-      setError("Please select a patient.");
+      if (!loadingPatients && patients.length === 0) {
+        setError(
+          "No patients are available. Please create a patient profile first before ordering labs."
+        );
+      } else {
+        setError("Please select a patient.");
+      }
       return;
     }
 
-    if (!testName.trim()) {
-      setError("Please enter the lab test name.");
+    if (!testCode.trim()) {
+      setError("Please enter the lab test code.");
       return;
     }
 
+    // IMPORTANT: align with backend:
+    // {
+    //   "patient": 123,
+    //   "priority": "ROUTINE",
+    //   "note": "optional note",
+    //   "items": [ { "test_code": "FBC" } ],
+    //   "provider": 45   // optional
+    // }
     const payload = {
       patient,
-      test_name: testName.trim(),
       priority: priority || "ROUTINE",
+      items: [
+        {
+          test_code: testCode.trim(), // must match LabTest.code
+        },
+      ],
     };
 
     if (notes.trim()) {
-      payload.notes = notes.trim();
+      payload.note = notes.trim();
     }
+
+    // Provider is implied from JWT (ordered_by), so we don't send provider id here.
+    // If backend later wants explicit provider, we can add it.
 
     setIsSubmitting(true);
     try {
@@ -86,7 +106,6 @@ export default function ProviderNewLabOrderPage() {
       router.push("/provider/labs");
     } catch (err) {
       console.error("Create lab order failed", err);
-      // apiFetch usually throws an Error with message or a Response-like object
       setError(
         err?.message ||
           "Failed to create lab order. Please check the fields and try again."
@@ -152,21 +171,20 @@ export default function ProviderNewLabOrderPage() {
           </p>
         </div>
 
-        {/* Test name */}
+        {/* Test code */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Test name
+            Test code
           </label>
           <input
             type="text"
-            value={testName}
-            onChange={(e) => setTestName(e.target.value)}
-            placeholder="e.g. Full blood count (FBC)"
+            value={testCode}
+            onChange={(e) => setTestCode(e.target.value)}
+            placeholder="e.g. FBC, FBC_HB"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Later we can hook this into a lab test catalogue; for now, free
-            text is accepted.
+            Code must match an existing lab test in the catalogue (LabTest.code).
           </p>
         </div>
 
@@ -191,7 +209,7 @@ export default function ProviderNewLabOrderPage() {
         {/* Notes */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Clinical notes (optional)
+            Clinical note (optional)
           </label>
           <textarea
             value={notes}

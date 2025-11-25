@@ -92,24 +92,29 @@ export default function FacilityNewLabOrderPage() {
     }
 
     if (!testName.trim()) {
-      setError("Please enter the lab test name.");
+      setError("Please enter the lab test code.");
       return;
     }
 
+    // Backend expects: { patient, priority, note?, items: [{ test_code }] }
     const payload = {
       patient,
-      test_name: testName.trim(),
       priority: priority || "ROUTINE",
+      items: [
+        {
+          // This must match LabTest.code in the catalog
+          test_code: testName.trim(),
+        },
+      ],
     };
 
     const provider = Number(providerId);
     if (provider && !Number.isNaN(provider)) {
-      // only send provider if selected
-      payload.provider = provider;
+      payload.provider = provider; // optional
     }
 
     if (notes.trim()) {
-      payload.notes = notes.trim();
+      payload.note = notes.trim(); // backend field is singular "note"
     }
 
     setIsSubmitting(true);
@@ -219,21 +224,21 @@ export default function FacilityNewLabOrderPage() {
           </p>
         </div>
 
-        {/* Test name */}
+        {/* Test code */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Test name
+            Test code
           </label>
           <input
             type="text"
             value={testName}
             onChange={(e) => setTestName(e.target.value)}
-            placeholder="e.g. Full blood count (FBC)"
+            placeholder="e.g. FBC_HB"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Later we can hook this into a lab test catalogue; for now, free
-            text is accepted.
+            Enter the lab test code; it must match an existing test in the lab
+            catalogue (e.g. FBC_HB).
           </p>
         </div>
 

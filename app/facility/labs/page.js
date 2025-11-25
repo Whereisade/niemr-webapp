@@ -39,11 +39,26 @@ export default function FacilityLabOrdersPage() {
 
   const [downloadingId, setDownloadingId] = useState(null);
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
+  // ✅ Normalize data into a proper rows array
+  let rows = [];
+
+  if (Array.isArray(data?.results)) {
+    // paginated shape: { count, results: [...] }
+    rows = data.results;
+  } else if (Array.isArray(data)) {
+    // raw list
+    rows = data;
+  } else if (data && typeof data === "object") {
+    // BFF “spread array into object with numeric keys” shape:
+    // { "0": {...}, "1": {...}, _debug_* }
+    const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      rows = numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => data[k]);
+    }
+  }
+
   const total = Number(data?.count ?? rows.length);
 
   const updateQuery = (patch) => {
@@ -195,7 +210,11 @@ export default function FacilityLabOrdersPage() {
                   {Array.isArray(order.items)
                     ? order.items
                         .map(
-                          (i) => i.test_name || i.test || i.code
+                          (i) =>
+                            i.test?.name ||
+                            i.test?.code ||
+                            i.test_name ||
+                            i.code
                         )
                         .join(", ")
                     : order.tests_display || "—"}
