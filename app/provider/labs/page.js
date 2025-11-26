@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
 import { downloadLabPdf } from "@/lib/reports";
+import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
 import {
   FlaskConical,
   Filter,
@@ -48,6 +49,10 @@ export default function ProviderLabOrdersPage() {
   });
 
   const [downloadingId, setDownloadingId] = useState(null);
+
+  // NEW: modal state for lab order details
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOrderId, setDetailsOrderId] = useState(null);
 
   // 🔧 Normalize data into a proper rows array (handles BFF numeric-key object)
   let rows = [];
@@ -299,14 +304,29 @@ export default function ProviderLabOrdersPage() {
                   </span>
                 </Td>
                 <td className="p-3 text-right text-sm">
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(order)}
-                    disabled={downloadingId === order.id}
-                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {downloadingId === order.id ? "Generating…" : "PDF"}
-                  </button>
+                  <div className="inline-flex items-center gap-2">
+                    {/* NEW: View button → opens modal */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailsOrderId(order.id);
+                        setDetailsOpen(true);
+                      }}
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      View
+                    </button>
+
+                    {/* Existing PDF button */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(order)}
+                      disabled={downloadingId === order.id}
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {downloadingId === order.id ? "Generating…" : "PDF"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -356,6 +376,13 @@ export default function ProviderLabOrdersPage() {
           </button>
         </div>
       </div>
+
+      {/* Lab order details modal */}
+      <LabOrderDetailsModal
+        orderId={detailsOrderId}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      />
     </main>
   );
 }
