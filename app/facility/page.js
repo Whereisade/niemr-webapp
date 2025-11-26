@@ -108,7 +108,7 @@ export default async function FacilityDashboard() {
       value: notifList.length,
       icon: BellRing,
       accent: "from-amber-600 via-orange-600 to-red-600",
-      href: "/facility/notifications",
+      href: "/notifications",
       cta: "View notifications",
     },
   ];
@@ -136,7 +136,7 @@ export default async function FacilityDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
-          <NotificationsBell href="/facility/notifications" />
+          <NotificationsBell href="/notifications" />
           <div className="flex flex-wrap gap-2">
             <Link
               href="/facility/encounters"
@@ -171,7 +171,7 @@ export default async function FacilityDashboard() {
             </Link>
 
             <Link
-              href="/facility/notifications"
+              href="/notifications"
               className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
               Facility Notifications
@@ -436,7 +436,7 @@ export default async function FacilityDashboard() {
       <section className="mt-10">
         <CardHead
           title="Recent Notifications"
-          href="/facility/notifications"
+          href="/notifications"
           icon={BellRing}
           actionLabel="View all"
         />

@@ -1,9 +1,10 @@
+// app/patient/labs/page.js
 "use client";
 
-import { useState } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useLabOrders } from "@/lib/useLabOrders";
-import { downloadLabPdf } from "@/lib/reports";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -16,211 +17,222 @@ function formatDateTime(value) {
   }
 }
 
-export default function PatientLabOrdersPage() {
-  const sp = useSearchParams();
+export default function PatientLabsPage() {
   const router = useRouter();
-  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const page = Number(sp.get("page") || 1);
-  const limit = Number(sp.get("limit") || 20);
-  const status = sp.get("status") || "";
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const { data, error, isLoading } = useLabOrders({
-    page,
-    limit,
-    status,
-  });
+  // details modal
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOrderId, setDetailsOrderId] = useState(null);
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
-  const total = Number(data?.count ?? rows.length);
+  // simple paging via query params: ?page=1&limit=10
+  const page = Number(searchParams.get("page") || "1");
+  const limit = Number(searchParams.get("limit") || "10");
 
-  const [downloadingId, setDownloadingId] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
 
-  const updateQuery = (patch) => {
-    const params = new URLSearchParams(sp?.toString() || "");
-    Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") {
-        params.delete(k);
-      } else {
-        params.set(k, String(v));
+    async function fetchLabs() {
+      try {
+        setLoading(true);
+        setError("");
+        // For now: reuse same endpoint as facility/provider.
+        // Backend should scope to "current patient" automatically
+        // when called as PATIENT role; if not, we can add &mine=true later.
+        const qs = new URLSearchParams();
+        qs.set("page", String(page));
+        qs.set("limit", String(limit));
+
+        const res = await apiFetch(`/labs/orders/?${qs.toString()}`);
+        if (cancelled) return;
+        setData(res);
+      } catch (err) {
+        console.error("Failed to load patient lab orders", err);
+        if (!cancelled) {
+          setError(
+            err?.message || "Failed to load lab orders. Please try again."
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    });
-    if ("status" in patch || "limit" in patch) {
-      params.set("page", "1");
     }
-    router.push(`${pathname}?${params.toString()}`);
-  };
 
-  async function handleDownload(order) {
-    if (!order?.id) {
-      alert("Missing lab id for report.");
-      return;
-    }
-    try {
-      setDownloadingId(order.id);
-      await downloadLabPdf(order.id);
-    } catch (err) {
-      console.error("Download lab report failed", err);
-      alert(
-        err?.message ||
-          "Failed to download lab report. Please try again."
-      );
-    } finally {
-      setDownloadingId(null);
+    fetchLabs();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, limit]);
+
+  // normalize like facility/provider
+  let rows = [];
+  if (Array.isArray(data?.results)) {
+    rows = data.results;
+  } else if (Array.isArray(data)) {
+    rows = data;
+  } else if (data && typeof data === "object") {
+    const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      rows = numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => data[k]);
     }
   }
 
-  if (isLoading && !data) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          My Lab Tests
-        </h1>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
-          Loading lab orders…
-        </div>
-      </main>
-    );
-  }
+  const hasNextPage = rows.length === limit; // simple heuristic
+  const hasPrevPage = page > 1;
 
-  if (error) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          My Lab Tests
-        </h1>
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
-        </div>
-      </main>
-    );
+  function goToPage(nextPage) {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (nextPage && nextPage > 1) {
+      sp.set("page", String(nextPage));
+    } else {
+      sp.delete("page");
+    }
+    router.push(`/patient/labs?${sp.toString()}`);
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            My Lab Tests
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Lab test requests and results recorded for you.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
-          >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="COLLECTED">Collected</option>
-            <option value="REPORTED">Reported</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={String(limit)}
-            onChange={(e) => updateQuery({ limit: e.target.value })}
-          >
-            <option value="10">Show 10</option>
-            <option value="20">Show 20</option>
-            <option value="50">Show 50</option>
-          </select>
-        </div>
+    <main className="mx-auto max-w-6xl p-6 md:p-10 space-y-6">
+      <header className="mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+          My lab orders
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">
+          View lab requests and their status. This is a read-only view.
+        </p>
       </header>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Tests
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Ordered At
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Result
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((order) => (
-              <tr key={order.id} className="hover:bg-slate-50">
-                <td className="p-3 text-sm text-slate-800">
-                  {Array.isArray(order.items)
-                    ? order.items
-                        .map((i) => i.test_name || i.test || i.code)
-                        .join(", ")
-                    : order.tests_display || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {order.status || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {formatDateTime(order.ordered_at || order.created_at)}
-                </td>
-                <td className="p-3 text-right text-sm">
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(order)}
-                    disabled={downloadingId === order.id}
-                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {downloadingId === order.id ? "Generating…" : "PDF"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-            {!rows.length && (
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100">
+            <thead className="bg-slate-50">
               <tr>
-                <td
-                  className="p-4 text-center text-sm text-slate-500"
-                  colSpan={4}
-                >
-                  No lab tests found.
-                </td>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Ordered at
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Tests
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Priority
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Status
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {loading && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    Loading lab orders…
+                  </td>
+                </tr>
+              )}
 
-      {/* Simple pager */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
+              {!loading &&
+                rows.map((order) => (
+                  <tr key={order.id} className="hover:bg-slate-50">
+                    <td className="p-3 text-sm text-slate-800">
+                      {formatDateTime(order.ordered_at)}
+                    </td>
+                    <td className="p-3 text-sm text-slate-800">
+                      {Array.isArray(order.items)
+                        ? order.items
+                            .map(
+                              (i) =>
+                                i.test?.name ||
+                                i.test?.code ||
+                                i.test_name ||
+                                i.code
+                            )
+                            .join(", ")
+                        : order.tests_display || "—"}
+                    </td>
+                    <td className="p-3 text-sm text-slate-800">
+                      {order.priority || "—"}
+                    </td>
+                    <td className="p-3 text-sm text-slate-800">
+                      {order.status || "—"}
+                    </td>
+                    <td className="p-3 text-sm text-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsOrderId(order.id);
+                          setDetailsOpen(true);
+                        }}
+                        className="rounded-full border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+              {!loading && !rows.length && !error && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    You don&apos;t have any lab orders yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Next
-          </button>
+
+        {/* simple pager */}
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+          <span>
+            Page {page} · Showing {rows.length} item
+            {rows.length === 1 ? "" : "s"}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => goToPage(page - 1)}
+              disabled={!hasPrevPage}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(page + 1)}
+              disabled={!hasNextPage}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
+
+      <LabOrderDetailsModal
+        orderId={detailsOrderId}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      />
     </main>
   );
 }

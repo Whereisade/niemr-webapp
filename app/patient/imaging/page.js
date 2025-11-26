@@ -1,9 +1,10 @@
+// app/patient/imaging/page.js
 "use client";
 
-import { useState } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useImagingRequests } from "@/lib/useImagingRequests";
-import { downloadImagingPdf } from "@/lib/reports";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import ImagingRequestDetailsModal from "@/components/imaging/ImagingRequestDetailsModal";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -16,202 +17,226 @@ function formatDateTime(value) {
   }
 }
 
-export default function PatientImagingRequestsPage() {
-  const sp = useSearchParams();
+// Base BFF path for imaging requests
+const IMAGING_BASE = "/imaging/requests/";
+
+export default function PatientImagingPage() {
   const router = useRouter();
-  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const page = Number(sp.get("page") || 1);
-  const limit = Number(sp.get("limit") || 20);
-  const status = sp.get("status") || "";
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [downloadingId, setDownloadingId] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsRequestId, setDetailsRequestId] = useState(null);
 
-  // Backend should automatically scope imaging requests to the logged-in PATIENT
-  const { data, error, isLoading } = useImagingRequests({
-    page,
-    limit,
-    status,
-  });
+  const page = Number(searchParams.get("page") || "1");
+  const limit = Number(searchParams.get("limit") || "10");
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
-  const total = Number(data?.count ?? rows.length);
+  useEffect(() => {
+    let cancelled = false;
 
-  const updateQuery = (patch) => {
-    const params = new URLSearchParams(sp?.toString() || "");
-    Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") {
-        params.delete(k);
-      } else {
-        params.set(k, String(v));
+    async function fetchImaging() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const qs = new URLSearchParams();
+        qs.set("page", String(page));
+        qs.set("limit", String(limit));
+
+        // Backend should scope to current PATIENT for this role
+        const res = await apiFetch(`${IMAGING_BASE}?${qs.toString()}`);
+        if (cancelled) return;
+        setData(res);
+      } catch (err) {
+        console.error("Failed to load patient imaging requests", err);
+        if (!cancelled) {
+          setError(
+            err?.message ||
+              "Failed to load imaging requests. Please try again."
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    });
-    if ("status" in patch || "limit" in patch) {
-      params.set("page", "1");
     }
-    router.push(`${pathname}?${params.toString()}`);
-  };
 
-  async function handleDownload(req) {
-    if (!req?.id) return;
-    try {
-      setDownloadingId(req.id);
-      await downloadImagingPdf(req.id);
-    } catch (err) {
-      console.error("Download imaging report failed", err);
-      alert(err?.message || "Failed to download imaging report.");
-    } finally {
-      setDownloadingId(null);
+    fetchImaging();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, limit]);
+
+  // Normalize list shape (handles array, {results}, or numeric-keyed object)
+  let rows = [];
+  if (Array.isArray(data?.results)) {
+    rows = data.results;
+  } else if (Array.isArray(data)) {
+    rows = data;
+  } else if (data && typeof data === "object") {
+    const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      rows = numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => data[k]);
     }
   }
 
-  if (isLoading && !data) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          My Imaging Tests
-        </h1>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
-          Loading imaging requests…
-        </div>
-      </main>
-    );
-  }
+  const hasNextPage = rows.length === limit;
+  const hasPrevPage = page > 1;
 
-  if (error) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          My Imaging Tests
-        </h1>
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
-        </div>
-      </main>
-    );
+  function goToPage(nextPage) {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (nextPage && nextPage > 1) {
+      sp.set("page", String(nextPage));
+    } else {
+      sp.delete("page");
+    }
+    router.push(`/patient/imaging?${sp.toString()}`);
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            My Imaging Tests
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            X-rays, ultrasounds, CT scans and other imaging tests requested for you.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
-          >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="SCHEDULED">Scheduled</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={String(limit)}
-            onChange={(e) => updateQuery({ limit: e.target.value })}
-          >
-            <option value="10">Show 10</option>
-            <option value="20">Show 20</option>
-            <option value="50">Show 50</option>
-          </select>
-        </div>
+    <main className="mx-auto max-w-6xl space-y-6 p-6 md:p-10">
+      <header className="mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+          My imaging requests
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">
+          View imaging requests (X-ray, CT, MRI, ultrasound, etc.) that have been ordered
+          for you and track their status.
+        </p>
       </header>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Procedure
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Scheduled For
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Report
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((req) => (
-              <tr key={req.id} className="hover:bg-slate-50">
-                <td className="p-3 text-sm text-slate-800">
-                  {req.procedure_name || req.procedure || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {req.status || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {formatDateTime(req.scheduled_for || req.created_at)}
-                </td>
-                <td className="p-3 text-right text-sm">
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(req)}
-                    disabled={downloadingId === req.id}
-                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {downloadingId === req.id ? "Generating…" : "PDF"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-            {!rows.length && (
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100">
+            <thead className="bg-slate-50">
               <tr>
-                <td
-                  className="p-4 text-center text-sm text-slate-500"
-                  colSpan={4}
-                >
-                  No imaging tests found.
-                </td>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Requested at
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Procedure(s)
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Priority
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Status
+                </th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {loading && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    Loading imaging requests…
+                  </td>
+                </tr>
+              )}
 
-      {/* Simple pager */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
+              {!loading &&
+                rows.map((req) => (
+                  <tr key={req.id} className="hover:bg-slate-50">
+                    <td className="p-3 text-sm text-slate-800">
+                      {formatDateTime(req.requested_at || req.created_at)}
+                    </td>
+                    <td className="p-3 text-sm text-slate-800">
+                      {Array.isArray(req.items)
+                        ? req.items
+                            .map(
+                              (i) =>
+                                i.procedure?.name ||
+                                i.procedure?.code ||
+                                i.procedure_name ||
+                                i.code
+                            )
+                            .join(", ")
+                        : req.procedures_display ||
+                          req.procedure_name ||
+                          "—"}
+                    </td>
+                    <td className="p-3 text-sm text-slate-800">
+                      {req.priority || "—"}
+                    </td>
+                    <td className="p-3 text-sm text-slate-800">
+                      {req.status || "—"}
+                    </td>
+                    <td className="p-3 text-right text-sm">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsRequestId(req.id);
+                          setDetailsOpen(true);
+                        }}
+                        className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+              {!loading && !rows.length && !error && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    You don&apos;t have any imaging requests yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Next
-          </button>
+
+        {/* Pager */}
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+          <span>
+            Page {page} · Showing {rows.length} item
+            {rows.length === 1 ? "" : "s"}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => goToPage(page - 1)}
+              disabled={!hasPrevPage}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(page + 1)}
+              disabled={!hasNextPage}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
+
+      <ImagingRequestDetailsModal
+        requestId={detailsRequestId}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      />
     </main>
   );
 }

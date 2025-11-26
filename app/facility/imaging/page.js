@@ -1,9 +1,13 @@
+// app/facility/imaging/page.js
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useImagingRequests } from "@/lib/useImagingRequests";
 import { downloadImagingPdf } from "@/lib/reports";
+import ImagingRequestDetailsModal from "@/components/imaging/ImagingRequestDetailsModal";
+import { updateImagingRequestStatus } from "@/lib/imagingStatusActions";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -23,6 +27,10 @@ export default function FacilityImagingRequestsPage() {
 
   const [downloadingId, setDownloadingId] = useState(null);
 
+  // Modal state
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsRequestId, setDetailsRequestId] = useState(null);
+
   const page = Number(sp.get("page") || 1);
   const limit = Number(sp.get("limit") || 20);
   const status = sp.get("status") || "";
@@ -38,11 +46,20 @@ export default function FacilityImagingRequestsPage() {
     s,
   });
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
+  // Normalize rows
+  let rows = [];
+  if (Array.isArray(data?.results)) {
+    rows = data.results;
+  } else if (Array.isArray(data)) {
+    rows = data;
+  } else if (data && typeof data === "object") {
+    const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      rows = numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => data[k]);
+    }
+  }
   const total = Number(data?.count ?? rows.length);
 
   const updateQuery = (patch) => {
@@ -59,6 +76,29 @@ export default function FacilityImagingRequestsPage() {
     }
     router.push(`${pathname}?${params.toString()}`);
   };
+
+  async function handleStatusChange(requestId, nextStatus) {
+    if (!requestId || !nextStatus) return;
+
+    if (nextStatus === "CANCELLED") {
+      const ok = window.confirm(
+        "Are you sure you want to cancel this imaging request?"
+      );
+      if (!ok) return;
+    }
+
+    try {
+      await updateImagingRequestStatus(requestId, nextStatus);
+      // simplest: refresh list from server
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to update imaging request status", err);
+      alert(
+        err?.message ||
+          "Failed to update imaging request status. Please try again."
+      );
+    }
+  }
 
   async function handleDownload(req) {
     if (!req?.id) return;
@@ -101,141 +141,256 @@ export default function FacilityImagingRequestsPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      {/* Header */}
+      <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Facility Imaging Requests
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+            Imaging requests
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            All imaging procedures requested for patients in this facility.
+          <p className="mt-1 text-sm text-slate-600">
+            View and manage imaging requests for this facility.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="search"
-            placeholder="Search indication / notes…"
-            defaultValue={s}
-            onBlur={(e) => updateQuery({ s: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <input
-            type="text"
-            placeholder="Filter by patient ID…"
-            defaultValue={patient}
-            onBlur={(e) => updateQuery({ patient: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
-          >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="SCHEDULED">Scheduled</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-32"
-            value={String(limit)}
-            onChange={(e) => updateQuery({ limit: e.target.value })}
-          >
-            <option value="20">Show 20</option>
-            <option value="50">Show 50</option>
-            <option value="100">Show 100</option>
-          </select>
-        </div>
+        <Link
+          href="/facility/imaging/new"
+          className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        >
+          New imaging request
+        </Link>
       </header>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Patient
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Procedure
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Scheduled For
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Report
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((req) => (
-              <tr key={req.id} className="hover:bg-slate-50">
-                <td className="p-3 text-sm text-slate-800">
-                  {req.patient_name || req.patient || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {req.procedure_name || req.procedure || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {req.status || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {formatDateTime(req.scheduled_for || req.created_at)}
-                </td>
-                <td className="p-3 text-right text-sm">
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(req)}
-                    disabled={downloadingId === req.id}
-                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {downloadingId === req.id ? "Generating…" : "PDF"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+      {/* Filters + table */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {/* Filters */}
+        <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Filters
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="text"
+                placeholder="Search reason / notes…"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 md:w-56"
+                defaultValue={s}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    updateQuery({ s: e.currentTarget.value });
+                  }
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Filter by patient id…"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 md:w-40"
+                defaultValue={patient}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    updateQuery({ patient: e.currentTarget.value });
+                  }
+                }}
+              />
+              <select
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 md:w-40"
+                value={status}
+                onChange={(e) => updateQuery({ status: e.target.value })}
+              >
+                <option value="">All statuses</option>
+                <option value="PENDING">Pending</option>
+                <option value="SCHEDULED">Scheduled</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 md:w-32"
+                value={String(limit)}
+                onChange={(e) => updateQuery({ limit: e.target.value })}
+              >
+                <option value="10">Show 10</option>
+                <option value="20">Show 20</option>
+                <option value="50">Show 50</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
-            {!rows.length && (
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100 text-sm">
+            <thead className="bg-slate-50 text-slate-700">
               <tr>
-                <td
-                  className="p-4 text-center text-sm text-slate-500"
-                  colSpan={5}
-                >
-                  No imaging requests found.
-                </td>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
+                  Requested at
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
+                  Patient
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
+                  Procedure(s)
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
+                  Priority
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
+                  Status
+                </th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide">
+                  Report
+                </th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide">
+                  Actions
+                </th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {rows.map((req) => (
+                <tr key={req.id} className="hover:bg-slate-50">
+                  <td className="p-3 text-sm text-slate-800">
+                    {formatDateTime(req.requested_at || req.created_at)}
+                  </td>
+                  <td className="p-3 text-sm text-slate-800">
+                    {req.patient_name || req.patient || "—"}
+                  </td>
+                  <td className="p-3 text-sm text-slate-800">
+                    {Array.isArray(req.items)
+                      ? req.items
+                          .map(
+                            (i) =>
+                              i.procedure?.name ||
+                              i.procedure?.code ||
+                              i.procedure_name ||
+                              i.code
+                          )
+                          .join(", ")
+                      : req.procedures_display || req.procedure_name || "—"}
+                  </td>
+                  <td className="p-3 text-sm text-slate-800">
+                    {req.priority || "—"}
+                  </td>
+                  <td className="p-3 text-sm text-slate-800">
+                    {req.status || "—"}
+                  </td>
+                  <td className="p-3 text-right text-sm">
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(req)}
+                      disabled={downloadingId === req.id}
+                      className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {downloadingId === req.id ? "Downloading…" : "PDF"}
+                    </button>
+                  </td>
+                  <td className="p-3 text-right text-sm">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {req.status === "PENDING" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleStatusChange(req.id, "SCHEDULED")
+                            }
+                            className="rounded-full border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Mark scheduled
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleStatusChange(req.id, "CANCELLED")
+                            }
+                            className="rounded-full border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      )}
 
-      {/* Simple pager */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
+                      {req.status === "SCHEDULED" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleStatusChange(req.id, "REPORTED")
+                            }
+                            className="rounded-full border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                          >
+                            Mark reported
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleStatusChange(req.id, "CANCELLED")
+                            }
+                            className="rounded-full border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsRequestId(req.id);
+                          setDetailsOpen(true);
+                        }}
+                        className="rounded-full border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        View
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+              {!rows.length && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    No imaging requests found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Next
-          </button>
+
+        {/* Pager */}
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+          <span>
+            Page {page} · Showing {rows.length} of {total} item
+            {total === 1 ? "" : "s"}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => updateQuery({ page: Math.max(page - 1, 1) })}
+              disabled={page <= 1}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => updateQuery({ page: page + 1 })}
+              disabled={rows.length < limit}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
+
+      <ImagingRequestDetailsModal
+        requestId={detailsRequestId}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      />
     </main>
   );
 }

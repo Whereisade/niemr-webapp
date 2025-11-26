@@ -292,7 +292,7 @@ export default async function PatientDashboard() {
                 </Link>
 
                 <Link
-                  href="/patient/notifications"
+                  href="/notifications"
                   className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                 >
                   My Notifications
@@ -338,7 +338,7 @@ export default async function PatientDashboard() {
       <section className="mt-10">
         <CardHead
           title="Recent Notifications"
-          href="/patient/notifications"
+          href="/notifications"
           icon={BellRing}
           actionLabel="View all"
         />
