@@ -6,6 +6,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
 import { downloadLabPdf } from "@/lib/reports";
 import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
+import LabOrderAttachmentsModal from "@/components/labs/LabOrderAttachmentsModal";
 import {
   FlaskConical,
   Filter,
@@ -50,9 +51,13 @@ export default function ProviderLabOrdersPage() {
 
   const [downloadingId, setDownloadingId] = useState(null);
 
-  // NEW: modal state for lab order details
+  // modal state for lab order details
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsOrderId, setDetailsOrderId] = useState(null);
+
+  // NEW: attachments modal state
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [attachmentsOrderId, setAttachmentsOrderId] = useState(null);
 
   // 🔧 Normalize data into a proper rows array (handles BFF numeric-key object)
   let rows = [];
@@ -95,8 +100,7 @@ export default function ProviderLabOrdersPage() {
     } catch (err) {
       console.error("Download lab report failed", err);
       alert(
-        err?.message ||
-          "Failed to download lab report. Please try again."
+        err?.message || "Failed to download lab report. Please try again."
       );
     } finally {
       setDownloadingId(null);
@@ -151,8 +155,7 @@ export default function ProviderLabOrdersPage() {
             Lab orders for patients in my care
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Filter by patient, status, or search text and track order
-            progress.
+            Filter by patient, status, or search text and track order progress.
           </p>
         </div>
 
@@ -247,10 +250,7 @@ export default function ProviderLabOrdersPage() {
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((order) => (
-              <tr
-                key={order.id}
-                className="transition hover:bg-slate-50/60"
-              >
+              <tr key={order.id} className="transition hover:bg-slate-50/60">
                 <Td>
                   <div className="flex items-center gap-2">
                     <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
@@ -304,8 +304,8 @@ export default function ProviderLabOrdersPage() {
                   </span>
                 </Td>
                 <td className="p-3 text-right text-sm">
-                  <div className="inline-flex items-center gap-2">
-                    {/* NEW: View button → opens modal */}
+                  <div className="inline-flex flex-wrap items-center gap-2">
+                    {/* View button → opens details modal */}
                     <button
                       type="button"
                       onClick={() => {
@@ -317,12 +317,24 @@ export default function ProviderLabOrdersPage() {
                       View
                     </button>
 
-                    {/* Existing PDF button */}
+                    {/* NEW: Attachments button → opens attachments modal */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachmentsOrderId(order.id);
+                        setAttachmentsOpen(true);
+                      }}
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Attachments
+                    </button>
+
+                    {/* PDF button */}
                     <button
                       type="button"
                       onClick={() => handleDownload(order)}
                       disabled={downloadingId === order.id}
-                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {downloadingId === order.id ? "Generating…" : "PDF"}
                     </button>
@@ -382,6 +394,14 @@ export default function ProviderLabOrdersPage() {
         orderId={detailsOrderId}
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
+      />
+
+      {/* NEW: Lab order attachments modal */}
+      <LabOrderAttachmentsModal
+        orderId={attachmentsOrderId}
+        open={attachmentsOpen}
+        onClose={() => setAttachmentsOpen(false)}
+        canUpload={true}
       />
     </main>
   );

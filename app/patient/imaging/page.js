@@ -1,10 +1,10 @@
-// app/patient/imaging/page.js
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import ImagingRequestDetailsModal from "@/components/imaging/ImagingRequestDetailsModal";
+import ImagingAttachmentsModal from "@/components/imaging/ImagingAttachmentsModal";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -30,6 +30,9 @@ export default function PatientImagingPage() {
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsRequestId, setDetailsRequestId] = useState(null);
+
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [attachmentsRequestId, setAttachmentsRequestId] = useState(null);
 
   const page = Number(searchParams.get("page") || "1");
   const limit = Number(searchParams.get("limit") || "10");
@@ -104,8 +107,8 @@ export default function PatientImagingPage() {
           My imaging requests
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          View imaging requests (X-ray, CT, MRI, ultrasound, etc.) that have been ordered
-          for you and track their status.
+          View imaging requests (X-ray, CT, MRI, ultrasound, etc.) that have
+          been ordered for you and track their status.
         </p>
       </header>
 
@@ -177,16 +180,28 @@ export default function PatientImagingPage() {
                       {req.status || "—"}
                     </td>
                     <td className="p-3 text-right text-sm">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailsRequestId(req.id);
-                          setDetailsOpen(true);
-                        }}
-                        className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        View
-                      </button>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailsRequestId(req.id);
+                            setDetailsOpen(true);
+                          }}
+                          className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAttachmentsRequestId(req.id);
+                            setAttachmentsOpen(true);
+                          }}
+                          className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Attachments
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -236,6 +251,13 @@ export default function PatientImagingPage() {
         requestId={detailsRequestId}
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
+      />
+
+      <ImagingAttachmentsModal
+        requestId={attachmentsRequestId}
+        open={attachmentsOpen}
+        onClose={() => setAttachmentsOpen(false)}
+        canUpload={false}
       />
     </main>
   );

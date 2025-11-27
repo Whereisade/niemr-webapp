@@ -7,6 +7,7 @@ import { useImagingRequests } from "@/lib/useImagingRequests";
 import { downloadImagingPdf } from "@/lib/reports";
 import ImagingRequestDetailsModal from "@/components/imaging/ImagingRequestDetailsModal";
 import { updateImagingRequestStatus } from "@/lib/imagingStatusActions";
+import ImagingAttachmentsModal from "@/components/imaging/ImagingAttachmentsModal";
 import {
   ScanLine,
   Filter,
@@ -46,6 +47,9 @@ export default function ProviderImagingRequestsPage() {
   // Modal state
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsRequestId, setDetailsRequestId] = useState(null);
+
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [attachmentsRequestId, setAttachmentsRequestId] = useState(null);
 
   // Backend scopes by facility / role in ImagingRequestViewSet.get_queryset()
   const { data, error, isLoading } = useImagingRequests({
@@ -411,6 +415,17 @@ export default function ProviderImagingRequestsPage() {
                       >
                         View
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachmentsRequestId(req.id);
+                          setAttachmentsOpen(true);
+                        }}
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Attachments
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -459,11 +474,18 @@ export default function ProviderImagingRequestsPage() {
         </div>
       </section>
 
-      {/* Modal */}
+      {/* Modals */}
       <ImagingRequestDetailsModal
         requestId={detailsRequestId}
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
+      />
+
+      <ImagingAttachmentsModal
+        requestId={attachmentsRequestId}
+        open={attachmentsOpen}
+        onClose={() => setAttachmentsOpen(false)}
+        canUpload={true}
       />
     </main>
   );

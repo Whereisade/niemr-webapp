@@ -7,6 +7,7 @@ import { useLabOrders } from "@/lib/useLabOrders";
 import { downloadLabPdf } from "@/lib/reports";
 import { updateLabOrderStatus } from "@/lib/labsStatusActions";
 import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
+import LabOrderAttachmentsModal from "@/components/labs/LabOrderAttachmentsModal";
 import {
   Activity,
   CalendarRange,
@@ -65,6 +66,8 @@ export default function FacilityLabOrdersPage() {
   const [downloadingId, setDownloadingId] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsOrderId, setDetailsOrderId] = useState(null);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [attachmentsOrderId, setAttachmentsOrderId] = useState(null);
 
   // Normalize rows
   let rows = [];
@@ -418,6 +421,17 @@ export default function FacilityLabOrdersPage() {
                           >
                             View details
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAttachmentsOrderId(order.id);
+                              setAttachmentsOpen(true);
+                            }}
+                            className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Attachments
+                          </button>
                         </div>
                       </Td>
                     </tr>
@@ -476,6 +490,14 @@ export default function FacilityLabOrdersPage() {
         orderId={detailsOrderId}
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
+      />
+
+      {/* Attachments modal */}
+      <LabOrderAttachmentsModal
+        orderId={attachmentsOrderId}
+        open={attachmentsOpen}
+        onClose={() => setAttachmentsOpen(false)}
+        canUpload={true}
       />
     </main>
   );

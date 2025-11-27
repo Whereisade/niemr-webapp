@@ -1,4 +1,3 @@
-// app/facility/imaging/page.js
 "use client";
 
 import { useState } from "react";
@@ -8,6 +7,7 @@ import { useImagingRequests } from "@/lib/useImagingRequests";
 import { downloadImagingPdf } from "@/lib/reports";
 import ImagingRequestDetailsModal from "@/components/imaging/ImagingRequestDetailsModal";
 import { updateImagingRequestStatus } from "@/lib/imagingStatusActions";
+import ImagingAttachmentsModal from "@/components/imaging/ImagingAttachmentsModal";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -30,6 +30,8 @@ export default function FacilityImagingRequestsPage() {
   // Modal state
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsRequestId, setDetailsRequestId] = useState(null);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [attachmentsRequestId, setAttachmentsRequestId] = useState(null);
 
   const page = Number(sp.get("page") || 1);
   const limit = Number(sp.get("limit") || 20);
@@ -340,6 +342,17 @@ export default function FacilityImagingRequestsPage() {
                       >
                         View
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachmentsRequestId(req.id);
+                          setAttachmentsOpen(true);
+                        }}
+                        className="rounded-full border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Attachments
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -390,6 +403,13 @@ export default function FacilityImagingRequestsPage() {
         requestId={detailsRequestId}
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
+      />
+
+      <ImagingAttachmentsModal
+        requestId={attachmentsRequestId}
+        open={attachmentsOpen}
+        onClose={() => setAttachmentsOpen(false)}
+        canUpload={true}
       />
     </main>
   );
