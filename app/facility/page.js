@@ -73,6 +73,16 @@ export default async function FacilityDashboard() {
     ? providers
     : providers?.results || [];
 
+  // NEW: derive unread notifications count from the list
+  const unreadCount = notifList.filter((n) => {
+    if (!n) return false;
+    // try a few common shapes: unread, is_read, read, read_at
+    if (typeof n.unread === "boolean") return n.unread;
+    if (typeof n.is_read === "boolean") return !n.is_read;
+    if (typeof n.read === "boolean") return !n.read;
+    return !n.read_at;
+  }).length;
+
   const greetingName =
     [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
     me?.email ||
@@ -104,12 +114,13 @@ export default async function FacilityDashboard() {
       cta: "View providers",
     },
     {
+      // UPDATED: show unread notifications, not just raw count
       label: "Notifications (7d)",
-      value: notifList.length,
+      value: unreadCount,
       icon: BellRing,
       accent: "from-amber-600 via-orange-600 to-red-600",
       href: "/notifications",
-      cta: "View notifications",
+      cta: unreadCount > 0 ? "View unread" : "View notifications",
     },
   ];
 
@@ -131,7 +142,8 @@ export default async function FacilityDashboard() {
             className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
           />
           <p className="mt-1 text-slate-600">
-            Monitor operations, clinical load, and financials across the facility.
+            Monitor operations, clinical load, and financials across the
+            facility.
           </p>
         </div>
 
@@ -210,7 +222,9 @@ export default async function FacilityDashboard() {
                   <Icon className="h-5 w-5 text-slate-700" />
                 </div>
               </div>
-              <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
+              <div className="mt-2 text-3xl font-semibold text-slate-900">
+                {value}
+              </div>
               <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-blue-700">
                 {cta}
                 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -293,10 +307,14 @@ export default async function FacilityDashboard() {
                       className="transition hover:bg-slate-50/60"
                     >
                       <Td className="font-medium text-slate-900">
-                        {a.patient_name || a.patient?.full_name || "Patient"}
+                        {a.patient_name ||
+                          a.patient?.full_name ||
+                          "Patient"}
                       </Td>
                       <Td>
-                        {a.provider_name || a.provider?.full_name || "Provider"}
+                        {a.provider_name ||
+                          a.provider?.full_name ||
+                          "Provider"}
                       </Td>
                       <Td className="text-slate-600">
                         {a.reason || "Consultation"}
@@ -350,11 +368,34 @@ export default async function FacilityDashboard() {
                   icon={CalendarRange}
                   label="Schedule Appointment"
                 />
-                <QuickLink href="/labs/new" icon={FileText} label="Order Lab" />
+                <QuickLink
+                  href="/labs/new"
+                  icon={FileText}
+                  label="Order Lab"
+                />
                 <QuickLink
                   href="/imaging/new"
                   icon={ClipboardList}
                   label="Request Imaging"
+                />
+                {/* NEW: notifications quick link with unread badge */}
+                <QuickLink
+                  href="/notifications"
+                  icon={BellRing}
+                  label="Notifications"
+                  badge={
+                    unreadCount > 0
+                      ? unreadCount > 99
+                        ? "99+"
+                        : `${unreadCount} new`
+                      : undefined
+                  }
+                />
+                {/* NEW: Audit logs quick link */}
+                <QuickLink
+                  href="/facility/audit"
+                  icon={ClipboardList}
+                  label="Audit logs"
                 />
               </div>
             </div>
@@ -371,7 +412,10 @@ export default async function FacilityDashboard() {
             <ul className="divide-y divide-slate-100">
               {provs.length ? (
                 provs.map((p, i) => (
-                  <li key={p.id || i} className="flex items-center justify-between p-4">
+                  <li
+                    key={p.id || i}
+                    className="flex items-center justify-between p-4"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
                         <Stethoscope className="h-5 w-5 text-slate-700" />
@@ -395,7 +439,9 @@ export default async function FacilityDashboard() {
                 ))
               ) : (
                 <li className="p-6">
-                  <div className="text-sm text-slate-600">No providers to show.</div>
+                  <div className="text-sm text-slate-600">
+                    No providers to show.
+                  </div>
                 </li>
               )}
             </ul>
@@ -410,7 +456,9 @@ export default async function FacilityDashboard() {
                   <ShieldCheck className="h-5 w-5 text-emerald-700" />
                 </div>
                 <div>
-                  <h3 className="text-slate-900 font-medium">Compliance & Backups</h3>
+                  <h3 className="text-slate-900 font-medium">
+                    Compliance & Backups
+                  </h3>
                   <p className="text-xs text-slate-500">
                     Auto-backups enabled; data retention set to 24 months.
                   </p>
@@ -455,7 +503,9 @@ export default async function FacilityDashboard() {
               ))
             ) : (
               <li className="p-6">
-                <div className="text-sm text-slate-600">No recent notifications.</div>
+                <div className="text-sm text-slate-600">
+                  No recent notifications.
+                </div>
               </li>
             )}
           </ul>
@@ -471,8 +521,8 @@ export default async function FacilityDashboard() {
                 Need to add a new service?
               </h3>
               <p className="text-sm text-slate-600">
-                Expand your catalog for orders, imaging, pharmacy, and billing in a
-                few clicks.
+                Expand your catalog for orders, imaging, pharmacy, and billing
+                in a few clicks.
               </p>
             </div>
             <Link
@@ -546,7 +596,9 @@ function Th({ children }) {
 
 function Td({ children, className = "" }) {
   return (
-    <td className={`px-4 py-3 align-middle text-sm text-slate-700 ${className}`}>
+    <td
+      className={`px-4 py-3 align-middle text-sm text-slate-700 ${className}`}
+    >
       {children}
     </td>
   );
@@ -563,13 +615,16 @@ function StatusPill({ value }) {
   const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
   const label = (v || "—").replaceAll("_", " ");
   return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+    >
       {label}
     </span>
   );
 }
 
-function QuickLink({ href, icon: Icon, label }) {
+// UPDATED: support an optional badge (for unread notifications)
+function QuickLink({ href, icon: Icon, label, badge }) {
   return (
     <Link
       href={href}
@@ -578,6 +633,11 @@ function QuickLink({ href, icon: Icon, label }) {
       <span className="inline-flex items-center gap-2">
         <Icon className="h-4 w-4" />
         {label}
+        {badge && (
+          <span className="inline-flex items-center justify-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+            {badge}
+          </span>
+        )}
       </span>
       <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
     </Link>
