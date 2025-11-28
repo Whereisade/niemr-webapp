@@ -302,19 +302,12 @@ export default async function FacilityDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {appts.length ? (
                   appts.map((a) => (
-                    <tr
-                      key={a.id}
-                      className="transition hover:bg-slate-50/60"
-                    >
+                    <tr key={a.id} className="transition hover:bg-slate-50/60">
                       <Td className="font-medium text-slate-900">
-                        {a.patient_name ||
-                          a.patient?.full_name ||
-                          "Patient"}
+                        {a.patient_name || a.patient?.full_name || "Patient"}
                       </Td>
                       <Td>
-                        {a.provider_name ||
-                          a.provider?.full_name ||
-                          "Provider"}
+                        {a.provider_name || a.provider?.full_name || "Provider"}
                       </Td>
                       <Td className="text-slate-600">
                         {a.reason || "Consultation"}
@@ -368,11 +361,7 @@ export default async function FacilityDashboard() {
                   icon={CalendarRange}
                   label="Schedule Appointment"
                 />
-                <QuickLink
-                  href="/labs/new"
-                  icon={FileText}
-                  label="Order Lab"
-                />
+                <QuickLink href="/labs/new" icon={FileText} label="Order Lab" />
                 <QuickLink
                   href="/imaging/new"
                   icon={ClipboardList}
@@ -397,6 +386,57 @@ export default async function FacilityDashboard() {
                   icon={ClipboardList}
                   label="Audit logs"
                 />
+                <Link
+                  href="/facility/emails"
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Email outbox
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Review sent and failed emails, and trigger resends when
+                      needed.
+                    </p>
+                  </div>
+                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                    Open outbox
+                  </span>
+                </Link>
+                <Link
+                  href="/settings/profile"
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Account profile
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Update your name and review the account linked to this
+                      login.
+                    </p>
+                  </div>
+                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                    Open profile
+                  </span>
+                </Link>
+                <Link
+                  href="/settings/notifications"
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Notification settings
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Choose which alerts you receive for appointments, labs,
+                      imaging, and billing.
+                    </p>
+                  </div>
+                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                    Manage notifications
+                  </span>
+                </Link>
               </div>
             </div>
           </div>

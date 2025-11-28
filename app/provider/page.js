@@ -241,10 +241,7 @@ export default async function ProviderDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {appts.length ? (
                   appts.map((a) => (
-                    <tr
-                      key={a.id}
-                      className="transition hover:bg-slate-50/60"
-                    >
+                    <tr key={a.id} className="transition hover:bg-slate-50/60">
                       <Td>
                         <div className="flex items-center gap-2">
                           <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
@@ -299,7 +296,11 @@ export default async function ProviderDashboard() {
                 Start common tasks faster.
               </p>
               <div className="mt-4 grid gap-2">
-                <QuickLink href="/encounters/new" icon={Stethoscope} label="New Note" />
+                <QuickLink
+                  href="/encounters/new"
+                  icon={Stethoscope}
+                  label="New Note"
+                />
                 <QuickLink href="/labs/new" icon={FileText} label="Order Lab" />
                 <QuickLink
                   href="/imaging/new"
@@ -339,6 +340,40 @@ export default async function ProviderDashboard() {
                 >
                   Billing – Payments
                 </Link>
+                <Link
+                  href="/settings/profile"
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Account profile
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Update your name and review the account linked to this
+                      login.
+                    </p>
+                  </div>
+                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                    Open profile
+                  </span>
+                </Link>
+                <Link
+                  href="/settings/notifications"
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Notification settings
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Choose which alerts you receive for appointments, labs,
+                      imaging, and billing.
+                    </p>
+                  </div>
+                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                    Manage notifications
+                  </span>
+                </Link>
               </div>
             </div>
           </div>
@@ -368,8 +403,7 @@ export default async function ProviderDashboard() {
                   e-Rx: <b>Enabled</b>
                 </span>
                 <span className="rounded-lg border border-slate-200 px-3 py-2 col-span-3">
-                  Council: <b>MDCN</b> · Specialty:{" "}
-                  <b>General Practice</b>
+                  Council: <b>MDCN</b> · Specialty: <b>General Practice</b>
                 </span>
               </div>
             </div>
