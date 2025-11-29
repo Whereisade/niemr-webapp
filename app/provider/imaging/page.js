@@ -47,7 +47,6 @@ export default function ProviderImagingRequestsPage() {
   // Modals
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsRequestId, setDetailsRequestId] = useState(null);
-
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [attachmentsRequestId, setAttachmentsRequestId] = useState(null);
 
@@ -152,7 +151,10 @@ export default function ProviderImagingRequestsPage() {
     );
   }
 
-  const uniquePatients = new Set(rows.map((r) => r.patient_name || r.patient)).size;
+  const uniquePatients = new Set(
+    rows.map((r) => r.patient_name || r.patient)
+  ).size;
+
   const pendingOrScheduled = rows.filter((r) => {
     const v = String(r.status || "").toUpperCase();
     return v === "PENDING" || v === "SCHEDULED";
@@ -261,6 +263,7 @@ export default function ProviderImagingRequestsPage() {
                 <option value="SCHEDULED">Scheduled</option>
                 <option value="IN_PROGRESS">In progress</option>
                 <option value="COMPLETED">Completed</option>
+                <option value="REPORTED">Reported</option>
                 <option value="CANCELLED">Cancelled</option>
               </select>
               <select
@@ -295,31 +298,37 @@ export default function ProviderImagingRequestsPage() {
                 const statusValue = String(req.status || "").toUpperCase();
                 const priorityValue = String(req.priority || "").toUpperCase();
 
+                const requestedAt = formatDateTime(
+                  req.requested_at || req.created_at
+                );
+                const patientName = req.patient_name || req.patient || "—";
+                const procedures = Array.isArray(req.items)
+                  ? req.items
+                      .map(
+                        (i) =>
+                          i.procedure?.name ||
+                          i.procedure?.code ||
+                          i.procedure_name ||
+                          i.code
+                      )
+                      .join(", ")
+                  : req.procedures_display || req.procedure_name || "—";
+
                 return (
                   <tr key={req.id} className="transition hover:bg-slate-50/60">
                     <Td>
                       <div className="flex items-center gap-1 text-xs text-slate-800">
-                        <span>{formatDateTime(req.requested_at || req.created_at)}</span>
+                        <span>{requestedAt}</span>
                       </div>
                     </Td>
                     <Td>
                       <span className="text-sm text-slate-900">
-                        {req.patient_name || req.patient || "—"}
+                        {patientName}
                       </span>
                     </Td>
                     <Td>
                       <span className="text-sm text-slate-800">
-                        {Array.isArray(req.items)
-                          ? req.items
-                              .map(
-                                (i) =>
-                                  i.procedure?.name ||
-                                  i.procedure?.code ||
-                                  i.procedure_name ||
-                                  i.code
-                              )
-                              .join(", ")
-                          : req.procedures_display || req.procedure_name || "—"}
+                        {procedures}
                       </span>
                     </Td>
                     <Td>
@@ -517,6 +526,7 @@ function StatusPill({ value }) {
     SCHEDULED: "bg-sky-50 text-sky-700 ring-sky-200",
     IN_PROGRESS: "bg-indigo-50 text-indigo-700 ring-indigo-200",
     COMPLETED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    REPORTED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
   };
   const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";

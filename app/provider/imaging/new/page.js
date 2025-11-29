@@ -76,21 +76,18 @@ export default function ProviderNewImagingRequestPage() {
       return;
     }
 
+    // 🔧 PATCH: align with backend ImagingRequestCreateSerializer
     const payload = {
       patient,
+      procedure_code: procedureCode.trim(), // must match ImagingProcedure.code
       priority: priority || "ROUTINE",
-      items: [
-        {
-          procedure_code: procedureCode.trim(), // must match ImagingProcedure.code
-        },
-      ],
     };
 
     if (notes.trim()) {
       payload.note = notes.trim();
     }
 
-    // Provider is inferred from JWT (ordered_by / requested_by)
+    // Provider is inferred from JWT (requested_by)
     setIsSubmitting(true);
     try {
       await createImagingRequest(payload);

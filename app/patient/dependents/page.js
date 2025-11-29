@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Users, UserPlus, Baby, Loader2 } from "lucide-react";
 import { fetchDependents, createDependent } from "@/lib/dependents";
 
 function formatName(dep) {
@@ -54,9 +55,7 @@ export default function PatientDependentsPage() {
         } else if (Array.isArray(res)) {
           items = res;
         } else if (res && typeof res === "object") {
-          const numericKeys = Object.keys(res).filter((k) =>
-            /^\d+$/.test(k)
-          );
+          const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
           if (numericKeys.length) {
             items = numericKeys
               .sort((a, b) => Number(a) - Number(b))
@@ -102,7 +101,7 @@ export default function PatientDependentsPage() {
       const payload = {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        dob, // YYYY-MM-DD from <input type="date">
+        dob,
         gender,
         relationship: relationship.trim() || null,
       };
@@ -112,11 +111,9 @@ export default function PatientDependentsPage() {
 
       const created = await createDependent(payload);
 
-      // optimistic append
       setDependents((prev) => [created, ...prev]);
       setSuccess("Dependent added successfully.");
 
-      // reset form
       setFirstName("");
       setLastName("");
       setDob("");
@@ -127,7 +124,6 @@ export default function PatientDependentsPage() {
     } catch (err) {
       console.error("Failed to create dependent", err);
 
-      // Try to show backend validation nicely if it's DRF style
       const detail =
         err?.detail ||
         (err?.data && JSON.stringify(err.data)) ||
@@ -142,45 +138,108 @@ export default function PatientDependentsPage() {
     }
   }
 
+  const total = dependents.length;
+  const minors = dependents.filter((d) => {
+    const date = d.dob || d.date_of_birth;
+    if (!date) return false;
+    const dobDate = new Date(date);
+    if (Number.isNaN(dobDate.getTime())) return false;
+    const ageMs = Date.now() - dobDate.getTime();
+    const ageYears = ageMs / (1000 * 60 * 60 * 24 * 365.25);
+    return ageYears < 18;
+  }).length;
+
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
-      <header className="space-y-1">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-          My dependents
-        </h1>
-        <p className="text-sm text-slate-600">
-          Add children, parents, or other family members you manage care
-          for. You’ll be able to book appointments and track their care
-          from here.
-        </p>
+    <main className="relative mx-auto max-w-4xl space-y-6 p-6 md:p-10">
+      {/* soft background accents */}
+      <div className="pointer-events-none absolute -top-24 -left-24 h-48 w-48 rounded-full bg-blue-100/60 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-56 w-56 rounded-full bg-emerald-100/60 blur-3xl" />
+
+      {/* Header */}
+      <header className="relative space-y-4">
+        <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
+          <Users className="h-3.5 w-3.5" />
+          Dependents
+        </div>
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+            My dependents
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Add children, parents, or other family members you manage care for.
+            You’ll be able to book appointments and track their care from here.
+          </p>
+        </div>
       </header>
 
+      {/* Quick stats */}
+      <section className="relative grid gap-3 sm:grid-cols-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
+            <Users className="h-4 w-4 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Total dependents
+            </p>
+            <p className="text-lg font-semibold text-slate-900">{total}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50">
+            <Baby className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Under 18
+            </p>
+            <p className="text-lg font-semibold text-slate-900">{minors}</p>
+          </div>
+        </div>
+
+        <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-700 shadow-sm sm:flex">
+          <UserPlus className="h-4 w-4 text-slate-500" />
+          <p>
+            Add a dependent below and start booking appointments on their
+            behalf.
+          </p>
+        </div>
+      </section>
+
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="relative rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <div className="relative rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           {success}
         </div>
       )}
 
       {/* Create form */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Add a new dependent
-        </h2>
-        <p className="mt-1 text-xs text-slate-600">
-          Basic information is required to create a dependent record.
-        </p>
+      <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Add a new dependent
+            </h2>
+            <p className="mt-1 text-xs text-slate-600">
+              Basic information is required to create a dependent record.
+            </p>
+          </div>
+          <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-blue-50 sm:flex">
+            <UserPlus className="h-4 w-4 text-blue-600" />
+          </div>
+        </div>
 
         <form
           onSubmit={handleCreate}
           className="mt-4 grid gap-4 md:grid-cols-2"
         >
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
               First name <span className="text-red-500">*</span>
             </label>
             <input
@@ -197,7 +256,7 @@ export default function PatientDependentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
               Last name <span className="text-red-500">*</span>
             </label>
             <input
@@ -214,7 +273,7 @@ export default function PatientDependentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
               Date of birth <span className="text-red-500">*</span>
             </label>
             <input
@@ -230,7 +289,7 @@ export default function PatientDependentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
               Gender <span className="text-red-500">*</span>
             </label>
             <select
@@ -250,7 +309,7 @@ export default function PatientDependentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
               Relationship
             </label>
             <input
@@ -267,7 +326,7 @@ export default function PatientDependentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
               Phone (optional)
             </label>
             <input
@@ -283,12 +342,30 @@ export default function PatientDependentsPage() {
             />
           </div>
 
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Email (optional)
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError("");
+                setSuccess("");
+              }}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="e.g. david@example.com"
+            />
+          </div>
+
           <div className="md:col-span-2 flex justify-end">
             <button
               type="submit"
               disabled={creating}
-              className="inline-flex items-center rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
+              {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {creating ? "Adding…" : "Add dependent"}
             </button>
           </div>
@@ -296,14 +373,15 @@ export default function PatientDependentsPage() {
       </section>
 
       {/* Dependents list */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-900">
           Saved dependents
         </h2>
 
         {loading && (
-          <p className="mt-3 text-sm text-slate-500">
-            Loading dependents…
+          <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading dependents…</span>
           </p>
         )}
 
