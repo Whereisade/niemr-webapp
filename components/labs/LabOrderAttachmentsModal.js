@@ -7,9 +7,35 @@ import {
   uploadLabOrderAttachment,
   deleteLabOrderAttachment,
 } from "@/lib/labAttachments";
+import {
+  Paperclip,
+  Download,
+  Trash2,
+  AlertTriangle,
+  Loader2,
+  X,
+  Plus,
+  FileText,
+} from "lucide-react";
 
 function resolveDownloadUrl(att) {
   return att.file_url || att.url || att.file || "#";
+}
+
+function normalizeAttachmentsResponse(res) {
+  if (!res) return [];
+  if (Array.isArray(res?.results)) return res.results;
+  if (Array.isArray(res)) return res;
+
+  if (res && typeof res === "object") {
+    const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      return numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => res[k]);
+    }
+  }
+  return [];
 }
 
 export default function LabOrderAttachmentsModal({
@@ -37,24 +63,8 @@ export default function LabOrderAttachmentsModal({
         setLoading(true);
         setError("");
         const res = await listLabOrderAttachments(orderId);
-
         if (cancelled) return;
-
-        let items = [];
-        if (Array.isArray(res?.results)) {
-          items = res.results;
-        } else if (Array.isArray(res)) {
-          items = res;
-        } else if (res && typeof res === "object") {
-          const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
-          if (numericKeys.length) {
-            items = numericKeys
-              .sort((a, b) => Number(a) - Number(b))
-              .map((k) => res[k]);
-          }
-        }
-
-        setAttachments(items);
+        setAttachments(normalizeAttachmentsResponse(res));
       } catch (err) {
         console.error("Failed to load lab attachments", err);
         if (!cancelled) {
@@ -76,6 +86,18 @@ export default function LabOrderAttachmentsModal({
 
   if (!open) return null;
 
+  async function refreshList() {
+    try {
+      const res = await listLabOrderAttachments(orderId);
+      setAttachments(normalizeAttachmentsResponse(res));
+    } catch (err) {
+      console.error("Refresh attachments failed", err);
+      setError(
+        err?.message || "Failed to refresh attachments. Please try again."
+      );
+    }
+  }
+
   async function handleUpload(e) {
     e.preventDefault();
     if (!file) {
@@ -93,21 +115,7 @@ export default function LabOrderAttachmentsModal({
       setDescription("");
 
       // Reload list
-      const res = await listLabOrderAttachments(orderId);
-      let items = [];
-      if (Array.isArray(res?.results)) {
-        items = res.results;
-      } else if (Array.isArray(res)) {
-        items = res;
-      } else if (res && typeof res === "object") {
-        const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
-        if (numericKeys.length) {
-          items = numericKeys
-            .sort((a, b) => Number(a) - Number(b))
-            .map((k) => res[k]);
-        }
-      }
-      setAttachments(items);
+      await refreshList();
     } catch (err) {
       console.error("Upload attachment failed", err);
       setError(
@@ -127,9 +135,7 @@ export default function LabOrderAttachmentsModal({
 
     try {
       setDeletingId(attId);
-      // orderId is still passed but ignored by the helper; that's fine.
       await deleteLabOrderAttachment(orderId, attId);
-
       setAttachments((prev) =>
         prev.filter((a) => a.id !== attId && String(a.id) !== String(attId))
       );
@@ -141,39 +147,75 @@ export default function LabOrderAttachmentsModal({
     }
   }
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) onClose?.();
+  };
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40">
-      <div className="mx-4 w-full max-w-xl rounded-2xl bg-white shadow-xl">
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="mx-4 w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/20">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Lab order attachments
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100"
-          >
-            Close
-          </button>
+        <div className="relative border-b border-slate-200/80">
+          <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+          <div className="flex items-center justify-between px-5 py-3">
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50">
+                <Paperclip className="h-4 w-4 text-slate-700" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Lab order attachments
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Upload and manage supporting files for this lab order.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50"
+            >
+              <X className="mr-1 h-3.5 w-3.5" />
+              Close
+            </button>
+          </div>
         </div>
 
         {/* Body */}
         <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4 text-sm">
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
+            <div className="flex gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           {loading && (
-            <p className="text-sm text-slate-500">Loading attachments…</p>
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+              Loading attachments…
+            </div>
           )}
 
           {!loading && !attachments.length && !error && (
-            <p className="text-sm text-slate-500">
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-500">
+              <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-full bg-white">
+                <FileText className="h-5 w-5 text-slate-400" />
+              </div>
               No attachments yet for this lab order.
-            </p>
+              {canUpload && (
+                <div className="mt-1 text-xs text-slate-400">
+                  Use the form below to upload documents, images, or external
+                  reports.
+                </div>
+              )}
+            </div>
           )}
 
           {!loading && attachments.length > 0 && (
@@ -181,33 +223,41 @@ export default function LabOrderAttachmentsModal({
               {attachments.map((att) => (
                 <li
                   key={att.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                  className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
                 >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-900">
-                      {att.filename ||
-                        att.name ||
-                        att.original_name ||
-                        "Attachment"}
-                    </p>
-                    {att.description && (
-                      <p className="text-xs text-slate-600">
-                        {att.description}
+                  <div className="flex flex-1 gap-2">
+                    <div className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white border border-slate-200">
+                      <FileText className="h-4 w-4 text-slate-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-900">
+                        {att.filename ||
+                          att.name ||
+                          att.original_name ||
+                          "Attachment"}
                       </p>
-                    )}
-                    {att.uploaded_at && (
-                      <p className="text-[11px] text-slate-500">
-                        Uploaded {new Date(att.uploaded_at).toLocaleString()}
-                      </p>
-                    )}
+                      {att.description && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
+                          {att.description}
+                        </p>
+                      )}
+                      {att.uploaded_at && (
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          Uploaded{" "}
+                          {new Date(att.uploaded_at).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="flex flex-col items-end gap-1">
                     <a
                       href={resolveDownloadUrl(att)}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                     >
+                      <Download className="h-3.5 w-3.5" />
                       Download
                     </a>
                     {canUpload && (
@@ -215,8 +265,9 @@ export default function LabOrderAttachmentsModal({
                         type="button"
                         onClick={() => handleDelete(att.id)}
                         disabled={deletingId === att.id}
-                        className="rounded-full border border-red-200 bg-white px-3 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-white px-3 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                       >
+                        <Trash2 className="h-3.5 w-3.5" />
                         {deletingId === att.id ? "Deleting…" : "Delete"}
                       </button>
                     )}
@@ -230,23 +281,35 @@ export default function LabOrderAttachmentsModal({
           {canUpload && (
             <form
               onSubmit={handleUpload}
-              className="mt-4 space-y-3 border-t border-slate-200 pt-3"
+              className="mt-4 space-y-3 border-t border-slate-200 pt-4"
             >
+              <div className="flex items-center gap-2">
+                <div className="grid h-7 w-7 place-items-center rounded-md bg-blue-50 border border-blue-100">
+                  <Plus className="h-3.5 w-3.5 text-blue-600" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Add new attachment
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Upload PDFs, images, or documents linked to this lab order.
+                  </p>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Add new attachment
-                </label>
                 <input
                   type="file"
                   onChange={(e) => {
-                    const f = e.target.files?.[0] || null;
-                    setFile(f);
+                    const f = e.target.files && e.target.files[0];
+                    setFile(f || null);
                   }}
                   className="block w-full text-xs text-slate-700 file:mr-2 file:rounded-full file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-xs file:font-medium file:text-blue-700 hover:file:bg-blue-100"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
+                <label className="mb-1 block text-xs font-medium text-slate-700">
                   Description (optional)
                 </label>
                 <input
@@ -257,13 +320,24 @@ export default function LabOrderAttachmentsModal({
                   placeholder="E.g. consent form, external result, photo…"
                 />
               </div>
+
               <div className="flex justify-end">
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="inline-flex items-center rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {uploading ? "Uploading…" : "Upload attachment"}
+                  {uploading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Uploading…
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-3.5 w-3.5" />
+                      Upload attachment
+                    </>
+                  )}
                 </button>
               </div>
             </form>

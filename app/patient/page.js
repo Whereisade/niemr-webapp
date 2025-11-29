@@ -334,6 +334,23 @@ export default async function PatientDashboard() {
                   </span>
                 </Link>
                 <Link
+                  href="/patient/dependents"
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      My dependents
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Add and manage children or family members you help care
+                      for.
+                    </p>
+                  </div>
+                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                    Manage dependents
+                  </span>
+                </Link>
+                <Link
                   href="/settings/notifications"
                   className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
                 >

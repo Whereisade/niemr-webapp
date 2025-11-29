@@ -14,10 +14,10 @@ import {
   UsersRound,
   Activity,
   ClipboardList,
-  Clock,
   ArrowLeft,
   ArrowRight,
   Image as ImageIcon,
+  Download,
 } from "lucide-react";
 
 function formatDateTime(value) {
@@ -44,7 +44,7 @@ export default function ProviderImagingRequestsPage() {
 
   const [downloadingId, setDownloadingId] = useState(null);
 
-  // Modal state
+  // Modals
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsRequestId, setDetailsRequestId] = useState(null);
 
@@ -82,12 +82,7 @@ export default function ProviderImagingRequestsPage() {
       if (v === undefined || v === null || v === "") params.delete(k);
       else params.set(k, String(v));
     });
-    if (
-      "status" in patch ||
-      "patient" in patch ||
-      "s" in patch ||
-      "limit" in patch
-    ) {
+    if ("status" in patch || "patient" in patch || "s" in patch || "limit" in patch) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
@@ -118,7 +113,7 @@ export default function ProviderImagingRequestsPage() {
 
     try {
       await updateImagingRequestStatus(requestId, nextStatus);
-      router.refresh(); // re-fetch data
+      router.refresh();
     } catch (err) {
       console.error("Failed to update imaging request status", err);
       alert(
@@ -132,11 +127,13 @@ export default function ProviderImagingRequestsPage() {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
         <h1 className="mb-4 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-          Imaging Requests
+          Imaging requests
         </h1>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="-mt-6 mb-4 h-1.5 w-full rounded-t-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-          <p className="text-slate-500">Loading imaging requests…</p>
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+          <div className="p-6 text-sm text-slate-500">
+            Loading imaging requests…
+          </div>
         </div>
       </main>
     );
@@ -146,7 +143,7 @@ export default function ProviderImagingRequestsPage() {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
         <h1 className="mb-4 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-          Imaging Requests
+          Imaging requests
         </h1>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
           Failed to load: {error.message || "Unknown error"}
@@ -155,29 +152,31 @@ export default function ProviderImagingRequestsPage() {
     );
   }
 
-  const uniquePatients = new Set(
-    rows.map((r) => r.patient_name || r.patient)
-  ).size;
+  const uniquePatients = new Set(rows.map((r) => r.patient_name || r.patient)).size;
   const pendingOrScheduled = rows.filter((r) => {
     const v = String(r.status || "").toUpperCase();
     return v === "PENDING" || v === "SCHEDULED";
   }).length;
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
+    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
+      {/* Soft background glows */}
+      <div className="pointer-events-none absolute -top-20 -left-24 h-64 w-64 rounded-full bg-blue-100/60 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100/60 blur-3xl" />
+
       {/* Header */}
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <header className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             <ScanLine className="h-3.5 w-3.5" />
-            Provider Imaging
+            Provider · Imaging
           </div>
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Imaging requests for patients in my care
+            Imaging requests for my patients
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Filter by patient, status, or text search. Open a request to view
-            full details and download reports.
+            Review, filter, and manage imaging requests. Open a request to view
+            clinical details, attachments, and download reports.
           </p>
         </div>
 
@@ -191,48 +190,35 @@ export default function ProviderImagingRequestsPage() {
       </header>
 
       {/* Quick stats */}
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50">
-            <UsersRound className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Unique patients
-            </p>
-            <p className="text-lg font-semibold text-slate-900">
-              {uniquePatients}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50">
-            <ClipboardList className="h-5 w-5 text-amber-600" />
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Pending / Scheduled
-            </p>
-            <p className="text-lg font-semibold text-slate-900">
-              {pendingOrScheduled}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
-            <Activity className="h-5 w-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Total requests
-            </p>
-            <p className="text-lg font-semibold text-slate-900">{total}</p>
-          </div>
-        </div>
+      <section className="relative grid gap-4 md:grid-cols-3">
+        <StatCard
+          icon={UsersRound}
+          iconBg="bg-blue-50"
+          iconColor="text-blue-600"
+          label="Unique patients"
+          value={uniquePatients}
+        />
+        <StatCard
+          icon={ClipboardList}
+          iconBg="bg-amber-50"
+          iconColor="text-amber-600"
+          label="Pending / scheduled"
+          value={pendingOrScheduled}
+        />
+        <StatCard
+          icon={Activity}
+          iconBg="bg-emerald-50"
+          iconColor="text-emerald-600"
+          label="Total requests"
+          value={total}
+        />
       </section>
 
       {/* Filters + table */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {/* Accent bar */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+
         {/* Filters */}
         <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -251,6 +237,7 @@ export default function ProviderImagingRequestsPage() {
                     updateQuery({ s: e.currentTarget.value });
                   }
                 }}
+                onBlur={(e) => updateQuery({ s: e.currentTarget.value })}
               />
               <input
                 type="text"
@@ -262,6 +249,7 @@ export default function ProviderImagingRequestsPage() {
                     updateQuery({ patient: e.currentTarget.value });
                   }
                 }}
+                onBlur={(e) => updateQuery({ patient: e.currentTarget.value })}
               />
               <select
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 md:w-40"
@@ -293,143 +281,138 @@ export default function ProviderImagingRequestsPage() {
           <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
-                  Requested at
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
-                  Patient
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
-                  Procedure(s)
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
-                  Priority
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide">
-                  Status
-                </th>
-                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide">
-                  Report
-                </th>
-                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide">
-                  Actions
-                </th>
+                <Th>Requested at</Th>
+                <Th>Patient</Th>
+                <Th>Procedure(s)</Th>
+                <Th>Priority</Th>
+                <Th>Status</Th>
+                <Th className="text-right">Report</Th>
+                <Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {rows.map((req) => (
-                <tr key={req.id} className="hover:bg-slate-50">
-                  <td className="p-3 text-sm text-slate-800">
-                    {formatDateTime(req.requested_at || req.created_at)}
-                  </td>
-                  <td className="p-3 text-sm text-slate-800">
-                    {req.patient_name || req.patient || "—"}
-                  </td>
-                  <td className="p-3 text-sm text-slate-800">
-                    {Array.isArray(req.items)
-                      ? req.items
-                          .map(
-                            (i) =>
-                              i.procedure?.name ||
-                              i.procedure?.code ||
-                              i.procedure_name ||
-                              i.code
-                          )
-                          .join(", ")
-                      : req.procedures_display || req.procedure_name || "—"}
-                  </td>
-                  <td className="p-3 text-sm text-slate-800">
-                    {req.priority || "—"}
-                  </td>
-                  <td className="p-3 text-sm text-slate-800">
-                    {req.status || "—"}
-                  </td>
-                  <td className="p-3 text-right text-sm">
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(req)}
-                      disabled={downloadingId === req.id}
-                      className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      <FileDownloadIcon className="mr-1.5 h-3.5 w-3.5" />
-                      {downloadingId === req.id ? "Downloading…" : "PDF"}
-                    </button>
-                  </td>
-                  <td className="p-3 text-right text-sm">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      {String(req.status || "").toUpperCase() ===
-                        "PENDING" && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleStatusChange(req.id, "SCHEDULED")
-                            }
-                            className="rounded-full border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            Mark scheduled
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleStatusChange(req.id, "CANCELLED")
-                            }
-                            className="rounded-full border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      )}
+              {rows.map((req) => {
+                const statusValue = String(req.status || "").toUpperCase();
+                const priorityValue = String(req.priority || "").toUpperCase();
 
-                      {String(req.status || "").toUpperCase() ===
-                        "SCHEDULED" && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleStatusChange(req.id, "REPORTED")
-                            }
-                            className="rounded-full border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
-                          >
-                            Mark reported
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleStatusChange(req.id, "CANCELLED")
-                            }
-                            className="rounded-full border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      )}
-
+                return (
+                  <tr key={req.id} className="transition hover:bg-slate-50/60">
+                    <Td>
+                      <div className="flex items-center gap-1 text-xs text-slate-800">
+                        <span>{formatDateTime(req.requested_at || req.created_at)}</span>
+                      </div>
+                    </Td>
+                    <Td>
+                      <span className="text-sm text-slate-900">
+                        {req.patient_name || req.patient || "—"}
+                      </span>
+                    </Td>
+                    <Td>
+                      <span className="text-sm text-slate-800">
+                        {Array.isArray(req.items)
+                          ? req.items
+                              .map(
+                                (i) =>
+                                  i.procedure?.name ||
+                                  i.procedure?.code ||
+                                  i.procedure_name ||
+                                  i.code
+                              )
+                              .join(", ")
+                          : req.procedures_display || req.procedure_name || "—"}
+                      </span>
+                    </Td>
+                    <Td>
+                      <PriorityPill value={priorityValue} />
+                    </Td>
+                    <Td>
+                      <StatusPill value={statusValue} />
+                    </Td>
+                    <Td className="text-right">
                       <button
                         type="button"
-                        onClick={() => {
-                          setDetailsRequestId(req.id);
-                          setDetailsOpen(true);
-                        }}
-                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        onClick={() => handleDownload(req)}
+                        disabled={downloadingId === req.id}
+                        className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                       >
-                        View
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        {downloadingId === req.id ? "Downloading…" : "PDF"}
                       </button>
+                    </Td>
+                    <Td className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {statusValue === "PENDING" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStatusChange(req.id, "SCHEDULED")
+                              }
+                              className="rounded-full border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              Mark scheduled
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStatusChange(req.id, "CANCELLED")
+                              }
+                              className="rounded-full border border-rose-200 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAttachmentsRequestId(req.id);
-                          setAttachmentsOpen(true);
-                        }}
-                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        Attachments
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {statusValue === "SCHEDULED" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStatusChange(req.id, "REPORTED")
+                              }
+                              className="rounded-full border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                            >
+                              Mark reported
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStatusChange(req.id, "CANCELLED")
+                              }
+                              className="rounded-full border border-rose-200 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailsRequestId(req.id);
+                            setDetailsOpen(true);
+                          }}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          View
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAttachmentsRequestId(req.id);
+                            setAttachmentsOpen(true);
+                          }}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Attachments
+                        </button>
+                      </div>
+                    </Td>
+                  </tr>
+                );
+              })}
 
               {!rows.length && (
                 <tr>
@@ -491,7 +474,78 @@ export default function ProviderImagingRequestsPage() {
   );
 }
 
-// tiny icon helper so we don't pull in more from lucide
-function FileDownloadIcon(props) {
-  return <Clock {...props} />;
+/* ─────────────── UI helpers ─────────────── */
+
+function Th({ children, className = "" }) {
+  return (
+    <th
+      className={`px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 ${className}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, className = "" }) {
+  return (
+    <td className={`px-3 py-2 align-top text-sm text-slate-800 ${className}`}>
+      {children}
+    </td>
+  );
+}
+
+function StatCard({ icon: Icon, iconBg, iconColor, label, value }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconBg}`}>
+        <Icon className={`h-5 w-5 ${iconColor}`} />
+      </div>
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
+        <p className="text-lg font-semibold text-slate-900">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ value }) {
+  const v = String(value || "").toUpperCase();
+  const map = {
+    PENDING: "bg-amber-50 text-amber-700 ring-amber-200",
+    SCHEDULED: "bg-sky-50 text-sky-700 ring-sky-200",
+    IN_PROGRESS: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+    COMPLETED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
+  };
+  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
+  const label = (v || "—").replaceAll("_", " ");
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${cls}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function PriorityPill({ value }) {
+  const v = String(value || "").toUpperCase();
+  const map = {
+    ROUTINE: "bg-slate-50 text-slate-700 ring-slate-200",
+    URGENT: "bg-orange-50 text-orange-700 ring-orange-200",
+    STAT: "bg-red-50 text-red-700 ring-red-200",
+  };
+  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
+  const label = v || "—";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${cls}`}
+    >
+      {label}
+    </span>
+  );
 }
