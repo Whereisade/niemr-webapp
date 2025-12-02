@@ -268,7 +268,7 @@ export default async function PatientDashboard() {
               </p>
               <div className="mt-4 grid gap-2">
                 <QuickLink
-                  href="/appointments/new"
+                  href="/patient/appointments/new"
                   icon={Plus}
                   label="Book Appointment"
                 />

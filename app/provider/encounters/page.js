@@ -5,6 +5,10 @@ import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
 import { downloadEncounterPdf } from "@/lib/reports";
+import {
+  closeEncounter,
+  crossOutEncounter,
+} from "@/lib/encounterActions";
 import AttachmentList from "@/components/attachments/AttachmentList";
 import {
   Stethoscope,
@@ -49,6 +53,8 @@ export default function ProviderEncountersPage() {
 
   const [attachmentsFor, setAttachmentsFor] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [updateError, setUpdateError] = useState("");
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -183,6 +189,12 @@ export default function ProviderEncountersPage() {
         />
       </section>
 
+      {updateError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {updateError}
+        </div>
+      )}
+
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
@@ -199,6 +211,9 @@ export default function ProviderEncountersPage() {
               <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Files
               </th>
+              <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 text-right">
+                Actions
+              </th>
             </tr>
           </thead>
 
@@ -210,8 +225,7 @@ export default function ProviderEncountersPage() {
 
               return (
                 <tr key={enc.id} className="hover:bg-slate-50">
-
-                  {/* 🔗 PATIENT CELL PATCHED HERE */}
+                  {/* Patient cell with link */}
                   <td className="p-3 text-sm text-slate-800">
                     <Link
                       href={`/provider/encounters/${enc.id}`}
@@ -256,13 +270,74 @@ export default function ProviderEncountersPage() {
                       Attachments
                     </button>
                   </td>
+
+                  {/* Actions: Close / Cross out */}
+                  <td className="p-3 text-xs text-slate-800 text-right">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setUpdateError("");
+                          setUpdatingId(enc.id);
+                          try {
+                            await closeEncounter(enc.id);
+                            router.refresh();
+                          } catch (err) {
+                            console.error("Close encounter failed", err);
+                            setUpdateError(
+                              err?.message ||
+                                "Failed to close encounter. Please try again."
+                            );
+                          } finally {
+                            setUpdatingId(null);
+                          }
+                        }}
+                        disabled={updatingId === enc.id}
+                        className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {updatingId === enc.id ? "Closing…" : "Close"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = window.confirm(
+                            "Are you sure you want to cross out this encounter? This is usually used to invalidate a note."
+                          );
+                          if (!ok) return;
+
+                          setUpdateError("");
+                          setUpdatingId(enc.id);
+                          try {
+                            await crossOutEncounter(enc.id);
+                            router.refresh();
+                          } catch (err) {
+                            console.error(
+                              "Cross out encounter failed",
+                              err
+                            );
+                            setUpdateError(
+                              err?.message ||
+                                "Failed to cross out encounter. Please try again."
+                            );
+                          } finally {
+                            setUpdatingId(null);
+                          }
+                        }}
+                        disabled={updatingId === enc.id}
+                        className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {updatingId === enc.id ? "Updating…" : "Cross out"}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
 
             {!rows.length && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center">
+                <td colSpan={7} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>

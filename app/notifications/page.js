@@ -8,14 +8,6 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "@/lib/notifications";
-import {
-  Bell,
-  CheckCheck,
-  AlertTriangle,
-  Loader2,
-  ArrowLeft,
-  ArrowRight,
-} from "lucide-react";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -28,12 +20,10 @@ function formatDateTime(value) {
   }
 }
 
-function buildNotificationTitle(n) {
-  return n.title || n.subject || n.heading || n.type || "Notification";
-}
-
-function buildNotificationBody(n) {
-  return n.message || n.body || n.text || n.description || "";
+function isUnread(n) {
+  if (typeof n.is_read === "boolean") return !n.is_read;
+  if (n.read_at) return false;
+  return true;
 }
 
 export default function NotificationsPage() {
@@ -44,12 +34,15 @@ export default function NotificationsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const [updatingId, setUpdatingId] = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [markingOne, setMarkingOne] = useState(null);
 
   const page = Number(searchParams.get("page") || "1");
   const limit = Number(searchParams.get("limit") || "20");
+  const unreadFilter = searchParams.get("unread"); // "true" | "false" | null
+
+  const unreadOnly =
+    unreadFilter === "true" ? true : unreadFilter === "false" ? false : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -58,25 +51,33 @@ export default function NotificationsPage() {
       try {
         setLoading(true);
         setError("");
-        const res = await fetchNotifications({ page, limit });
+
+        const res = await fetchNotifications({
+          page,
+          limit,
+          unread: unreadOnly,
+        });
+
         if (cancelled) return;
 
         setData(res);
 
-        // normalize to array
         let items = [];
         if (Array.isArray(res?.results)) {
           items = res.results;
         } else if (Array.isArray(res)) {
           items = res;
         } else if (res && typeof res === "object") {
-          const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
+          const numericKeys = Object.keys(res).filter((k) =>
+            /^\d+$/.test(k)
+          );
           if (numericKeys.length) {
             items = numericKeys
               .sort((a, b) => Number(a) - Number(b))
               .map((k) => res[k]);
           }
         }
+
         setRows(items);
       } catch (err) {
         console.error("Failed to load notifications", err);
@@ -97,7 +98,7 @@ export default function NotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, limit]);
+  }, [page, limit, unreadOnly]);
 
   const hasNextPage = rows.length === limit;
   const hasPrevPage = page > 1;
@@ -112,15 +113,29 @@ export default function NotificationsPage() {
     router.push(`/notifications?${sp.toString()}`);
   }
 
+  function applyUnreadFilter(value) {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (value === "all") {
+      sp.delete("unread");
+    } else if (value === "unread") {
+      sp.set("unread", "true");
+    } else if (value === "read") {
+      sp.set("unread", "false");
+    }
+    sp.delete("page");
+    router.push(`/notifications?${sp.toString()}`);
+  }
+
   async function handleMarkRead(id) {
     if (!id) return;
-    setUpdatingId(id);
+
     try {
+      setMarkingOne(id);
       await markNotificationRead(id);
-      // optimistic update
+
       setRows((prev) =>
         prev.map((n) =>
-          n.id === id || String(n.id) === String(id)
+          String(n.id) === String(id)
             ? {
                 ...n,
                 is_read: true,
@@ -130,20 +145,21 @@ export default function NotificationsPage() {
         )
       );
     } catch (err) {
-      console.error("Failed to mark notification read", err);
+      console.error("Failed to mark notification as read", err);
       alert(
         err?.message ||
           "Failed to mark notification as read. Please try again."
       );
     } finally {
-      setUpdatingId(null);
+      setMarkingOne(null);
     }
   }
 
-  async function handleMarkAll() {
-    setMarkingAll(true);
+  async function handleMarkAllRead() {
     try {
+      setMarkingAll(true);
       await markAllNotificationsRead();
+
       setRows((prev) =>
         prev.map((n) => ({
           ...n,
@@ -152,7 +168,7 @@ export default function NotificationsPage() {
         }))
       );
     } catch (err) {
-      console.error("Failed to mark all notifications read", err);
+      console.error("Failed to mark all notifications as read", err);
       alert(
         err?.message ||
           "Failed to mark all notifications as read. Please try again."
@@ -162,197 +178,183 @@ export default function NotificationsPage() {
     }
   }
 
-  const unreadCount = rows.filter((n) => !n.is_read).length;
-  const totalCount = Number(data?.count ?? rows.length);
-
   return (
-    <main className="relative mx-auto max-w-4xl space-y-6 p-6 md:p-10">
-      {/* Soft background glow */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-52 w-52 rounded-full bg-blue-100/70 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-24 h-60 w-60 rounded-full bg-indigo-100/70 blur-3xl" />
-
-      {/* Header */}
-      <header className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
+      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
-            <Bell className="h-3.5 w-3.5" />
-            Notification center
-          </div>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
             Notifications
           </h1>
-          <p className="mt-1 max-w-xl text-sm text-slate-600">
-            See important updates about appointments, labs, imaging, billing,
-            and other activity related to your account.
+          <p className="mt-1 text-sm text-slate-600">
+            See alerts about appointments, lab results, imaging reports,
+            prescriptions, and billing activity.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleMarkAll}
-          disabled={markingAll || !rows.length || unreadCount === 0}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {markingAll ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Marking all…
-            </>
-          ) : (
-            <>
-              <CheckCheck className="h-4 w-4" />
-              Mark all as read
-            </>
-          )}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={
+              unreadOnly === true
+                ? "unread"
+                : unreadOnly === false
+                ? "read"
+                : "all"
+            }
+            onChange={(e) => applyUnreadFilter(e.target.value)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">All</option>
+            <option value="unread">Unread only</option>
+            <option value="read">Read only</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={handleMarkAllRead}
+            disabled={markingAll || !rows.some((n) => isUnread(n))}
+            className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+          >
+            {markingAll ? "Marking…" : "Mark all as read"}
+          </button>
+        </div>
       </header>
 
-      {/* Quick stats */}
-      <section className="relative grid gap-3 sm:grid-cols-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
-            <Bell className="h-4 w-4 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              Unread
-            </p>
-            <p className="text-lg font-semibold text-slate-900">
-              {unreadCount}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50">
-            <span className="text-xs font-semibold text-slate-600">All</span>
-          </div>
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              Total notifications
-            </p>
-            <p className="text-lg font-semibold text-slate-900">
-              {totalCount}
-            </p>
-          </div>
-        </div>
-        <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 shadow-sm sm:flex">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/70">
-            <Bell className="h-4 w-4 text-blue-600" />
-          </div>
-          <p className="text-xs text-slate-700">
-            Unread items are highlighted. Mark as read to keep your inbox tidy.
-          </p>
-        </div>
-      </section>
-
       {error && (
-        <div className="relative flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{error}</p>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
         </div>
       )}
 
-      {/* Notifications list */}
-      <section className="relative space-y-2">
-        {loading && (
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading notifications…</span>
-          </div>
-        )}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100 text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  When
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Title
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Message
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Status
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {loading && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    Loading notifications…
+                  </td>
+                </tr>
+              )}
 
-        {!loading && !rows.length && !error && (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center text-sm text-slate-500 shadow-sm">
-            <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-white">
-              <Bell className="h-4 w-4 text-slate-400" />
-            </div>
-            <p>You don&apos;t have any notifications yet.</p>
-          </div>
-        )}
+              {!loading &&
+                rows.map((n) => {
+                  const unread = isUnread(n);
+                  const title =
+                    n.title || n.subject || n.heading || "—";
+                  const message =
+                    n.body || n.message || n.text || "—";
 
-        {!loading &&
-          rows.map((n) => {
-            const isRead = Boolean(n.is_read);
-            const title = buildNotificationTitle(n);
-            const body = buildNotificationBody(n);
-
-            return (
-              <article
-                key={n.id}
-                className={`flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm shadow-sm transition ${
-                  isRead
-                    ? "border-slate-100 bg-white"
-                    : "border-blue-100 bg-blue-50/70"
-                }`}
-              >
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    {!isRead && (
-                      <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                    )}
-                    <h2 className="text-sm font-semibold text-slate-900">
-                      {title}
-                    </h2>
-                  </div>
-
-                  {body && (
-                    <p className="text-xs text-slate-700 whitespace-pre-wrap">
-                      {body}
-                    </p>
-                  )}
-
-                  <p className="text-[11px] text-slate-500">
-                    {formatDateTime(
-                      n.created_at || n.sent_at || n.timestamp
-                    )}
-                    {isRead && " · read"}
-                  </p>
-                </div>
-
-                <div className="flex flex-col items-end gap-2">
-                  {!isRead && (
-                    <button
-                      type="button"
-                      onClick={() => handleMarkRead(n.id)}
-                      disabled={updatingId === n.id}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  return (
+                    <tr
+                      key={n.id}
+                      className={
+                        unread ? "bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-50"
+                      }
                     >
-                      {updatingId === n.id ? "Marking…" : "Mark as read"}
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-      </section>
+                      <td className="p-3 text-xs text-slate-800">
+                        {formatDateTime(
+                          n.created_at || n.timestamp || n.sent_at
+                        )}
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-900">
+                        {title}
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        <span className="line-clamp-3">{message}</span>
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            unread
+                              ? "bg-blue-50 text-blue-700"
+                              : "bg-slate-50 text-slate-600"
+                          }`}
+                        >
+                          {unread ? "Unread" : "Read"}
+                        </span>
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        <div className="flex flex-wrap gap-2">
+                          {unread && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkRead(n.id)}
+                              disabled={markingOne === n.id}
+                              className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              {markingOne === n.id
+                                ? "Marking…"
+                                : "Mark as read"}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
 
-      {/* Pager */}
-      <div className="relative flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-600">
-        <span>
-          Page {page} · Showing {rows.length} notification
-          {rows.length === 1 ? "" : "s"}
-        </span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => goToPage(page - 1)}
-            disabled={!hasPrevPage}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() => goToPage(page + 1)}
-            disabled={!hasNextPage}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Next
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+              {!loading && !rows.length && !error && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    No notifications found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-600">
+          <span>
+            Page {page} · Showing {rows.length} notification
+            {rows.length === 1 ? "" : "s"}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => goToPage(page - 1)}
+              disabled={!hasPrevPage}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(page + 1)}
+              disabled={!hasNextPage}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

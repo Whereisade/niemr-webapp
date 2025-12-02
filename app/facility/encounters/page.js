@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
 import { downloadEncounterPdf } from "@/lib/reports";
 import AttachmentList from "@/components/attachments/AttachmentList";
+import {
+  closeEncounter,
+  crossOutEncounter,
+} from "@/lib/encounterActions";
 import {
   Building2,
   Users2,
@@ -31,402 +35,522 @@ function formatDateTime(value) {
 }
 
 export default function FacilityEncountersPage() {
-  const sp = useSearchParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
-  const page = Number(sp.get("page") || 1);
-  const limit = Number(sp.get("limit") || 10);
-  const status = sp.get("status") || "";
-  const s = sp.get("s") || "";
+  const page = Number(searchParams.get("page") || 1);
+  const status = searchParams.get("status") || "";
+  const search = searchParams.get("s") || "";
+  const mine = searchParams.get("mine") === "1";
 
-  // Backend scopes by user.facility_id for staff roles
-  const { data, error, isLoading } = useEncounters({
+  const { data, loading, error } = useEncounters({
     page,
-    limit,
-    status,
-    s,
+    status: status || undefined,
+    mine,
+    search: search || undefined,
+    scope: "facility",
   });
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
-  const total = Number(data?.count ?? rows.length);
-
-  const [attachmentsFor, setAttachmentsFor] = useState(null); // { id, label } | null
+  const [rows, setRows] = useState([]);
+  const [attachmentsFor, setAttachmentsFor] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
 
-  const updateQuery = (patch) => {
-    const params = new URLSearchParams(sp?.toString() || "");
-    Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") params.delete(k);
-      else params.set(k, String(v));
-    });
-    if ("status" in patch || "s" in patch) params.set("page", "1");
-    router.push(`${pathname}?${params.toString()}`);
-  };
+  // NEW: local state for update actions
+  const [updatingId, setUpdatingId] = useState(null);
+  const [updateError, setUpdateError] = useState("");
 
-  async function handleDownload(enc) {
-    if (!enc?.id) return;
+  // Normalize data -> rows
+  useEffect(() => {
+    if (Array.isArray(data?.results)) {
+      setRows(data.results);
+    } else if (Array.isArray(data)) {
+      setRows(data);
+    } else if (data && typeof data === "object") {
+      const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
+      if (numericKeys.length) {
+        setRows(
+          numericKeys
+            .sort((a, b) => Number(a) - Number(b))
+            .map((k) => data[k])
+        );
+      } else {
+        setRows([]);
+      }
+    } else {
+      setRows([]);
+    }
+  }, [data]);
+
+  const total = Number(data?.count ?? (rows.length || 0));
+
+  const openCount = rows.filter(
+    (e) => e.status === "OPEN" || e.status === "IN_PROGRESS"
+  ).length;
+  const closedCount = rows.filter((e) => e.status === "CLOSED").length;
+  const crossedOutCount = rows.filter((e) => e.status === "CROSSED_OUT").length;
+
+  function setQuery(next) {
+    const sp = new URLSearchParams(searchParams.toString());
+    Object.entries(next).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === "") {
+        sp.delete(key);
+      } else {
+        sp.set(key, String(value));
+      }
+    });
+    router.push(`${pathname}?${sp.toString()}`);
+  }
+
+  async function handleDownload(encounterId) {
+    if (!encounterId) return;
     try {
-      setDownloadingId(enc.id);
-      await downloadEncounterPdf(enc.id);
+      setDownloadingId(encounterId);
+      await downloadEncounterPdf(encounterId);
     } catch (err) {
-      console.error("Download failed", err);
-      alert(err?.message || "Failed to download encounter report.");
+      console.error("Failed to download encounter PDF", err);
+      alert(
+        err?.message ||
+          "Failed to download encounter report. Please try again."
+      );
     } finally {
       setDownloadingId(null);
     }
   }
 
-  if (isLoading && !data) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          Facility Encounters
-        </h1>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 -mt-6 mb-4 rounded-t-xl" />
-          <p className="text-slate-500">Loading encounters…</p>
-        </div>
-      </main>
-    );
-  }
-
   if (error) {
     return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <h1 className="text-lg font-semibold text-slate-900">
           Facility Encounters
         </h1>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
-        </div>
+        <p className="mt-2 text-sm text-red-700">
+          {typeof error === "string"
+            ? error
+            : error?.message || "Failed to load encounters."}
+        </p>
       </main>
     );
   }
 
-  // Quick counts based on current page items
-  const openCount = rows.filter(
-    (r) => (r.status || "").toUpperCase() === "OPEN"
-  ).length;
-  const closedCount = rows.filter(
-    (r) => (r.status || "").toUpperCase() === "CLOSED"
-  ).length;
-  const crossedOut = rows.filter(
-    (r) => (r.status || "").toUpperCase() === "CROSSED_OUT"
-  ).length;
-
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
-      {/* Header */}
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
-            <Building2 className="h-3.5 w-3.5" />
-            Facility Workspace
+    <main className="mx-auto max-w-6xl px-4 py-6">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+            <Stethoscope className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">
+              Facility Encounters
+            </h1>
+            <p className="text-xs text-slate-500">
+              View all encounters created under this facility, across all
+              providers.
+            </p>
           </div>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Facility Encounters
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            All encounters recorded for patients in this facility.
-          </p>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative">
-            <input
-              type="search"
-              placeholder="Search patient / complaint / diagnosis…"
-              defaultValue={s}
-              onBlur={(e) => updateQuery({ s: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-72"
-            />
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
-
-          <div className="relative">
-            <select
-              className="w-full appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-44"
-              value={status}
-              onChange={(e) => updateQuery({ status: e.target.value })}
-            >
-              <option value="">All statuses</option>
-              <option value="OPEN">Open</option>
-              <option value="CLOSED">Closed</option>
-              <option value="CROSSED_OUT">Crossed Out</option>
-            </select>
-            <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <Building2 className="mr-1 h-4 w-4" />
+          Facility-wide view
         </div>
       </header>
 
-      {/* Stat tiles */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          icon={FileText}
-          label="Encounters on page"
-          value={rows.length}
-          gradient="from-blue-600 via-indigo-600 to-violet-600"
-        />
-        <StatTile
-          icon={Users2}
-          label="Open"
-          value={openCount}
-          gradient="from-emerald-600 via-teal-600 to-cyan-600"
-        />
-        <StatTile
-          icon={CalendarClock}
-          label="Closed"
-          value={closedCount}
-          gradient="from-amber-600 via-orange-600 to-red-600"
-        />
-        <StatTile
-          icon={Stethoscope}
-          label="Crossed Out"
-          value={crossedOut}
-          gradient="from-fuchsia-600 via-pink-600 to-rose-600"
-        />
+      {/* Summary tiles */}
+      <section className="mb-6 grid gap-3 sm:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-slate-500">Total</p>
+            <Users2 className="h-4 w-4 text-slate-400" />
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">
+            {total}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
+          <p className="text-xs font-medium text-emerald-700">Open</p>
+          <p className="mt-2 text-2xl font-semibold text-emerald-900">
+            {openCount}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500">Closed</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">
+            {closedCount}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+          <p className="text-xs font-medium text-rose-700">Crossed out</p>
+          <p className="mt-2 text-2xl font-semibold text-rose-900">
+            {crossedOutCount}
+          </p>
+        </div>
       </section>
 
+      {/* Filters + search */}
+      <section className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs">
+          {[
+            { label: "All", value: "" },
+            { label: "Open", value: "OPEN" },
+            { label: "Closed", value: "CLOSED" },
+            { label: "Crossed out", value: "CROSSED_OUT" },
+          ].map((opt) => {
+            const active = status === opt.value;
+            return (
+              <button
+                key={opt.value || "all"}
+                type="button"
+                onClick={() =>
+                  setQuery({ status: opt.value || null, page: 1 })
+                }
+                className={[
+                  "rounded-full px-3 py-1 font-medium",
+                  active
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:bg-white/60",
+                ].join(" ")}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const value = formData.get("s")?.toString() || "";
+            setQuery({ s: value || null, page: 1 });
+          }}
+          className="flex w-full max-w-xs items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs"
+        >
+          <Search className="h-4 w-4 text-slate-400" />
+          <input
+            name="s"
+            defaultValue={search}
+            placeholder="Search by patient, provider, summary…"
+            className="flex-1 border-none bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
+          />
+        </form>
+      </section>
+
+      {/* NEW: update error (distinct from fetch error above) */}
+      {updateError && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {updateError}
+        </div>
+      )}
+
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <Th>Patient</Th>
-              <Th>Provider</Th>
-              <Th>When</Th>
-              <Th>Status</Th>
-              <Th>Summary</Th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Report
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Files
-              </th>
-              {/* NEW Details column */}
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Details
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((enc) => {
-              const patientName = enc.patient_name || enc.patient || "—";
-              const providerName = enc.provider_name || enc.provider || "—";
-              const whenLabel = formatDateTime(
-                enc.occurred_at || enc.created_at
-              );
-
-              return (
-                <tr
-                  key={enc.id}
-                  className="transition hover:bg-slate-50/60"
-                >
-                  <Td>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-50">
-                        <UserRound className="h-4 w-4 text-slate-700" />
-                      </span>
-                      <span className="text-slate-900">
-                        {patientName}
-                      </span>
-                    </span>
-                  </Td>
-                  <Td>
-                    <span className="text-slate-800">
-                      {providerName}
-                    </span>
-                  </Td>
-                  <Td>
-                    <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                      {whenLabel}
-                    </span>
-                  </Td>
-                  <Td>
-                    <StatusPill value={enc.status} />
-                  </Td>
-                  <Td>
-                    <span className="line-clamp-2 text-slate-800">
-                      {enc.chief_complaint || enc.summary || "—"}
-                    </span>
-                  </Td>
-
-                  <td className="p-3 text-right text-sm">
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(enc)}
-                      disabled={downloadingId === enc.id}
-                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {downloadingId === enc.id ? "Generating…" : "PDF"}
-                    </button>
-                  </td>
-
-                  <td className="p-3 text-right text-sm">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAttachmentsFor({
-                          id: enc.id,
-                          label: `${patientName} · ${providerName} #${enc.id}`,
-                        })
-                      }
-                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                    >
-                      Attachments
-                    </button>
-                  </td>
-
-                  {/* NEW Details cell */}
-                  <td className="p-3 text-right text-sm">
-                    <Link
-                      href={`/facility/encounters/${enc.id}`}
-                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      View
-                    </Link>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-xs">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  Patient
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  Provider
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  When
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  Status
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  Summary
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  Report
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  Files
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {loading && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    Loading encounters…
                   </td>
                 </tr>
-              );
-            })}
+              )}
 
-            {!rows.length && (
-              <tr>
-                {/* bump colSpan from 7 → 8 */}
-                <td colSpan={8} className="px-4 py-10 text-center">
-                  <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
-                    <FileText className="h-6 w-6 text-slate-400" />
-                  </div>
-                  <div className="text-sm font-medium text-slate-900">
-                    No encounters found
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    Try adjusting search or status.
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              {!loading &&
+                rows.map((enc) => (
+                  <tr key={enc.id} className="hover:bg-slate-50">
+                    <td className="p-3 text-sm text-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
+                          <UserRound className="h-4 w-4 text-slate-500" />
+                        </span>
+                        <div>
+                          <div className="font-medium">
+                            {enc.patient_name || enc.patient || "—"}
+                          </div>
+                          {enc.patient_identifier && (
+                            <div className="text-[11px] text-slate-500">
+                              {enc.patient_identifier}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
 
-      {/* Pager */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
+                    <td className="p-3 text-sm text-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-50">
+                          <Stethoscope className="h-4 w-4 text-blue-600" />
+                        </span>
+                        <div>
+                          <div className="font-medium">
+                            {enc.provider_name || enc.provider || "—"}
+                          </div>
+                          {enc.provider_role && (
+                            <div className="text-[11px] text-slate-500">
+                              {enc.provider_role}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="p-3 text-xs text-slate-700">
+                      <div className="flex items-center gap-1">
+                        <CalendarClock className="h-4 w-4 text-slate-400" />
+                        <span>{formatDateTime(enc.started_at)}</span>
+                      </div>
+                    </td>
+
+                    <td className="p-3 text-xs text-slate-800">
+                      {enc.status === "OPEN" || enc.status === "IN_PROGRESS" ? (
+                        <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          {enc.status === "IN_PROGRESS"
+                            ? "In progress"
+                            : "Open"}
+                        </span>
+                      ) : enc.status === "CLOSED" ? (
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                          Closed
+                        </span>
+                      ) : enc.status === "CROSSED_OUT" ? (
+                        <span className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
+                          Crossed out
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          {enc.status || "—"}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="p-3 text-xs text-slate-700">
+                      <p className="line-clamp-2">
+                        {enc.summary ||
+                          enc.chief_complaint ||
+                          enc.reason ||
+                          "—"}
+                      </p>
+                    </td>
+
+                    <td className="p-3 text-xs text-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(enc.id)}
+                        disabled={downloadingId === enc.id}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <FileText className="h-3 w-3" />
+                        {downloadingId === enc.id ? "Downloading…" : "PDF"}
+                      </button>
+                    </td>
+
+                    <td className="p-3 text-xs text-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setAttachmentsFor(enc)}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Attachments
+                      </button>
+                    </td>
+
+                    {/* NEW: Close / Cross-out + View in one Actions cell */}
+                    <td className="p-3 text-xs text-slate-800">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {/* Close encounter */}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setUpdateError("");
+                            setUpdatingId(enc.id);
+                            try {
+                              const res = await closeEncounter(enc.id);
+
+                              const newStatus =
+                                res &&
+                                typeof res === "object" &&
+                                res.status
+                                  ? res.status
+                                  : "CLOSED";
+
+                              setRows((prev) =>
+                                prev.map((e) =>
+                                  e.id === enc.id
+                                    ? { ...e, status: newStatus }
+                                    : e
+                                )
+                              );
+                            } catch (err) {
+                              console.error(
+                                "Facility close encounter failed",
+                                err
+                              );
+                              setUpdateError(
+                                err?.message ||
+                                  "Failed to close encounter. Please try again."
+                              );
+                            } finally {
+                              setUpdatingId(null);
+                            }
+                          }}
+                          disabled={updatingId === enc.id}
+                          className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          {updatingId === enc.id ? "Closing…" : "Close"}
+                        </button>
+
+                        {/* Cross out encounter */}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = window.confirm(
+                              "Are you sure you want to cross out this encounter? This should only be used to invalidate an incorrect note."
+                            );
+                            if (!ok) return;
+
+                            setUpdateError("");
+                            setUpdatingId(enc.id);
+                            try {
+                              const res = await crossOutEncounter(enc.id);
+
+                              const newStatus =
+                                res &&
+                                typeof res === "object" &&
+                                res.status
+                                  ? res.status
+                                  : "CROSSED_OUT";
+
+                              setRows((prev) =>
+                                prev.map((e) =>
+                                  e.id === enc.id
+                                    ? { ...e, status: newStatus }
+                                    : e
+                                )
+                              );
+                            } catch (err) {
+                              console.error(
+                                "Facility cross-out encounter failed",
+                                err
+                              );
+                              setUpdateError(
+                                err?.message ||
+                                  "Failed to cross out encounter. Please try again."
+                              );
+                            } finally {
+                              setUpdatingId(null);
+                            }
+                          }}
+                          disabled={updatingId === enc.id}
+                          className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {updatingId === enc.id ? "Updating…" : "Cross out"}
+                        </button>
+
+                        {/* View details (existing behavior) */}
+                        <Link
+                          href={`/facility/encounters/${enc.id}`}
+                          className="inline-flex items-center rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+              {!loading && !rows.length && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="p-4 text-center text-sm text-slate-500"
+                  >
+                    No encounters found for this facility.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
-          >
-            Next
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
 
-      {/* Attachments modal (facility can upload/remove) */}
-      {attachmentsFor && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
-            <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Encounter attachments
-                </h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {attachmentsFor.label}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAttachmentsFor(null)}
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              >
-                <span className="sr-only">Close</span>
-                ✕
-              </button>
-            </div>
-
-            <div className="px-4 py-3">
-              <AttachmentList
-                refType="ENCOUNTER"
-                refId={attachmentsFor.id}
-                canUpload={true}
-              />
-            </div>
+        {/* Pagination */}
+        <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-600">
+          <div>
+            Page {page} •{" "}
+            {rows.length
+              ? `Showing ${(page - 1) * rows.length + 1}–${
+                  (page - 1) * rows.length + rows.length
+                } of ${total}`
+              : `Total ${total}`}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => page > 1 && setQuery({ page: page - 1 })}
+              disabled={page <= 1}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 disabled:opacity-50"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuery({ page: page + 1 })}
+              disabled={!rows.length || rows.length === 0}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 disabled:opacity-50"
+            >
+              Next
+              <ArrowRight className="h-3 w-3" />
+            </button>
           </div>
         </div>
+      </section>
+
+      {/* Attachments drawer */}
+      {attachmentsFor && (
+        <AttachmentList
+          open={!!attachmentsFor}
+          onClose={() => setAttachmentsFor(null)}
+          objectType="encounter"
+          objectId={attachmentsFor.id}
+          title="Encounter attachments"
+        />
       )}
     </main>
   );
-}
-
-/* ───────────── UI helpers ───────────── */
-
-function StatTile({ icon: Icon, label, value, gradient }) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
-      <div className="p-5">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-600">{label}</div>
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-            <Icon className="h-5 w-5 text-slate-700" />
-          </div>
-        </div>
-        <div className="mt-2 text-3xl font-semibold text-slate-900">
-          {value}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatusPill({ value }) {
-  const v = String(value || "").toUpperCase();
-  const map = {
-    OPEN: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CLOSED: "bg-slate-50 text-slate-700 ring-slate-200",
-    CROSSED_OUT: "bg-rose-50 text-rose-700 ring-rose-200",
-  };
-  const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
-  const label = v || "—";
-  return (
-    <span
-      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
-    >
-      {label.replaceAll("_", " ")}
-    </span>
-  );
-}
-
-function Th({ children }) {
-  return (
-    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-      {children}
-    </th>
-  );
-}
-function Td({ children }) {
-  return <td className="p-3 text-sm text-slate-800">{children}</td>;
 }

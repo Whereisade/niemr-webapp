@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { APPT_TYPES, createAppointment } from "@/lib/appointmentsActions";
 import { apiFetch } from "@/lib/api";
+import { fetchDependents } from "@/lib/dependents";
 import {
   CalendarRange,
   Clock,
@@ -43,6 +44,12 @@ export default function PatientNewAppointmentPage() {
   const [facilities, setFacilities] = useState([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
+
+  // Dependents data
+  const [dependents, setDependents] = useState([]);
+  const [loadingDependents, setLoadingDependents] = useState(true);
+  const [dependentsError, setDependentsError] = useState("");
+  const [whoFor, setWhoFor] = useState("self");
 
   // Load providers + facilities once on mount
   useEffect(() => {
@@ -90,6 +97,57 @@ export default function PatientNewAppointmentPage() {
     };
   }, []);
 
+  // Load dependents once on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDeps() {
+      try {
+        setLoadingDependents(true);
+        setDependentsError("");
+
+        const res = await fetchDependents();
+
+        if (cancelled) return;
+
+        let items = [];
+        if (Array.isArray(res?.results)) {
+          items = res.results;
+        } else if (Array.isArray(res)) {
+          items = res;
+        } else if (res && typeof res === "object") {
+          const numericKeys = Object.keys(res).filter((k) =>
+            /^\d+$/.test(k)
+          );
+          if (numericKeys.length) {
+            items = numericKeys
+              .sort((a, b) => Number(a) - Number(b))
+              .map((k) => res[k]);
+          }
+        }
+
+        setDependents(items);
+      } catch (err) {
+        console.error("Failed to load dependents", err);
+        if (!cancelled) {
+          setDependentsError(
+            err?.message ||
+              "Could not load dependents. You can still book for yourself."
+          );
+          setDependents([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingDependents(false);
+      }
+    }
+
+    loadDeps();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -106,11 +164,20 @@ export default function PatientNewAppointmentPage() {
     const endAt = endDate.toISOString();
 
     const payload = {
-      // patient is NOT sent; backend infers from logged-in user
+      // For self: backend infers patient from logged-in user
+      // For dependents: we set payload.patient below
       appt_type: apptType,
       start_at: startAt,
       end_at: endAt,
     };
+
+    // If booking for a dependent, attach that dependent's patient id
+    if (whoFor !== "self") {
+      const parsed = Number(whoFor);
+      if (parsed && !Number.isNaN(parsed)) {
+        payload.patient = parsed;
+      }
+    }
 
     const provider = Number(providerId);
     if (provider && !Number.isNaN(provider)) {
@@ -215,6 +282,47 @@ export default function PatientNewAppointmentPage() {
               </div>
             )}
 
+            {/* Who is this appointment for? */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Book for
+              </label>
+              <select
+                value={whoFor}
+                onChange={(e) => setWhoFor(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="self">Myself</option>
+                {dependents.map((dep) => {
+                  const fullName = [dep.first_name, dep.last_name]
+                    .filter(Boolean)
+                    .join(" ");
+                  const label =
+                    fullName || dep.name || `Dependent #${dep.id}`;
+                  const relationship =
+                    dep.relationship || dep.relation || "";
+                  return (
+                    <option key={dep.id} value={String(dep.id)}>
+                      {label}
+                      {relationship ? ` (${relationship})` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {loadingDependents && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Loading dependents…
+                </p>
+              )}
+
+              {dependentsError && (
+                <p className="mt-1 text-[11px] text-amber-600">
+                  {dependentsError}
+                </p>
+              )}
+            </div>
+
             {/* Appointment type */}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -305,7 +413,8 @@ export default function PatientNewAppointmentPage() {
                         .filter(Boolean)
                         .join(" ");
                       const roleOrSpec = p.specialty || p.role || "";
-                      const label = fullName || p.email || `Provider #${p.id}`;
+                      const label =
+                        fullName || p.email || `Provider #${p.id}`;
                       return (
                         <option key={p.id} value={String(p.id)}>
                           {label}

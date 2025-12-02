@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
@@ -17,6 +18,7 @@ import {
   postAppointmentAction,
   APPT_STATUS,
 } from "@/lib/appointmentsActions";
+import { fetchDependents } from "@/lib/dependents";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -90,6 +92,63 @@ export default function PatientAppointmentsPage() {
     }
   };
 
+  // ───── Dependents lookup for "who is this appointment for" badge ─────
+  const [dependents, setDependents] = useState([]);
+  const [loadingDependents, setLoadingDependents] = useState(true);
+  const [dependentsError, setDependentsError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDependents() {
+      try {
+        setLoadingDependents(true);
+        setDependentsError("");
+
+        const res = await fetchDependents();
+
+        if (cancelled) return;
+
+        let items = [];
+        if (Array.isArray(res?.results)) {
+          items = res.results;
+        } else if (Array.isArray(res)) {
+          items = res;
+        } else if (res && typeof res === "object") {
+          const numericKeys = Object.keys(res).filter((k) =>
+            /^\d+$/.test(k)
+          );
+          if (numericKeys.length) {
+            items = numericKeys
+              .sort((a, b) => Number(a) - Number(b))
+              .map((k) => res[k]);
+          }
+        }
+
+        setDependents(items);
+      } catch (err) {
+        console.error("Failed to load dependents for appointments list", err);
+        if (!cancelled) {
+          setDependentsError(
+            err?.message ||
+              "Could not load dependents. Appointments will still show as normal."
+          );
+          setDependents([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDependents(false);
+        }
+      }
+    }
+
+    loadDependents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <main className="relative mx-auto max-w-7xl p-6 md:p-10 space-y-6">
       {/* soft bg accents (keeps consistency with provider/facility pages) */}
@@ -109,6 +168,11 @@ export default function PatientAppointmentsPage() {
           <p className="mt-1 text-sm text-slate-600">
             View, cancel and download details of your bookings.
           </p>
+          {dependentsError && (
+            <p className="mt-1 text-xs text-amber-600">
+              {dependentsError}
+            </p>
+          )}
         </div>
 
         {/* Right side: Book button + mini stats */}
@@ -190,6 +254,7 @@ export default function PatientAppointmentsPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
+                <Th>Patient</Th>
                 <Th>Doctor / Provider</Th>
                 <Th>When</Th>
                 <Th>Status</Th>
@@ -199,13 +264,13 @@ export default function PatientAppointmentsPage() {
             <tbody className="divide-y divide-slate-100">
               {isLoading && !data ? (
                 <tr>
-                  <td colSpan={4} className="p-6 text-slate-600">
+                  <td colSpan={5} className="p-6 text-slate-600">
                     Loading appointments…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={4} className="p-6 text-rose-700 bg-rose-50">
+                  <td colSpan={5} className="p-6 text-rose-700 bg-rose-50">
                     Failed to load: {error.message || "Unknown error"}
                   </td>
                 </tr>
@@ -214,11 +279,32 @@ export default function PatientAppointmentsPage() {
                   const statusValue = a.status || "SCHEDULED";
                   const actions = getPatientActions(statusValue);
 
+                  const patientLabel =
+                    a.patient_name || a.patient || "—";
+                  const isDependent = dependents.some(
+                    (dep) => String(dep.id) === String(a.patient)
+                  );
+
                   return (
                     <tr
                       key={a.id}
                       className="transition hover:bg-slate-50/60"
                     >
+                      {/* Patient cell with Dependent pill when applicable */}
+                      <Td>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-slate-900">
+                            {patientLabel}
+                          </span>
+                          {isDependent && (
+                            <span className="mt-0.5 inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                              Dependent
+                            </span>
+                          )}
+                        </div>
+                      </Td>
+
+                      {/* Provider */}
                       <Td className="font-medium text-slate-900">
                         <span className="inline-flex items-center gap-2">
                           <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
@@ -227,6 +313,8 @@ export default function PatientAppointmentsPage() {
                           {a.provider_name || a.provider || "—"}
                         </span>
                       </Td>
+
+                      {/* When */}
                       <Td>
                         <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           {formatDateTime(
@@ -234,9 +322,13 @@ export default function PatientAppointmentsPage() {
                           )}
                         </span>
                       </Td>
+
+                      {/* Status */}
                       <Td>
                         <StatusBadge value={a.status} />
                       </Td>
+
+                      {/* Actions */}
                       <Td className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {actions.length > 0 && (
@@ -271,7 +363,7 @@ export default function PatientAppointmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={4} className="p-8">
+                  <td colSpan={5} className="p-8">
                     <EmptyState
                       title="No appointments found"
                       subtitle="Try adjusting your search or status filter."
