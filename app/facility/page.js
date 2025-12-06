@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import GreetingLine from "@/components/GreetingLine";
+import LogoutButton from "@/components/LogoutButton";
 import NotificationsBell from "@/components/notifications/NotificationsBell";
 import {
   CalendarRange,
@@ -167,6 +168,7 @@ export default async function FacilityDashboard() {
 
         <div className="flex items-center gap-3">
           <NotificationsBell href="/notifications" />
+         
           <div className="flex flex-wrap gap-2">
             <Link
               href="/facility/encounters"

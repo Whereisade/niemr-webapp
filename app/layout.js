@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
+import LogoutButton from "@/components/LogoutButton";
 
 export const metadata = { title: "NIEMR", description: "NIEMR Frontend" };
 
@@ -66,6 +67,7 @@ export default function RootLayout({ children }) {
                 Register
                 <ArrowRight className="ml-1 h-4 w-4" />
               </a>
+               <LogoutButton />
             </nav>
 
             {/* Mobile nav */}
