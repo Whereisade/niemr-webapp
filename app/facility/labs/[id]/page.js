@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import DownloadReportButton from "@/components/DownloadReportButton";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -260,6 +261,15 @@ export default function FacilityLabOrderDetailPage() {
               Ordered {orderedDate}
             </span>
           )}
+
+          <DownloadReportButton
+            type="lab"
+            refId={
+              order?.reference ||
+              order?.order_number ||
+              order?.id
+            }
+          />
         </div>
       </div>
 

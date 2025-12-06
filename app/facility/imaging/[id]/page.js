@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import DownloadReportButton from "@/components/DownloadReportButton";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -243,6 +244,17 @@ export default function FacilityImagingDetailPage() {
             >
               {status}
             </span>
+          )}
+
+          {request && (
+            <DownloadReportButton
+              type="imaging"
+              refId={
+                request?.reference ||
+                request?.request_number ||
+                request?.id
+              }
+            />
           )}
         </div>
       </div>

@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import EncounterRelatedData from "@/components/encounters/EncounterRelatedData";
+import DownloadReportButton from "@/components/DownloadReportButton";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -230,6 +231,15 @@ export default function FacilityEncounterDetailPage() {
               {encounter.status}
             </span>
           )}
+
+          <DownloadReportButton
+            type="encounter"
+            refId={
+              encounter?.reference ||
+              encounter?.ref ||
+              encounter?.id
+            }
+          />
         </div>
       </div>
 

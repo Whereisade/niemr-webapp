@@ -193,6 +193,14 @@ export default function FacilityLabOrdersPage() {
           </p>
         </div>
 
+        <div className="space-x-2">
+        <Link
+          href="/facility/labs/catalog/"
+          className="inline-flex items-center rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        >
+          <FileText className="mr-2 h-4 w-4" />
+          New lab catalog creation
+        </Link>
         <Link
           href="/facility/labs/new"
           className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
@@ -200,6 +208,8 @@ export default function FacilityLabOrdersPage() {
           <FileText className="mr-2 h-4 w-4" />
           New lab order
         </Link>
+
+        </div>
       </header>
 
       {/* Quick stats */}

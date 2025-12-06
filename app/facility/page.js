@@ -357,13 +357,18 @@ export default async function FacilityDashboard() {
                   label="New Encounter"
                 />
                 <QuickLink
+                  href="/facility/patients"
+                  icon={Users2}
+                  label="Register patient"
+                />
+                <QuickLink
                   href="/facility/appointments/new"
                   icon={CalendarRange}
                   label="Schedule Appointment"
                 />
-                <QuickLink href="/labs/new" icon={FileText} label="Order Lab" />
+                <QuickLink href="/facility/labs/new" icon={FileText} label="Order Lab" />
                 <QuickLink
-                  href="/imaging/new"
+                  href="/facility/imaging/new"
                   icon={ClipboardList}
                   label="Request Imaging"
                 />
@@ -386,6 +391,28 @@ export default async function FacilityDashboard() {
                   icon={ClipboardList}
                   label="Audit logs"
                 />
+                <Link
+                  href="/facility/reports"
+                  className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm transition hover:border-slate-400 hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">
+                        Reports & PDFs
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Download encounter, lab, imaging and billing PDFs.
+                      </p>
+                    </div>
+                    <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900">
+                      <FileText className="h-4 w-4 text-white" />
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] font-medium text-slate-500">
+                    Facility staff only
+                  </p>
+                </Link>
+
                 <Link
                   href="/facility/emails"
                   className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"

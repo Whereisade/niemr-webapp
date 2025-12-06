@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { downloadImagingPdf } from "@/lib/reports";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -117,10 +118,9 @@ export default function PatientImagingDetailPage() {
         qs.set("owner_type", "imaging_request");
         qs.set("owner_id", String(id));
 
-        const body = await apiFetch(
-          `/attachments/?${qs.toString()}`,
-          { method: "GET" }
-        );
+        const body = await apiFetch(`/attachments/?${qs.toString()}`, {
+          method: "GET",
+        });
 
         if (cancelled) return;
 
@@ -206,44 +206,56 @@ export default function PatientImagingDetailPage() {
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="inline-flex items-center text-xs font-medium text-slate-600 hover:text-slate-900"
-          >
-            ← Back
-          </button>
-          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-            Imaging test details
-          </h1>
-          <p className="text-sm text-slate-600">
-            This page shows a read-only summary of an imaging request recorded
-            for you.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {status && status !== "—" && (
-            <span
-              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                status === "REQUESTED"
-                  ? "bg-amber-50 text-amber-700"
-                  : status === "SCHEDULED"
-                  ? "bg-sky-50 text-sky-700"
-                  : status === "COMPLETED"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : status === "CANCELLED"
-                  ? "bg-red-50 text-red-700"
-                  : "bg-slate-50 text-slate-600"
-              }`}
+      <header className="mb-6 space-y-2">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {/* Left: back + title */}
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex items-center text-xs font-medium text-slate-600 hover:text-slate-900"
             >
-              {status}
-            </span>
-          )}
+              ← Back
+            </button>
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+              Imaging test details
+            </h1>
+            <p className="text-sm text-slate-600">
+              This page shows a read-only summary of an imaging request
+              recorded for you.
+            </p>
+          </div>
+
+          {/* Right: status + download */}
+          <div className="flex items-center gap-2">
+            {status && status !== "—" && (
+              <span
+                className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                  status === "REQUESTED"
+                    ? "bg-amber-50 text-amber-700"
+                    : status === "SCHEDULED"
+                    ? "bg-sky-50 text-sky-700"
+                    : status === "COMPLETED"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : status === "CANCELLED"
+                    ? "bg-red-50 text-red-700"
+                    : "bg-slate-50 text-slate-600"
+                }`}
+              >
+                {status}
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={() => downloadImagingPdf(id)}
+              className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Download PDF
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
