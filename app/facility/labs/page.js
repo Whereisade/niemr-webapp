@@ -99,7 +99,12 @@ export default function FacilityLabOrdersPage() {
         params.set(k, String(v));
       }
     });
-    if ("status" in patch || "patient" in patch || "s" in patch || "limit" in patch) {
+    if (
+      "status" in patch ||
+      "patient" in patch ||
+      "s" in patch ||
+      "limit" in patch
+    ) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
@@ -319,7 +324,10 @@ export default function FacilityLabOrdersPage() {
                   const pillCls = statusPillClasses(order.status);
 
                   return (
-                    <tr key={order.id} className="transition hover:bg-slate-50/60">
+                    <tr
+                      key={order.id}
+                      className="transition hover:bg-slate-50/60"
+                    >
                       <Td>
                         <div className="flex items-center gap-2">
                           <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
@@ -376,6 +384,14 @@ export default function FacilityLabOrdersPage() {
 
                       <Td>
                         <div className="flex flex-wrap gap-2">
+                          {/* View link to detail page */}
+                          <Link
+                            href={`/facility/labs/${order.id}`}
+                            className="text-xs font-medium text-blue-600 hover:underline"
+                          >
+                            View
+                          </Link>
+
                           {order.status === "PENDING" && (
                             <>
                               <button
@@ -439,7 +455,10 @@ export default function FacilityLabOrdersPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm">
+                  <td
+                    colSpan={6}
+                    className="px-4 py-10 text-center text-sm"
+                  >
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                       <Activity className="h-6 w-6 text-slate-400" />
                     </div>
@@ -531,7 +550,9 @@ function Th({ children, className = "" }) {
 
 function Td({ children, className = "" }) {
   return (
-    <td className={`px-4 py-3 align-middle text-sm text-slate-800 ${className}`}>
+    <td
+      className={`px-4 py-3 align-middle text-sm text-slate-800 ${className}`}
+    >
       {children}
     </td>
   );

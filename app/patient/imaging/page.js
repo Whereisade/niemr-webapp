@@ -1,10 +1,10 @@
+// app/patient/imaging/page.js
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import ImagingRequestDetailsModal from "@/components/imaging/ImagingRequestDetailsModal";
-import ImagingAttachmentsModal from "@/components/imaging/ImagingAttachmentsModal";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -17,30 +17,65 @@ function formatDateTime(value) {
   }
 }
 
-// Base BFF path for imaging requests
-const IMAGING_BASE = "/imaging/requests/";
+function normalizeImagingPayload(body) {
+  if (!body) return [];
 
-export default function PatientImagingPage() {
-  const router = useRouter();
+  // DRF paginated: { count, results: [...] }
+  if (Array.isArray(body.results)) {
+    return body.results;
+  }
+
+  // Plain list: [...]
+  if (Array.isArray(body)) {
+    return body;
+  }
+
+  // Weird numeric-key object from BFF spread
+  if (body && typeof body === "object") {
+    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      return numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => body[k]);
+    }
+  }
+
+  return [];
+}
+
+function buildStatusPillClasses(status) {
+  switch (status) {
+    case "PENDING":
+      return "bg-amber-50 text-amber-700";
+    case "SCHEDULED":
+      return "bg-blue-50 text-blue-700";
+    case "REPORTED":
+    case "COMPLETED":
+      return "bg-emerald-50 text-emerald-700";
+    case "CANCELLED":
+      return "bg-slate-100 text-slate-600";
+    default:
+      return "bg-slate-50 text-slate-600";
+  }
+}
+
+export default function PatientImagingRequestsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
+  const [rows, setRows] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [detailsRequestId, setDetailsRequestId] = useState(null);
-
-  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
-  const [attachmentsRequestId, setAttachmentsRequestId] = useState(null);
-
   const page = Number(searchParams.get("page") || "1");
   const limit = Number(searchParams.get("limit") || "10");
+  const status = searchParams.get("status") || "";
 
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchImaging() {
+    async function load() {
       try {
         setLoading(true);
         setError("");
@@ -48,11 +83,22 @@ export default function PatientImagingPage() {
         const qs = new URLSearchParams();
         qs.set("page", String(page));
         qs.set("limit", String(limit));
+        qs.set("mine", "true"); // scope to this patient
+        if (status) qs.set("status", status);
 
-        // Backend should scope to current PATIENT for this role
-        const res = await apiFetch(`${IMAGING_BASE}?${qs.toString()}`);
+        // Assuming ImagingRequestViewSet is registered at /imaging/requests/
+        const body = await apiFetch(
+          `/imaging/requests/?${qs.toString()}`,
+          {
+            method: "GET",
+          }
+        );
+
         if (cancelled) return;
-        setData(res);
+
+        setData(body);
+        const items = normalizeImagingPayload(body);
+        setRows(items);
       } catch (err) {
         console.error("Failed to load patient imaging requests", err);
         if (!cancelled) {
@@ -60,32 +106,20 @@ export default function PatientImagingPage() {
             err?.message ||
               "Failed to load imaging requests. Please try again."
           );
+          setRows([]);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    fetchImaging();
+    load();
     return () => {
       cancelled = true;
     };
-  }, [page, limit]);
-
-  // Normalize list shape (handles array, {results}, or numeric-keyed object)
-  let rows = [];
-  if (Array.isArray(data?.results)) {
-    rows = data.results;
-  } else if (Array.isArray(data)) {
-    rows = data;
-  } else if (data && typeof data === "object") {
-    const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
-    if (numericKeys.length) {
-      rows = numericKeys
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => data[k]);
-    }
-  }
+  }, [page, limit, status]);
 
   const hasNextPage = rows.length === limit;
   const hasPrevPage = page > 1;
@@ -100,16 +134,43 @@ export default function PatientImagingPage() {
     router.push(`/patient/imaging?${sp.toString()}`);
   }
 
+  function applyStatusFilter(nextStatus) {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (nextStatus) {
+      sp.set("status", nextStatus);
+    } else {
+      sp.delete("status");
+    }
+    sp.delete("page");
+    router.push(`/patient/imaging?${sp.toString()}`);
+  }
+
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6 md:p-10">
-      <header className="mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-          My imaging requests
-        </h1>
-        <p className="mt-1 text-sm text-slate-600">
-          View imaging requests (X-ray, CT, MRI, ultrasound, etc.) that have
-          been ordered for you and track their status.
-        </p>
+    <main className="mx-auto max-w-5xl space-y-6 p-6 md:p-10">
+      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+            My imaging requests
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            View imaging procedures that have been requested for you
+            (e.g. X-ray, CT, MRI) and track their status.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={status}
+            onChange={(e) => applyStatusFilter(e.target.value)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="">All statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="SCHEDULED">Scheduled</option>
+            <option value="REPORTED">Reported</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
       </header>
 
       {error && (
@@ -120,7 +181,7 @@ export default function PatientImagingPage() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100">
+          <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -130,10 +191,19 @@ export default function PatientImagingPage() {
                   Procedure(s)
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Priority
+                  Status
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status
+                  Scheduled for
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Facility
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Requested by
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Note / indication
                 </th>
                 <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Actions
@@ -144,7 +214,7 @@ export default function PatientImagingPage() {
               {loading && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={8}
                     className="p-4 text-center text-sm text-slate-500"
                   >
                     Loading imaging requests…
@@ -153,66 +223,101 @@ export default function PatientImagingPage() {
               )}
 
               {!loading &&
-                rows.map((req) => (
-                  <tr key={req.id} className="hover:bg-slate-50">
-                    <td className="p-3 text-sm text-slate-800">
-                      {formatDateTime(req.requested_at || req.created_at)}
-                    </td>
-                    <td className="p-3 text-sm text-slate-800">
-                      {Array.isArray(req.items)
-                        ? req.items
-                            .map(
-                              (i) =>
-                                i.procedure?.name ||
-                                i.procedure?.code ||
-                                i.procedure_name ||
-                                i.code
-                            )
-                            .join(", ")
-                        : req.procedures_display ||
-                          req.procedure_name ||
-                          "—"}
-                    </td>
-                    <td className="p-3 text-sm text-slate-800">
-                      {req.priority || "—"}
-                    </td>
-                    <td className="p-3 text-sm text-slate-800">
-                      {req.status || "—"}
-                    </td>
-                    <td className="p-3 text-right text-sm">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDetailsRequestId(req.id);
-                            setDetailsOpen(true);
-                          }}
-                          className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                rows.map((req) => {
+                  const proceduresText = Array.isArray(req.items)
+                    ? req.items
+                        .map(
+                          (i) =>
+                            i.procedure?.name ||
+                            i.procedure?.code ||
+                            i.procedure_name ||
+                            i.code
+                        )
+                        .join(", ")
+                    : req.procedures_display ||
+                      req.procedure_name ||
+                      "—";
+
+                  const facilityName =
+                    req.facility_name || req.facility?.name || "—";
+
+                  const requestedByName =
+                    req.ordered_by_name ||
+                    req.requested_by_name ||
+                    (req.provider_first_name || req.provider_last_name
+                      ? `${req.provider_first_name || ""} ${
+                          req.provider_last_name || ""
+                        }`.trim()
+                      : "") ||
+                    req.provider ||
+                    req.requested_by ||
+                    "—";
+
+                  const scheduledFor =
+                    req.scheduled_at ||
+                    req.scheduled_for ||
+                    req.appointment_time ||
+                    null;
+
+                  return (
+                    <tr key={req.id} className="hover:bg-slate-50">
+                      <td className="p-3 text-xs text-slate-800">
+                        {formatDateTime(
+                          req.requested_at ||
+                            req.ordered_at ||
+                            req.created_at
+                        )}
+                      </td>
+                      <td className="p-3 text-sm text-slate-800">
+                        {proceduresText}
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${buildStatusPillClasses(
+                            req.status
+                          )}`}
+                        >
+                          {req.status || "—"}
+                        </span>
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        {scheduledFor
+                          ? formatDateTime(scheduledFor)
+                          : "—"}
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        {facilityName}
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        {requestedByName}
+                      </td>
+                      <td className="p-3 text-xs text-slate-800">
+                        <span className="line-clamp-2">
+                          {req.indication ||
+                            req.note ||
+                            req.reason ||
+                            "—"}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right text-xs text-slate-800">
+                        <Link
+                          href={`/patient/imaging/${req.id}`}
+                          className="font-medium text-blue-600 hover:underline"
                         >
                           View
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAttachmentsRequestId(req.id);
-                            setAttachmentsOpen(true);
-                          }}
-                          className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                          Attachments
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
 
               {!loading && !rows.length && !error && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={8}
                     className="p-4 text-center text-sm text-slate-500"
                   >
-                    You don&apos;t have any imaging requests yet.
+                    No imaging requests found for your account yet.
                   </td>
                 </tr>
               )}
@@ -220,10 +325,9 @@ export default function PatientImagingPage() {
           </table>
         </div>
 
-        {/* Pager */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-600">
           <span>
-            Page {page} · Showing {rows.length} item
+            Page {page} · Showing {rows.length} imaging request
             {rows.length === 1 ? "" : "s"}
           </span>
           <div className="flex gap-2">
@@ -246,19 +350,6 @@ export default function PatientImagingPage() {
           </div>
         </div>
       </section>
-
-      <ImagingRequestDetailsModal
-        requestId={detailsRequestId}
-        open={detailsOpen}
-        onClose={() => setDetailsOpen(false)}
-      />
-
-      <ImagingAttachmentsModal
-        requestId={attachmentsRequestId}
-        open={attachmentsOpen}
-        onClose={() => setAttachmentsOpen(false)}
-        canUpload={false}
-      />
     </main>
   );
 }

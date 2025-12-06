@@ -1,55 +1,463 @@
 // app/patient/encounters/[id]/page.js
+"use client";
 
-import EncounterDetailClient from "./EncounterDetailClient";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { apiFetch } from "@/lib/api";
+import EncounterRelatedData from "@/components/encounters/EncounterRelatedData";
 
-async function fetchEncounter(id) {
-  const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
-  const res = await fetch(`${base}/api/bff/encounters/${id}`, {
-    cache: "no-store",
-  });
-
-  if (res.status === 404) {
-    return { notFound: true };
+function formatDateTime(value) {
+  if (!value) return "—";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString();
+  } catch {
+    return String(value);
   }
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.error("Failed to fetch encounter", res.status, text);
-    throw new Error("Failed to load encounter.");
-  }
-
-  const data = await res.json();
-  return { notFound: false, data };
 }
 
-export default async function PatientEncounterDetailPage({ params }) {
-  const encounterId = params?.id;
-  if (!encounterId) {
+function formatDate(value) {
+  if (!value) return "—";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleDateString();
+  } catch {
+    return String(value);
+  }
+}
+
+function normalizeAttachmentsPayload(body) {
+  if (!body) return [];
+
+  // DRF paginated: { count, results: [...] }
+  if (Array.isArray(body.results)) {
+    return body.results;
+  }
+
+  // Plain list: [...]
+  if (Array.isArray(body)) {
+    return body;
+  }
+
+  // Weird numeric-key object from BFF spread
+  if (body && typeof body === "object") {
+    const numericKeys = Object.keys(body).filter((k) =>
+      /^\d+$/.test(k)
+    );
+    if (numericKeys.length) {
+      return numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => body[k]);
+    }
+  }
+
+  return [];
+}
+
+export default function PatientEncounterDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params?.id;
+
+  const [encounter, setEncounter] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Attachments state
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [attachmentsError, setAttachmentsError] = useState("");
+
+  useEffect(() => {
+    if (!id) return;
+
+    let cancelled = false;
+
+    async function loadEncounter() {
+      try {
+        setLoading(true);
+        setError("");
+
+        // Uses existing BFF + JWT via apiFetch
+        const data = await apiFetch(`/encounters/${id}/`, {
+          method: "GET",
+        });
+
+        if (cancelled) return;
+
+        setEncounter(data);
+      } catch (err) {
+        console.error("Failed to load patient encounter", err);
+        if (!cancelled) {
+          setError(
+            err?.message ||
+              "Failed to load encounter details. Please try again."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadEncounter();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  // Load attachments for this encounter (read-only)
+  useEffect(() => {
+    if (!id) return;
+
+    let cancelled = false;
+
+    async function loadAttachments() {
+      try {
+        setAttachmentsLoading(true);
+        setAttachmentsError("");
+
+        const qs = new URLSearchParams();
+        qs.set("owner_type", "encounter");
+        qs.set("owner_id", String(id));
+
+        const body = await apiFetch(
+          `/attachments/?${qs.toString()}`,
+          { method: "GET" }
+        );
+
+        if (cancelled) return;
+
+        const items = normalizeAttachmentsPayload(body);
+        setAttachments(items);
+      } catch (err) {
+        console.error("Failed to load encounter attachments (patient)", err);
+        if (!cancelled) {
+          setAttachmentsError(
+            err?.message ||
+              "Attachments could not be loaded for this visit."
+          );
+          setAttachments([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setAttachmentsLoading(false);
+        }
+      }
+    }
+
+    loadAttachments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (!id) {
     return (
       <main className="mx-auto max-w-4xl p-6 md:p-10">
-        <p className="text-sm text-red-600">
-          No encounter ID was provided in the URL.
-        </p>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Missing encounter ID in URL.
+        </div>
       </main>
     );
   }
 
-  const result = await fetchEncounter(encounterId);
+  const patientName =
+    encounter?.patient_name ||
+    (encounter?.patient_first_name || encounter?.patient_last_name
+      ? `${encounter?.patient_first_name || ""} ${
+          encounter?.patient_last_name || ""
+        }`.trim()
+      : "") ||
+    encounter?.patient ||
+    "—";
 
-  if (result.notFound) {
-    return (
-      <main className="mx-auto max-w-4xl p-6 md:p-10">
-        <h1 className="text-xl font-semibold text-slate-900">
-          Encounter not found
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          We could not find an encounter with ID {encounterId}.
-        </p>
-      </main>
-    );
-  }
+  const facilityName =
+    encounter?.facility_name || encounter?.facility?.name || "—";
+
+  const providerName =
+    encounter?.provider_name ||
+    (encounter?.provider_first_name || encounter?.provider_last_name
+      ? `${encounter?.provider_first_name || ""} ${
+          encounter?.provider_last_name || ""
+        }`.trim()
+      : "") ||
+    encounter?.provider ||
+    "—";
+
+  const isForDependent =
+    encounter?.patient_is_dependent === true ||
+    encounter?.is_dependent === true ||
+    false;
 
   return (
-    <EncounterDetailClient encounter={result.data} encounterId={encounterId} />
+    <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
+      {/* Header */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex items-center text-xs font-medium text-slate-600 hover:text-slate-900"
+          >
+            ← Back
+          </button>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+            Visit summary
+          </h1>
+          <p className="text-sm text-slate-600">
+            This page shows a read-only summary of a visit recorded in your
+            medical record.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {encounter?.status && (
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                encounter.status === "OPEN"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : encounter.status === "CLOSED"
+                  ? "bg-slate-100 text-slate-700"
+                  : encounter.status === "CROSSED_OUT"
+                  ? "bg-red-50 text-red-700"
+                  : "bg-slate-50 text-slate-600"
+              }`}
+            >
+              {encounter.status}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {loading && !error && (
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
+          Loading encounter…
+        </div>
+      )}
+
+      {!loading && !error && !encounter && (
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
+          Encounter not found.
+        </div>
+      )}
+
+      {!loading && encounter && (
+        <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {/* Who & where */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                For
+              </p>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-sm font-medium text-slate-900">
+                  {patientName}
+                </p>
+                {isForDependent && (
+                  <span className="inline-flex w-fit rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    Dependent
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Facility
+              </p>
+              <p className="text-sm font-medium text-slate-900">
+                {facilityName}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Provider
+              </p>
+              <p className="text-sm font-medium text-slate-900">
+                {providerName}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Visit date
+              </p>
+              <p className="text-sm font-medium text-slate-900">
+                {formatDate(encounter.encounter_date || encounter.start_at)}
+              </p>
+            </div>
+          </div>
+
+          {/* Timing */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Started at
+              </p>
+              <p className="text-sm text-slate-900">
+                {formatDateTime(encounter.start_at || encounter.created_at)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Ended at
+              </p>
+              <p className="text-sm text-slate-900">
+                {formatDateTime(encounter.end_at)}
+              </p>
+            </div>
+          </div>
+
+          {/* Reason */}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Reason for visit
+            </p>
+            <p className="text-sm text-slate-900">
+              {encounter.reason || encounter.chief_complaint || "—"}
+            </p>
+          </div>
+
+          {/* Clinical note (read-only) */}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Summary of what happened
+            </p>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
+              {encounter.patient_facing_note ||
+                encounter.note ||
+                encounter.notes ||
+                "Your provider did not record a note for this visit."}
+            </div>
+          </div>
+
+          {/* Attachments (read-only) */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Attachments
+            </p>
+
+            {attachmentsLoading && (
+              <p className="text-xs text-slate-500">
+                Loading attachments…
+              </p>
+            )}
+
+            {attachmentsError && (
+              <p className="text-xs text-red-600">
+                {attachmentsError}
+              </p>
+            )}
+
+            {!attachmentsLoading &&
+              !attachmentsError &&
+              attachments.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  No files attached to this visit.
+                </p>
+              )}
+
+            {!attachmentsLoading && attachments.length > 0 && (
+              <ul className="space-y-2">
+                {attachments.map((att) => {
+                  const fileUrl =
+                    att.file || att.url || att.download_url || "#";
+
+                  const nameFromPath =
+                    typeof att.file === "string"
+                      ? att.file.split("/").slice(-1)[0]
+                      : null;
+
+                  const label =
+                    att.filename ||
+                    att.name ||
+                    nameFromPath ||
+                    `Attachment #${att.id}`;
+
+                  return (
+                    <li
+                      key={att.id || `${label}-${fileUrl}`}
+                      className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-900">
+                          {label}
+                        </span>
+                        {att.description && (
+                          <span className="mt-0.5 text-[11px] text-slate-600">
+                            {att.description}
+                          </span>
+                        )}
+                        {att.created_at && (
+                          <span className="mt-0.5 text-[11px] text-slate-500">
+                            Added {formatDateTime(att.created_at)}
+                          </span>
+                        )}
+                      </div>
+                      {fileUrl && fileUrl !== "#" && (
+                        <a
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-3 text-[11px] font-medium text-blue-600 hover:underline"
+                        >
+                          Open
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Related orders & prescriptions */}
+          <EncounterRelatedData
+            encounter={encounter}
+            context="patient"
+          />
+
+          {/* Linked appointment (if any) */}
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Appointment
+              </p>
+              {encounter.appointment_id ? (
+                <p className="text-sm text-slate-800">
+                  Appointment #{encounter.appointment_id}
+                </p>
+              ) : (
+                <p className="text-sm text-slate-500">None linked</p>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+            <Link
+              href="/patient/encounters"
+              className="text-xs font-medium text-slate-600 hover:text-slate-900"
+            >
+              ← Back to my visits
+            </Link>
+          </div>
+        </section>
+      )}
+    </main>
   );
 }

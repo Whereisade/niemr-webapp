@@ -75,7 +75,9 @@ export default function FacilityImagingRequestsPage() {
   const total = Number(data?.count ?? rows.length);
 
   const stats = useMemo(() => {
-    const pending = rows.filter((r) => (r.status || "").toUpperCase() === "PENDING").length;
+    const pending = rows.filter(
+      (r) => (r.status || "").toUpperCase() === "PENDING"
+    ).length;
     const completed = rows.filter((r) =>
       ["COMPLETED", "REPORTED"].includes((r.status || "").toUpperCase())
     ).length;
@@ -91,7 +93,12 @@ export default function FacilityImagingRequestsPage() {
         params.set(k, String(v));
       }
     });
-    if ("status" in patch || "patient" in patch || "s" in patch || "limit" in patch) {
+    if (
+      "status" in patch ||
+      "patient" in patch ||
+      "s" in patch ||
+      "limit" in patch
+    ) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
@@ -425,16 +432,13 @@ export default function FacilityImagingRequestsPage() {
                           </button>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDetailsRequestId(req.id);
-                            setDetailsOpen(true);
-                          }}
+                        {/* View now navigates to the facility imaging detail page */}
+                        <Link
+                          href={`/facility/imaging/${req.id}`}
                           className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                         >
                           View
-                        </button>
+                        </Link>
 
                         <button
                           type="button"
@@ -504,7 +508,7 @@ export default function FacilityImagingRequestsPage() {
         </div>
       </section>
 
-      {/* Details modal */}
+      {/* Details modal (still available if you keep using it elsewhere) */}
       <ImagingRequestDetailsModal
         requestId={detailsRequestId}
         open={detailsOpen}
@@ -548,7 +552,9 @@ function StatTile({ label, value, accent }) {
       <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
       <div className="p-4">
         <div className="text-xs font-medium text-slate-600">{label}</div>
-        <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
+        <div className="mt-1 text-2xl font-semibold text-slate-900">
+          {value}
+        </div>
       </div>
     </div>
   );

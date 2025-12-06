@@ -1,11 +1,10 @@
-// app/facility/encounters/[id]/page.js
+// app/facility/imaging/[id]/page.js
 "use client";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import EncounterRelatedData from "@/components/encounters/EncounterRelatedData";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -54,12 +53,12 @@ function normalizeAttachmentsPayload(body) {
   return [];
 }
 
-export default function FacilityEncounterDetailPage() {
+export default function FacilityImagingDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id;
 
-  const [encounter, setEncounter] = useState(null);
+  const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,28 +66,30 @@ export default function FacilityEncounterDetailPage() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState("");
 
+  // Load imaging request
   useEffect(() => {
     if (!id) return;
 
     let cancelled = false;
 
-    async function loadEncounter() {
+    async function loadRequest() {
       try {
         setLoading(true);
         setError("");
 
-        const data = await apiFetch(`/encounters/${id}/`, {
+        // Mirrors lab orders: /imaging/requests/{id}/
+        const data = await apiFetch(`/imaging/requests/${id}/`, {
           method: "GET",
         });
 
         if (cancelled) return;
-        setEncounter(data);
+        setRequest(data);
       } catch (err) {
-        console.error("Failed to load facility encounter", err);
+        console.error("Failed to load imaging request (facility)", err);
         if (!cancelled) {
           setError(
             err?.message ||
-              "Failed to load encounter details. Please try again."
+              "Failed to load imaging request details. Please try again."
           );
         }
       } finally {
@@ -96,12 +97,13 @@ export default function FacilityEncounterDetailPage() {
       }
     }
 
-    loadEncounter();
+    loadRequest();
     return () => {
       cancelled = true;
     };
   }, [id]);
 
+  // Load attachments for imaging request
   useEffect(() => {
     if (!id) return;
 
@@ -113,7 +115,8 @@ export default function FacilityEncounterDetailPage() {
         setAttachmentsError("");
 
         const qs = new URLSearchParams();
-        qs.set("owner_type", "encounter");
+        // Assume attachments are keyed as owner_type=imaging_request
+        qs.set("owner_type", "imaging_request");
         qs.set("owner_id", String(id));
 
         const body = await apiFetch(
@@ -126,11 +129,11 @@ export default function FacilityEncounterDetailPage() {
         const items = normalizeAttachmentsPayload(body);
         setAttachments(items);
       } catch (err) {
-        console.error("Failed to load facility encounter attachments", err);
+        console.error("Failed to load imaging attachments (facility)", err);
         if (!cancelled) {
           setAttachmentsError(
             err?.message ||
-              "Attachments could not be loaded for this encounter."
+              "Attachments could not be loaded for this imaging request."
           );
           setAttachments([]);
         }
@@ -149,49 +152,58 @@ export default function FacilityEncounterDetailPage() {
     return (
       <main className="mx-auto max-w-4xl p-6 md:p-10">
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Missing encounter ID in URL.
+          Missing imaging request ID in URL.
         </div>
       </main>
     );
   }
 
   const patientName =
-    encounter?.patient_name ||
-    (encounter?.patient_first_name || encounter?.patient_last_name
-      ? `${encounter?.patient_first_name || ""} ${
-          encounter?.patient_last_name || ""
+    request?.patient_name ||
+    (request?.patient_first_name || request?.patient_last_name
+      ? `${request?.patient_first_name || ""} ${
+          request?.patient_last_name || ""
         }`.trim()
       : "") ||
-    encounter?.patient ||
+    request?.patient ||
     "—";
 
   const facilityName =
-    encounter?.facility_name || encounter?.facility?.name || "—";
+    request?.facility_name || request?.facility?.name || "—";
 
-  const providerName =
-    encounter?.provider_name ||
-    (encounter?.provider_first_name || encounter?.provider_last_name
-      ? `${encounter?.provider_first_name || ""} ${
-          encounter?.provider_last_name || ""
+  const requestedBy =
+    request?.requested_by_name ||
+    request?.ordered_by_name ||
+    (request?.requested_by_first_name || request?.requested_by_last_name
+      ? `${request?.requested_by_first_name || ""} ${
+          request?.requested_by_last_name || ""
         }`.trim()
       : "") ||
-    encounter?.provider ||
+    request?.requested_by ||
+    request?.ordered_by ||
     "—";
 
-  const createdByName =
-    encounter?.created_by_name ||
-    (encounter?.created_by_first_name || encounter?.created_by_last_name
-      ? `${encounter?.created_by_first_name || ""} ${
-          encounter?.created_by_last_name || ""
-        }`.trim()
-      : "") ||
-    encounter?.created_by ||
-    null;
+  const status = request?.status || "—";
+  const priority = request?.priority || "—";
 
-  const isForDependent =
-    encounter?.patient_is_dependent === true ||
-    encounter?.is_dependent === true ||
-    false;
+  const modality =
+    request?.modality || request?.imaging_type || request?.category || "—";
+
+  const bodyPart =
+    request?.body_part || request?.anatomy || request?.region || "—";
+
+  const scheduledFor =
+    request?.scheduled_for || request?.scheduled_at || request?.appointment_at;
+
+  const reportText =
+    request?.report ||
+    request?.report_text ||
+    request?.result ||
+    request?.impression ||
+    "";
+
+  const indication =
+    request?.indication || request?.reason || request?.clinical_note || "";
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
@@ -206,28 +218,30 @@ export default function FacilityEncounterDetailPage() {
             ← Back
           </button>
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-            Encounter details
+            Imaging request details
           </h1>
           <p className="text-sm text-slate-600">
-            Facility view of a recorded encounter, including patient, provider,
-            timing, notes and attachments.
+            Facility view of an imaging request, including patient, modality,
+            schedule, report and attachments.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {encounter?.status && (
+          {status && status !== "—" && (
             <span
               className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                encounter.status === "OPEN"
+                status === "REQUESTED"
+                  ? "bg-amber-50 text-amber-700"
+                  : status === "SCHEDULED"
+                  ? "bg-sky-50 text-sky-700"
+                  : status === "COMPLETED"
                   ? "bg-emerald-50 text-emerald-700"
-                  : encounter.status === "CLOSED"
-                  ? "bg-slate-100 text-slate-700"
-                  : encounter.status === "CROSSED_OUT"
+                  : status === "CANCELLED"
                   ? "bg-red-50 text-red-700"
                   : "bg-slate-50 text-slate-600"
               }`}
             >
-              {encounter.status}
+              {status}
             </span>
           )}
         </div>
@@ -241,34 +255,27 @@ export default function FacilityEncounterDetailPage() {
 
       {loading && !error && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
-          Loading encounter…
+          Loading imaging request…
         </div>
       )}
 
-      {!loading && !error && !encounter && (
+      {!loading && !error && !request && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
-          Encounter not found.
+          Imaging request not found.
         </div>
       )}
 
-      {!loading && encounter && (
+      {!loading && request && (
         <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          {/* Top-level info */}
+          {/* Top summary */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Patient
               </p>
-              <div className="flex flex-col gap-0.5">
-                <p className="text-sm font-medium text-slate-900">
-                  {patientName}
-                </p>
-                {isForDependent && (
-                  <span className="inline-flex w-fit rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                    Dependent
-                  </span>
-                )}
-              </div>
+              <p className="text-sm font-medium text-slate-900">
+                {patientName}
+              </p>
             </div>
 
             <div className="space-y-1">
@@ -282,71 +289,74 @@ export default function FacilityEncounterDetailPage() {
 
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Provider
+                Requested by
               </p>
               <p className="text-sm font-medium text-slate-900">
-                {providerName}
+                {requestedBy}
               </p>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Visit date
+                Requested at
               </p>
               <p className="text-sm font-medium text-slate-900">
-                {formatDate(encounter.encounter_date || encounter.start_at)}
+                {formatDateTime(request.requested_at || request.ordered_at)}
               </p>
             </div>
           </div>
 
-          {/* Timing & creator */}
+          {/* Modality / scheduling */}
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Started at
+                Modality / procedure
               </p>
-              <p className="text-sm text-slate-900">
-                {formatDateTime(encounter.start_at || encounter.created_at)}
-              </p>
+              <p className="text-sm text-slate-900">{modality}</p>
             </div>
+
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Ended at
+                Body part / region
               </p>
-              <p className="text-sm text-slate-900">
-                {formatDateTime(encounter.end_at)}
-              </p>
+              <p className="text-sm text-slate-900">{bodyPart}</p>
             </div>
+
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Recorded by
+                Scheduled for
               </p>
               <p className="text-sm text-slate-900">
-                {createdByName || providerName || "—"}
+                {scheduledFor ? formatDateTime(scheduledFor) : "—"}
               </p>
             </div>
           </div>
 
-          {/* Reason */}
+          {/* Priority */}
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Reason / chief complaint
+              Priority
             </p>
-            <p className="text-sm text-slate-900">
-              {encounter.reason || encounter.chief_complaint || "—"}
-            </p>
+            <p className="text-sm text-slate-900">{priority}</p>
           </div>
 
-          {/* Clinical note */}
+          {/* Indication / reason */}
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Clinical note
+              Clinical indication / reason
             </p>
             <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
-              {encounter.note ||
-                encounter.notes ||
-                encounter.summary ||
-                "No note recorded for this encounter."}
+              {indication || "No indication recorded for this request."}
+            </div>
+          </div>
+
+          {/* Report */}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Imaging report
+            </p>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
+              {reportText || "No report recorded yet."}
             </div>
           </div>
 
@@ -372,7 +382,7 @@ export default function FacilityEncounterDetailPage() {
               !attachmentsError &&
               attachments.length === 0 && (
                 <p className="text-xs text-slate-500">
-                  No files attached to this encounter yet.
+                  No files attached to this imaging request yet.
                 </p>
               )}
 
@@ -430,35 +440,13 @@ export default function FacilityEncounterDetailPage() {
             )}
           </div>
 
-          {/* Related orders & prescriptions */}
-          <EncounterRelatedData
-            encounter={encounter}
-            context="facility"
-          />
-
-          {/* Linked appointment (if any) */}
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Appointment
-              </p>
-              {encounter.appointment_id ? (
-                <p className="text-sm text-slate-800">
-                  #{encounter.appointment_id}
-                </p>
-              ) : (
-                <p className="text-sm text-slate-500">None linked</p>
-              )}
-            </div>
-          </div>
-
           {/* Footer */}
           <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
             <Link
-              href="/facility/encounters"
+              href="/facility/imaging"
               className="text-xs font-medium text-slate-600 hover:text-slate-900"
             >
-              ← Back to encounters
+              ← Back to imaging requests
             </Link>
           </div>
         </section>

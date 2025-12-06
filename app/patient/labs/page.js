@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
@@ -198,13 +199,16 @@ export default function PatientLabOrdersPage() {
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Note
                 </th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {loading && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="p-4 text-center text-sm text-slate-500"
                   >
                     Loading lab orders…
@@ -227,18 +231,16 @@ export default function PatientLabOrdersPage() {
                     : order.tests_display || "—";
 
                   const facilityName =
-                    order.facility_name ||
-                    order.facility?.name ||
-                    "—";
+                    order.facility_name || order.facility?.name || "—";
 
                   const orderedByName =
                     order.ordered_by_name ||
                     (order.ordered_by_first_name ||
-                      order.ordered_by_last_name
-                        ? `${order.ordered_by_first_name || ""} ${
-                            order.ordered_by_last_name || ""
-                          }`.trim()
-                        : "") ||
+                    order.ordered_by_last_name
+                      ? `${order.ordered_by_first_name || ""} ${
+                          order.ordered_by_last_name || ""
+                        }`.trim()
+                      : "") ||
                     order.ordered_by ||
                     "—";
 
@@ -270,6 +272,14 @@ export default function PatientLabOrdersPage() {
                           {order.note || "—"}
                         </span>
                       </td>
+                      <td className="p-3 text-right text-xs">
+                        <Link
+                          href={`/patient/labs/${order.id}`}
+                          className="font-medium text-blue-600 hover:underline"
+                        >
+                          View
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
@@ -277,7 +287,7 @@ export default function PatientLabOrdersPage() {
               {!loading && !rows.length && !error && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="p-4 text-center text-sm text-slate-500"
                   >
                     No lab tests found for your account yet.

@@ -1,11 +1,10 @@
-// app/facility/encounters/[id]/page.js
+// app/patient/labs/[id]/page.js
 "use client";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import EncounterRelatedData from "@/components/encounters/EncounterRelatedData";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -32,18 +31,19 @@ function formatDate(value) {
 function normalizeAttachmentsPayload(body) {
   if (!body) return [];
 
+  // DRF paginated
   if (Array.isArray(body.results)) {
     return body.results;
   }
 
+  // Plain list
   if (Array.isArray(body)) {
     return body;
   }
 
+  // Numeric-key object from BFF spread
   if (body && typeof body === "object") {
-    const numericKeys = Object.keys(body).filter((k) =>
-      /^\d+$/.test(k)
-    );
+    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
     if (numericKeys.length) {
       return numericKeys
         .sort((a, b) => Number(a) - Number(b))
@@ -54,12 +54,12 @@ function normalizeAttachmentsPayload(body) {
   return [];
 }
 
-export default function FacilityEncounterDetailPage() {
+export default function PatientLabOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id;
 
-  const [encounter, setEncounter] = useState(null);
+  const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,28 +67,29 @@ export default function FacilityEncounterDetailPage() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState("");
 
+  // Load lab order
   useEffect(() => {
     if (!id) return;
 
     let cancelled = false;
 
-    async function loadEncounter() {
+    async function loadOrder() {
       try {
         setLoading(true);
         setError("");
 
-        const data = await apiFetch(`/encounters/${id}/`, {
+        const data = await apiFetch(`/labs/orders/${id}/`, {
           method: "GET",
         });
 
         if (cancelled) return;
-        setEncounter(data);
+        setOrder(data);
       } catch (err) {
-        console.error("Failed to load facility encounter", err);
+        console.error("Failed to load patient lab order", err);
         if (!cancelled) {
           setError(
             err?.message ||
-              "Failed to load encounter details. Please try again."
+              "Failed to load lab order details. Please try again."
           );
         }
       } finally {
@@ -96,12 +97,13 @@ export default function FacilityEncounterDetailPage() {
       }
     }
 
-    loadEncounter();
+    loadOrder();
     return () => {
       cancelled = true;
     };
   }, [id]);
 
+  // Load attachments (read-only)
   useEffect(() => {
     if (!id) return;
 
@@ -113,7 +115,7 @@ export default function FacilityEncounterDetailPage() {
         setAttachmentsError("");
 
         const qs = new URLSearchParams();
-        qs.set("owner_type", "encounter");
+        qs.set("owner_type", "lab_order");
         qs.set("owner_id", String(id));
 
         const body = await apiFetch(
@@ -126,11 +128,11 @@ export default function FacilityEncounterDetailPage() {
         const items = normalizeAttachmentsPayload(body);
         setAttachments(items);
       } catch (err) {
-        console.error("Failed to load facility encounter attachments", err);
+        console.error("Failed to load lab order attachments (patient)", err);
         if (!cancelled) {
           setAttachmentsError(
             err?.message ||
-              "Attachments could not be loaded for this encounter."
+              "Attachments could not be loaded for this lab order."
           );
           setAttachments([]);
         }
@@ -149,49 +151,52 @@ export default function FacilityEncounterDetailPage() {
     return (
       <main className="mx-auto max-w-4xl p-6 md:p-10">
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Missing encounter ID in URL.
+          Missing lab order ID in URL.
         </div>
       </main>
     );
   }
 
   const patientName =
-    encounter?.patient_name ||
-    (encounter?.patient_first_name || encounter?.patient_last_name
-      ? `${encounter?.patient_first_name || ""} ${
-          encounter?.patient_last_name || ""
+    order?.patient_name ||
+    (order?.patient_first_name || order?.patient_last_name
+      ? `${order?.patient_first_name || ""} ${
+          order?.patient_last_name || ""
         }`.trim()
       : "") ||
-    encounter?.patient ||
+    order?.patient ||
     "—";
 
   const facilityName =
-    encounter?.facility_name || encounter?.facility?.name || "—";
+    order?.facility_name || order?.facility?.name || "—";
 
-  const providerName =
-    encounter?.provider_name ||
-    (encounter?.provider_first_name || encounter?.provider_last_name
-      ? `${encounter?.provider_first_name || ""} ${
-          encounter?.provider_last_name || ""
+  const orderedBy =
+    order?.ordered_by_name ||
+    (order?.ordered_by_first_name || order?.ordered_by_last_name
+      ? `${order?.ordered_by_first_name || ""} ${
+          order?.ordered_by_last_name || ""
         }`.trim()
       : "") ||
-    encounter?.provider ||
+    order?.ordered_by ||
     "—";
 
-  const createdByName =
-    encounter?.created_by_name ||
-    (encounter?.created_by_first_name || encounter?.created_by_last_name
-      ? `${encounter?.created_by_first_name || ""} ${
-          encounter?.created_by_last_name || ""
-        }`.trim()
-      : "") ||
-    encounter?.created_by ||
-    null;
+  const status = order?.status || "—";
+  const priority = order?.priority || "—";
 
-  const isForDependent =
-    encounter?.patient_is_dependent === true ||
-    encounter?.is_dependent === true ||
-    false;
+  const tests =
+    Array.isArray(order?.items) && order.items.length
+      ? order.items
+          .map((i) => {
+            if (i.test?.name || i.test?.code) {
+              if (i.test.name && i.test.code) {
+                return `${i.test.name} (${i.test.code})`;
+              }
+              return i.test.name || i.test.code;
+            }
+            return i.test_name || i.test_code || i.code || "Lab test";
+          })
+          .join(", ")
+      : order?.tests_display || "—";
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
@@ -206,28 +211,30 @@ export default function FacilityEncounterDetailPage() {
             ← Back
           </button>
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-            Encounter details
+            Lab test details
           </h1>
           <p className="text-sm text-slate-600">
-            Facility view of a recorded encounter, including patient, provider,
-            timing, notes and attachments.
+            This page shows a read-only summary of a lab test request recorded
+            for you.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {encounter?.status && (
+          {status && status !== "—" && (
             <span
               className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                encounter.status === "OPEN"
+                status === "PENDING"
+                  ? "bg-amber-50 text-amber-700"
+                  : status === "COLLECTED"
+                  ? "bg-sky-50 text-sky-700"
+                  : status === "REPORTED"
                   ? "bg-emerald-50 text-emerald-700"
-                  : encounter.status === "CLOSED"
-                  ? "bg-slate-100 text-slate-700"
-                  : encounter.status === "CROSSED_OUT"
+                  : status === "CANCELLED"
                   ? "bg-red-50 text-red-700"
                   : "bg-slate-50 text-slate-600"
               }`}
             >
-              {encounter.status}
+              {status}
             </span>
           )}
         </div>
@@ -241,34 +248,27 @@ export default function FacilityEncounterDetailPage() {
 
       {loading && !error && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
-          Loading encounter…
+          Loading lab test…
         </div>
       )}
 
-      {!loading && !error && !encounter && (
+      {!loading && !error && !order && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
-          Encounter not found.
+          Lab order not found.
         </div>
       )}
 
-      {!loading && encounter && (
+      {!loading && order && (
         <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          {/* Top-level info */}
+          {/* Top summary */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Patient
+                For
               </p>
-              <div className="flex flex-col gap-0.5">
-                <p className="text-sm font-medium text-slate-900">
-                  {patientName}
-                </p>
-                {isForDependent && (
-                  <span className="inline-flex w-fit rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                    Dependent
-                  </span>
-                )}
-              </div>
+              <p className="text-sm font-medium text-slate-900">
+                {patientName}
+              </p>
             </div>
 
             <div className="space-y-1">
@@ -282,75 +282,61 @@ export default function FacilityEncounterDetailPage() {
 
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Provider
+                Requested by
               </p>
               <p className="text-sm font-medium text-slate-900">
-                {providerName}
+                {orderedBy}
               </p>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Visit date
+                Requested at
               </p>
               <p className="text-sm font-medium text-slate-900">
-                {formatDate(encounter.encounter_date || encounter.start_at)}
+                {formatDateTime(order.ordered_at)}
               </p>
             </div>
           </div>
 
-          {/* Timing & creator */}
-          <div className="grid gap-4 md:grid-cols-3">
+          {/* Priority */}
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Started at
+                Priority
               </p>
-              <p className="text-sm text-slate-900">
-                {formatDateTime(encounter.start_at || encounter.created_at)}
-              </p>
+              <p className="text-sm text-slate-900">{priority}</p>
             </div>
+
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Ended at
+                External lab (if any)
               </p>
               <p className="text-sm text-slate-900">
-                {formatDateTime(encounter.end_at)}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Recorded by
-              </p>
-              <p className="text-sm text-slate-900">
-                {createdByName || providerName || "—"}
+                {order.external_lab_name || "—"}
               </p>
             </div>
           </div>
 
-          {/* Reason */}
+          {/* Tests */}
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Reason / chief complaint
+              Tests requested
             </p>
-            <p className="text-sm text-slate-900">
-              {encounter.reason || encounter.chief_complaint || "—"}
-            </p>
+            <p className="text-sm text-slate-900">{tests}</p>
           </div>
 
-          {/* Clinical note */}
+          {/* Note */}
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Clinical note
+              Note
             </p>
             <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
-              {encounter.note ||
-                encounter.notes ||
-                encounter.summary ||
-                "No note recorded for this encounter."}
+              {order.note || "No additional note for this lab order."}
             </div>
           </div>
 
-          {/* Attachments */}
+          {/* Attachments (read-only) */}
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Attachments
@@ -372,7 +358,7 @@ export default function FacilityEncounterDetailPage() {
               !attachmentsError &&
               attachments.length === 0 && (
                 <p className="text-xs text-slate-500">
-                  No files attached to this encounter yet.
+                  No files attached to this lab test yet.
                 </p>
               )}
 
@@ -430,35 +416,13 @@ export default function FacilityEncounterDetailPage() {
             )}
           </div>
 
-          {/* Related orders & prescriptions */}
-          <EncounterRelatedData
-            encounter={encounter}
-            context="facility"
-          />
-
-          {/* Linked appointment (if any) */}
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Appointment
-              </p>
-              {encounter.appointment_id ? (
-                <p className="text-sm text-slate-800">
-                  #{encounter.appointment_id}
-                </p>
-              ) : (
-                <p className="text-sm text-slate-500">None linked</p>
-              )}
-            </div>
-          </div>
-
           {/* Footer */}
           <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
             <Link
-              href="/facility/encounters"
+              href="/patient/labs"
               className="text-xs font-medium text-slate-600 hover:text-slate-900"
             >
-              ← Back to encounters
+              ← Back to lab tests
             </Link>
           </div>
         </section>
