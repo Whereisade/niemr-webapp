@@ -1,4 +1,3 @@
-// app/provider/page.js
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -53,6 +52,22 @@ async function fetchMe() {
   }
 }
 
+function normalizeListAndCount(payload) {
+  if (Array.isArray(payload)) {
+    return { list: payload, count: payload.length };
+  }
+  if (payload && Array.isArray(payload.results)) {
+    return {
+      list: payload.results,
+      count:
+        typeof payload.count === "number"
+          ? payload.count
+          : payload.results.length,
+    };
+  }
+  return { list: [], count: 0 };
+}
+
 export default async function ProviderDashboard() {
   const [notifications, myAppointments, me] = await Promise.all([
     safeFetchJSON("/notifications/items/?since=7d", []),
@@ -64,9 +79,9 @@ export default async function ProviderDashboard() {
     ? notifications
     : notifications?.results || [];
 
-  const appts = Array.isArray(myAppointments)
-    ? myAppointments
-    : myAppointments?.results || [];
+  const { list: appts, count: todaysApptCount } = normalizeListAndCount(
+    myAppointments
+  );
 
   const greetingName =
     [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
@@ -75,8 +90,9 @@ export default async function ProviderDashboard() {
 
   const stats = [
     {
-      label: "Today’s Appointments",
-      value: appts.length,
+      // CHANGED LABEL
+      label: "Total Appointments",
+      value: todaysApptCount,
       icon: CalendarRange,
       accent: "from-blue-600 via-indigo-600 to-violet-600",
       href: "/provider/appointments",
@@ -577,7 +593,6 @@ function DummyMiniChart({ title, icon: Icon, gradient, hint }) {
             <Icon className="h-5 w-5 text-slate-700" />
           </div>
         </div>
-        {/* Dummy bars */}
         <div className="grid h-20 grid-cols-12 items-end gap-1.5">
           {Array.from({ length: 12 }).map((_, i) => (
             <div

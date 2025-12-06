@@ -186,12 +186,22 @@ export default function FacilityImagingRequestsPage() {
           </p>
         </div>
 
+        <div className="space-x-2">
+        <Link
+          href="/facility/imaging/procedures"
+          className="inline-flex items-center rounded-full bg-blue-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        >
+          New imaging procedure
+        </Link>
+
         <Link
           href="/facility/imaging/new"
           className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
         >
           New imaging request
         </Link>
+
+        </div>
       </header>
 
       {/* Stats row */}

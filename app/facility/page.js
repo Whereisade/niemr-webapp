@@ -1,4 +1,3 @@
-// app/facility/page.js
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -53,6 +52,27 @@ async function fetchMe() {
   }
 }
 
+function normalizeListAndCount(payload) {
+  // Plain list
+  if (Array.isArray(payload)) {
+    return { list: payload, count: payload.length };
+  }
+
+  // Paginated: { count, results: [...] }
+  if (payload && Array.isArray(payload.results)) {
+    return {
+      list: payload.results,
+      count:
+        typeof payload.count === "number"
+          ? payload.count
+          : payload.results.length,
+    };
+  }
+
+  // Fallback
+  return { list: [], count: 0 };
+}
+
 export default async function FacilityDashboard() {
   const [notifications, todaysAppointments, providers, me] = await Promise.all([
     safeFetchJSON("/notifications/items/?since=7d", []),
@@ -65,18 +85,16 @@ export default async function FacilityDashboard() {
     ? notifications
     : notifications?.results || [];
 
-  const appts = Array.isArray(todaysAppointments)
-    ? todaysAppointments
-    : todaysAppointments?.results || [];
+  const { list: appts, count: todaysApptCount } = normalizeListAndCount(
+    todaysAppointments
+  );
 
   const provs = Array.isArray(providers)
     ? providers
     : providers?.results || [];
 
-  // NEW: derive unread notifications count from the list
   const unreadCount = notifList.filter((n) => {
     if (!n) return false;
-    // try a few common shapes: unread, is_read, read, read_at
     if (typeof n.unread === "boolean") return n.unread;
     if (typeof n.is_read === "boolean") return !n.is_read;
     if (typeof n.read === "boolean") return !n.read;
@@ -98,8 +116,9 @@ export default async function FacilityDashboard() {
 
   const stats = [
     {
-      label: "Today’s Appointments",
-      value: appts.length,
+      // CHANGED LABEL HERE
+      label: "Total Appointments",
+      value: todaysApptCount,
       icon: CalendarRange,
       accent: "from-blue-600 via-indigo-600 to-violet-600",
       href: "/facility/appointments",
@@ -114,7 +133,6 @@ export default async function FacilityDashboard() {
       cta: "View providers",
     },
     {
-      // UPDATED: show unread notifications, not just raw count
       label: "Notifications (7d)",
       value: unreadCount,
       icon: BellRing,
@@ -372,7 +390,6 @@ export default async function FacilityDashboard() {
                   icon={ClipboardList}
                   label="Request Imaging"
                 />
-                {/* NEW: notifications quick link with unread badge */}
                 <QuickLink
                   href="/notifications"
                   icon={BellRing}
@@ -385,7 +402,6 @@ export default async function FacilityDashboard() {
                       : undefined
                   }
                 />
-                {/* NEW: Audit logs quick link */}
                 <QuickLink
                   href="/facility/audit"
                   icon={ClipboardList}
@@ -690,7 +706,6 @@ function StatusPill({ value }) {
   );
 }
 
-// UPDATED: support an optional badge (for unread notifications)
 function QuickLink({ href, icon: Icon, label, badge }) {
   return (
     <Link
@@ -722,7 +737,6 @@ function DummyMiniChart({ title, icon: Icon, gradient, hint }) {
             <Icon className="h-5 w-5 text-slate-700" />
           </div>
         </div>
-        {/* Dummy chart bars */}
         <div className="grid grid-cols-12 items-end gap-1.5 h-20">
           {Array.from({ length: 12 }).map((_, i) => (
             <div
