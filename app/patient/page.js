@@ -273,9 +273,9 @@ export default async function PatientDashboard() {
                   label="Book Appointment"
                 />
                 <QuickLink
-                  href="/records"
+                  href="/patient/documents"
                   icon={FileText}
-                  label="View Records"
+                  label="Add and View Results"
                 />
                 <QuickLink
                   href="/profile"
