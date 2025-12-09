@@ -225,7 +225,12 @@ export default function FacilityPatientsPage() {
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="p-3 text-sm text-slate-800">
                         <div className="flex flex-col">
-                          <span className="font-medium">{displayName}</span>
+                          <Link
+                            href={`/facility/patients/${p.id}`}
+                            className="font-medium text-blue-600 hover:underline"
+                          >
+                            {displayName}
+                          </Link>
                           {p.mrn && (
                             <span className="text-[11px] font-mono text-slate-500">
                               MRN: {p.mrn}
