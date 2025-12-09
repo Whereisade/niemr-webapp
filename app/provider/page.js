@@ -374,6 +374,22 @@ export default async function ProviderDashboard() {
                   </span>
                 </Link>
                 <Link
+                  href="/provider/facility/apply"
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Apply to a facility
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Join a facility to access patient records and provide
+                    </p>
+                  </div>
+                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                    Apply now
+                  </span>
+                </Link>
+                <Link
                   href="/settings/notifications"
                   className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
                 >

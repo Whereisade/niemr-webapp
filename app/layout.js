@@ -9,11 +9,15 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
+import SmartHomeLink from "@/components/SmartHomeLink";
+
 import LogoutButton from "@/components/LogoutButton";
 
 export const metadata = { title: "NIEMR", description: "NIEMR Frontend" };
 
 export default function RootLayout({ children }) {
+  
+
   return (
     <html lang="en">
       <body className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-blue-50 text-slate-800 antialiased">
@@ -45,13 +49,10 @@ export default function RootLayout({ children }) {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6 text-sm">
-              <a
-                className="inline-flex items-center gap-2 text-slate-700 hover:text-blue-700 transition-colors"
-                href="/"
-              >
+              <SmartHomeLink className="inline-flex items-center gap-2 text-slate-700 hover:text-blue-700 transition-colors">
                 <Home className="h-4 w-4" />
                 Home
-              </a>
+              </SmartHomeLink>
               <a
                 className="inline-flex items-center gap-2 text-slate-700 hover:text-blue-700 transition-colors"
                 href="/login"
@@ -67,7 +68,7 @@ export default function RootLayout({ children }) {
                 Register
                 <ArrowRight className="ml-1 h-4 w-4" />
               </a>
-               <LogoutButton />
+              <LogoutButton />
             </nav>
 
             {/* Mobile nav */}
@@ -81,13 +82,11 @@ export default function RootLayout({ children }) {
                 className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
                 role="menu"
               >
-                <a
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
-                  href="/"
-                >
+                <SmartHomeLink className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
                   <Home className="h-4 w-4" />
                   Home
-                </a>
+                </SmartHomeLink>
+
                 <a
                   className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
                   href="/login"
@@ -118,7 +117,8 @@ export default function RootLayout({ children }) {
         {/* Footer */}
         <footer className="border-t border-slate-200/70">
           <div className="container py-6 text-xs text-slate-500">
-            © {new Date().getFullYear()} NIEMR — Secure, role-based healthcare records.
+            © {new Date().getFullYear()} NIEMR — Secure, role-based healthcare
+            records.
           </div>
         </footer>
       </body>

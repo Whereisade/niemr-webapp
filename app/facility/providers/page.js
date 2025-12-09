@@ -51,11 +51,16 @@ export default function FacilityProvidersPage() {
     searchParams.get("status") || ""
   );
 
+  // NEW: pending applications state
+  const [applications, setApplications] = useState([]);
+  const [loadingApplications, setLoadingApplications] = useState(true);
+
   const page = Number(searchParams.get("page") || "1");
   const limit = Number(searchParams.get("limit") || "20");
   const q = searchParams.get("q") || "";
   const statusFilter = searchParams.get("status") || "";
 
+  // Load providers
   useEffect(() => {
     let cancelled = false;
 
@@ -113,6 +118,27 @@ export default function FacilityProvidersPage() {
     };
   }, [page, limit, q, statusFilter]);
 
+  // NEW: load pending provider applications
+  async function loadApplications() {
+    try {
+      setLoadingApplications(true);
+      const body = await apiFetch(
+        "/providers/facility/applications/?status=PENDING"
+      );
+      const items = body.results || body || [];
+      setApplications(items);
+    } catch (err) {
+      console.error("Failed to load provider applications", err);
+    } finally {
+      setLoadingApplications(false);
+    }
+  }
+
+  // Call once on mount (and whenever you want to re-sync, if deps added later)
+  useEffect(() => {
+    loadApplications();
+  }, []);
+
   const hasNextPage = rows.length === limit;
   const hasPrevPage = page > 1;
 
@@ -167,9 +193,6 @@ export default function FacilityProvidersPage() {
     }
 
     try {
-      // We PATCH the provider with a status field.
-      // If backend uses a different field (e.g. "is_approved"),
-      // we will adjust this helper in one place.
       await apiFetch(`/providers/${providerId}/`, {
         method: "PATCH",
         body: JSON.stringify({ status: nextStatus }),
@@ -188,6 +211,60 @@ export default function FacilityProvidersPage() {
       alert(
         err?.message ||
           "Failed to update provider status. Please try again."
+      );
+    }
+  }
+
+  // NEW: approve / reject applications
+  async function handleApplicationDecision(applicationId, decision) {
+    try {
+      await apiFetch(
+        `/providers/facility/applications/${applicationId}/${decision}/`,
+        {
+          method: "POST",
+        }
+      );
+      // After decision, refresh both providers + pending applications
+      // so newly approved providers show in the list and app disappears
+      const qs = new URLSearchParams();
+      qs.set("page", String(page));
+      qs.set("limit", String(limit));
+      if (q) qs.set("q", q);
+      if (statusFilter) qs.set("status", statusFilter);
+
+      // Reload providers list
+      try {
+        const res = await apiFetch(`/providers/?${qs.toString()}`);
+        setData(res);
+
+        let items = [];
+        if (Array.isArray(res?.results)) {
+          items = res.results;
+        } else if (Array.isArray(res)) {
+          items = res;
+        } else if (res && typeof res === "object") {
+          const numericKeys = Object.keys(res).filter((k) =>
+            /^\d+$/.test(k)
+          );
+          if (numericKeys.length) {
+            items = numericKeys
+              .sort((a, b) => Number(a) - Number(b))
+              .map((k) => res[k]);
+          }
+        }
+
+        setRows(items);
+      } catch (err) {
+        console.error("Failed to reload providers after decision", err);
+      }
+
+      // Reload applications
+      await loadApplications();
+    } catch (err) {
+      console.error("Failed to update application", err);
+      alert(
+        err?.message ||
+          "Failed to update application. Please try again."
       );
     }
   }
@@ -245,6 +322,7 @@ export default function FacilityProvidersPage() {
         </div>
       )}
 
+      {/* Existing providers table */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100 text-sm">
@@ -397,6 +475,91 @@ export default function FacilityProvidersPage() {
             </button>
           </div>
         </div>
+      </section>
+
+      {/* NEW: Pending provider applications */}
+      <section className="mt-10">
+        <h2 className="text-sm font-semibold text-slate-800">
+          Pending provider applications
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          These providers have requested to join your facility. Approving will
+          attach them to this facility and mark their profile as approved.
+        </p>
+
+        {loadingApplications ? (
+          <p className="mt-3 text-xs text-slate-500">
+            Loading applications…
+          </p>
+        ) : applications.length === 0 ? (
+          <p className="mt-3 text-xs text-slate-400">
+            No pending applications.
+          </p>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-slate-200 text-xs">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-slate-500">
+                    Provider
+                  </th>
+                  <th className="px-4 py-2 text-left font-medium text-slate-500">
+                    Facility
+                  </th>
+                  <th className="px-4 py-2 text-left font-medium text-slate-500">
+                    Message
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium text-slate-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {applications.map((app) => (
+                  <tr key={app.id}>
+                    <td className="px-4 py-2 text-slate-800">
+                      {app.provider_name}
+                    </td>
+                    <td className="px-4 py-2 text-slate-500">
+                      {app.facility_name}
+                    </td>
+                    <td className="px-4 py-2 text-slate-500">
+                      {app.message ? (
+                        app.message
+                      ) : (
+                        <span className="italic text-slate-400">
+                          No message
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="inline-flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleApplicationDecision(app.id, "approve")
+                          }
+                          className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleApplicationDecision(app.id, "reject")
+                          }
+                          className="rounded-lg bg-red-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </main>
   );
