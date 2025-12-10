@@ -379,7 +379,7 @@ export default async function FacilityDashboard() {
                 <QuickLink
                   href="/facility/patients"
                   icon={Users2}
-                  label="Register patient"
+                  label="Patients"
                 />
                 <QuickLink
                   href="/facility/appointments/new"
