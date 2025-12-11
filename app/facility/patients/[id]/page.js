@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import PatientDocumentsProvider from "@/components/patient/PatientDocumentsProvider"; // Document provider component
-import PatientDocumentUploadProvider from "@/components/patient/PatientDocumentUploadProvider"; // Upload component
+import PatientDocumentsProvider from "@/components/patient/PatientDocumentsProvider";
+import PatientDocumentUploadProvider from "@/components/patient/PatientDocumentUploadProvider";
+import PatientVitalsHistory from "@/components/patient/PatientVitalsHistory";
 import NurseWorkflow from "@/components/nurse/NurseWorkflow";
+import { Activity, FileText, Stethoscope } from "lucide-react";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -52,7 +55,6 @@ export default function FacilityPatientDetailPage() {
     fullName || patient?.email || (patient ? `Patient #${patient.id}` : "");
 
   const handleUploadSuccess = (documentData) => {
-    // Optimistic update: prepend new document to the list
     setPatient((prev) => ({
       ...prev,
       documents: [documentData, ...(prev?.documents || [])],
@@ -60,7 +62,7 @@ export default function FacilityPatientDetailPage() {
   };
 
   return (
-    <main className="relative mx-auto max-w-5xl space-y-6 p-6 md:p-10">
+    <main className="relative mx-auto max-w-6xl space-y-6 p-6 md:p-10">
       {/* Back Link */}
       <button
         type="button"
@@ -79,6 +81,17 @@ export default function FacilityPatientDetailPage() {
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
             {loadingPatient ? "Loading…" : displayName || "Patient"}
           </h1>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/facility/vitals?patient=${patientId}`}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Activity className="h-4 w-4" />
+            View All Vitals
+          </Link>
         </div>
       </header>
 
@@ -100,7 +113,7 @@ export default function FacilityPatientDetailPage() {
               <strong>Name:</strong> {displayName || "N/A"}
             </p>
             <p>
-              <strong>Date of Birth:</strong> {formatDate(patient.date_of_birth)}
+              <strong>Date of Birth:</strong> {formatDate(patient.dob)}
             </p>
             <p>
               <strong>Gender:</strong> {patient.gender || "N/A"}
@@ -117,12 +130,28 @@ export default function FacilityPatientDetailPage() {
         )}
       </section>
 
+      {/* Vitals History Section */}
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <Stethoscope className="h-5 w-5 text-slate-600" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Vitals History
+          </h2>
+        </div>
+        <PatientVitalsHistory patientId={patientId} />
+      </section>
+
       {/* Documents Section */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-slate-500">
-          Documents
-        </h2>
-        <PatientDocumentsProvider patientId={patientId} />
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <FileText className="h-5 w-5 text-slate-600" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Documents
+          </h2>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <PatientDocumentsProvider patientId={patientId} />
+        </div>
       </section>
 
       {/* Document Upload Section */}
@@ -136,6 +165,7 @@ export default function FacilityPatientDetailPage() {
         />
       </section>
 
+      {/* Nurse Workflow (Record Vitals, Labs, Prescriptions, etc.) */}
       <NurseWorkflow patientId={patientId} />
     </main>
   );
