@@ -25,6 +25,8 @@ function PatientDocumentUploadProvider({ patientId, onUploadSuccess }) {
       return;
     }
 
+    console.log("PatientDocumentUploadProvider - patientId prop:", patientId);
+
     try {
       setLoading(true);
       setError("");
@@ -35,6 +37,7 @@ function PatientDocumentUploadProvider({ patientId, onUploadSuccess }) {
         title,
         documentType,
         notes,
+        patientId,  // 🔧 FIXED: Now passing patientId to the upload function
       });
 
       setSuccess("Document uploaded successfully.");
@@ -56,6 +59,13 @@ function PatientDocumentUploadProvider({ patientId, onUploadSuccess }) {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
         Upload Document for Patient
       </h2>
+
+      {/* Debug info */}
+      {patientId && (
+        <div className="mb-3 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700">
+          Patient ID: {patientId}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
