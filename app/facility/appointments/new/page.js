@@ -1,3 +1,4 @@
+// app/facility/appointments/new/page.js
 "use client";
 
 import { useEffect, useState } from "react";
@@ -117,6 +118,7 @@ export default function FacilityNewAppointmentPage() {
 
     const provider = Number(providerId);
     if (provider && !Number.isNaN(provider)) {
+      // now sending the User id (p.user) thanks to the select value
       payload.provider = provider;
     }
 
@@ -149,8 +151,10 @@ export default function FacilityNewAppointmentPage() {
   const selectedPatient = patients.find(
     (p) => String(p.id) === String(patientId)
   );
+
+  // 🔹 Use p.user (User id) instead of profile id
   const selectedProvider = providers.find(
-    (p) => String(p.id) === String(providerId)
+    (p) => String(p.user) === String(providerId)
   );
 
   const patientName = selectedPatient
@@ -262,22 +266,19 @@ export default function FacilityNewAppointmentPage() {
                 <option value="">
                   {loadingProviders
                     ? "Loading providers…"
-                    : "Any available provider"}
+                    : "Unassigned"}
                 </option>
                 {!loadingProviders &&
-                  providers.map((p) => {
-                    const fullName = [p.first_name, p.last_name]
-                      .filter(Boolean)
-                      .join(" ");
-                    const roleOrSpec = p.specialty || p.role || "";
-                    const label = fullName || p.email || `Provider #${p.id}`;
-                    return (
-                      <option key={p.id} value={String(p.id)}>
-                        {label}
-                        {roleOrSpec ? ` – ${roleOrSpec}` : ""}
-                      </option>
-                    );
-                  })}
+                  providers.map((p) => (
+                    <option key={p.id} value={String(p.user)}>
+                      {[
+                        p.first_name,
+                        p.last_name,
+                      ]
+                        .filter(Boolean)
+                        .join(" ") || p.email || `Provider #${p.id}`}
+                    </option>
+                  ))}
               </select>
               <p className="mt-1 text-xs text-slate-500">
                 Leave blank to allow the facility to assign a provider later.

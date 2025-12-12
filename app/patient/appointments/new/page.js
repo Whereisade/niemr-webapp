@@ -217,8 +217,9 @@ export default function PatientNewAppointmentPage() {
 
   const canSubmit = !isSubmitting && !!date && !!time;
 
+  // 🔹 Use p.user (User id) instead of profile id
   const selectedProvider = providers.find(
-    (p) => String(p.id) === String(providerId)
+    (p) => String(p.user) === String(providerId)
   );
   const selectedFacility = facilities.find(
     (f) => String(f.id) === String(facilityId)
@@ -411,20 +412,16 @@ export default function PatientNewAppointmentPage() {
                       : "Any available provider"}
                   </option>
                   {!loadingProviders &&
-                    providers.map((p) => {
-                      const fullName = [p.first_name, p.last_name]
-                        .filter(Boolean)
-                        .join(" ");
-                      const roleOrSpec = p.specialty || p.role || "";
-                      const label =
-                        fullName || p.email || `Provider #${p.id}`;
-                      return (
-                        <option key={p.id} value={String(p.id)}>
-                          {label}
-                          {roleOrSpec ? ` – ${roleOrSpec}` : ""}
-                        </option>
-                      );
-                    })}
+                    providers.map((p) => (
+                      <option key={p.id} value={String(p.user)}>
+                        {[
+                          p.first_name,
+                          p.last_name,
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || p.email || `Provider #${p.id}`}
+                      </option>
+                    ))}
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
                   You can leave this empty and the clinic will route you to an
@@ -602,3 +599,5 @@ export default function PatientNewAppointmentPage() {
     </main>
   );
 }
+
+
