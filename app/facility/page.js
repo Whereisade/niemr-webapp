@@ -19,6 +19,8 @@ import {
   FileText,
   ShieldCheck,
   Plus,
+  Bed,
+  ClipboardClock,
 } from "lucide-react";
 
 const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
@@ -372,6 +374,11 @@ export default async function FacilityDashboard() {
               </p>
               <div className="mt-4 grid gap-2">
                 <QuickLink
+                  href="/facility/appointments/new"
+                  icon={CalendarRange}
+                  label="Schedule Appointment"
+                />
+                <QuickLink
                   href="/encounters/new"
                   icon={Stethoscope}
                   label="New Encounter"
@@ -381,16 +388,21 @@ export default async function FacilityDashboard() {
                   icon={Users2}
                   label="Patients"
                 />
-                <QuickLink
-                  href="/facility/appointments/new"
-                  icon={CalendarRange}
-                  label="Schedule Appointment"
-                />
                 <QuickLink href="/facility/labs/new" icon={FileText} label="Order Lab" />
                 <QuickLink
                   href="/facility/imaging/new"
                   icon={ClipboardList}
                   label="Request Imaging"
+                />
+                <QuickLink
+                  href="/facility/wards"
+                  icon={Bed}
+                  label="Wards"
+                />
+                <QuickLink
+                  href="/facility/bed-history"
+                  icon={ClipboardClock}
+                  label="Ward Bed History"
                 />
                 <QuickLink
                   href="/notifications"
@@ -406,7 +418,7 @@ export default async function FacilityDashboard() {
                 />
                 <QuickLink
                   href="/facility/audit"
-                  icon={ClipboardList}
+                  icon={ClipboardClock}
                   label="Audit logs"
                 />
                 <Link
