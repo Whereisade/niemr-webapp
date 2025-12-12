@@ -29,9 +29,7 @@ function formatFacility(p) {
 
 function deriveStatus(p) {
   if (p.status) return p.status;
-  if (typeof p.is_approved === "boolean") {
-    return p.is_approved ? "APPROVED" : "PENDING";
-  }
+  if (p.verification_status) return p.verification_status.toUpperCase();
   return "UNKNOWN";
 }
 
@@ -51,7 +49,7 @@ export default function FacilityProvidersPage() {
     searchParams.get("status") || ""
   );
 
-  // NEW: pending applications state
+  // Pending applications state
   const [applications, setApplications] = useState([]);
   const [loadingApplications, setLoadingApplications] = useState(true);
 
@@ -60,7 +58,7 @@ export default function FacilityProvidersPage() {
   const q = searchParams.get("q") || "";
   const statusFilter = searchParams.get("status") || "";
 
-  // Load providers
+  // Load providers (facility-scoped)
   useEffect(() => {
     let cancelled = false;
 
@@ -69,11 +67,8 @@ export default function FacilityProvidersPage() {
         setLoading(true);
         setError("");
 
-        const qs = new URLSearchParams();
-        qs.set("page", String(page));
-        qs.set("limit", String(limit));
-        if (q) qs.set("q", q);
-        if (statusFilter) qs.set("status", statusFilter);
+        const qs = new URLSearchParams(searchParams);
+        qs.set("facility", "current");
 
         const res = await apiFetch(`/providers/?${qs.toString()}`);
 
@@ -116,9 +111,9 @@ export default function FacilityProvidersPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, limit, q, statusFilter]);
+  }, [page, limit, q, statusFilter, searchParams, router]);
 
-  // NEW: load pending provider applications
+  // Load pending provider applications
   async function loadApplications() {
     try {
       setLoadingApplications(true);
@@ -193,16 +188,23 @@ export default function FacilityProvidersPage() {
     }
 
     try {
-      await apiFetch(`/providers/${providerId}/`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: nextStatus }),
-      });
+      // Use dedicated approve/reject actions on the backend
+      await apiFetch(
+        `/providers/${providerId}/${nextStatus.toLowerCase()}/`,
+        {
+          method: "POST",
+        }
+      );
 
       // Optimistic update instead of full reload
       setRows((prev) =>
         prev.map((p) =>
           p.id === providerId || String(p.id) === String(providerId)
-            ? { ...p, status: nextStatus }
+            ? {
+                ...p,
+                status: nextStatus,
+                verification_status: nextStatus,
+              }
             : p
         )
       );
@@ -215,7 +217,7 @@ export default function FacilityProvidersPage() {
     }
   }
 
-  // NEW: approve / reject applications
+  // Approve / reject applications
   async function handleApplicationDecision(applicationId, decision) {
     try {
       await apiFetch(
@@ -226,13 +228,9 @@ export default function FacilityProvidersPage() {
       );
       // After decision, refresh both providers + pending applications
       // so newly approved providers show in the list and app disappears
-      const qs = new URLSearchParams();
-      qs.set("page", String(page));
-      qs.set("limit", String(limit));
-      if (q) qs.set("q", q);
-      if (statusFilter) qs.set("status", statusFilter);
+      const qs = new URLSearchParams(searchParams);
+      qs.set("facility", "current");
 
-      // Reload providers list
       try {
         const res = await apiFetch(`/providers/?${qs.toString()}`);
         setData(res);
@@ -477,7 +475,7 @@ export default function FacilityProvidersPage() {
         </div>
       </section>
 
-      {/* NEW: Pending provider applications */}
+      {/* Pending provider applications */}
       <section className="mt-10">
         <h2 className="text-sm font-semibold text-slate-800">
           Pending provider applications
@@ -564,3 +562,5 @@ export default function FacilityProvidersPage() {
     </main>
   );
 }
+
+
