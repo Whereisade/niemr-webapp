@@ -244,26 +244,36 @@ export default function FacilityPharmacyPage() {
           </p>
         </div>
 
-        {/* High-level stats (for current page) */}
-        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-          <StatCard
-            label="Pending (page)"
-            value={stats.pendingOnPage}
-            icon={ClipboardList}
-            accent="from-sky-500 via-sky-600 to-sky-700"
-          />
-          <StatCard
-            label="Dispensed (page)"
-            value={stats.dispensed}
-            icon={Activity}
-            accent="from-emerald-500 via-emerald-600 to-emerald-700"
-          />
-          <StatCard
-            label="Total results"
-            value={total}
-            icon={UsersRound}
-            accent="from-slate-500 via-slate-600 to-slate-700"
-          />
+        {/* Right side: catalog button + stats */}
+        <div className="flex flex-col items-end gap-3">
+          <Link
+            href="/facility/pharmacy/catalog"
+            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+          >
+            Add / view catalog
+          </Link>
+
+          {/* High-level stats (for current page) */}
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            <StatCard
+              label="Pending (page)"
+              value={stats.pendingOnPage}
+              icon={ClipboardList}
+              accent="from-sky-500 via-sky-600 to-sky-700"
+            />
+            <StatCard
+              label="Dispensed (page)"
+              value={stats.dispensed}
+              icon={Activity}
+              accent="from-emerald-500 via-emerald-600 to-emerald-700"
+            />
+            <StatCard
+              label="Total results"
+              value={total}
+              icon={UsersRound}
+              accent="from-slate-500 via-slate-600 to-slate-700"
+            />
+          </div>
         </div>
       </header>
 
