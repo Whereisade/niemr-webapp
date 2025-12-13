@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { usePrescriptions } from "@/lib/usePrescriptions";
+import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
 import {
   Pill,
   Filter,
@@ -24,57 +26,182 @@ function formatDateTime(value) {
   }
 }
 
+function normalisePrescriptionsPayload(payload) {
+  if (!payload) return { rows: [], total: 0 };
+
+  // DRF paginated: { count, results: [...] }
+  if (Array.isArray(payload.results)) {
+    return {
+      rows: payload.results,
+      total:
+        typeof payload.count === "number"
+          ? payload.count
+          : payload.results.length,
+    };
+  }
+
+  // Plain list
+  if (Array.isArray(payload)) {
+    return { rows: payload, total: payload.length };
+  }
+
+  // Fallback: object keyed by index
+  if (payload && typeof payload === "object") {
+    const numericKeys = Object.keys(payload).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      const rows = numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => payload[k]);
+      return { rows, total: rows.length };
+    }
+  }
+
+  return { rows: [], total: 0 };
+}
+
+function getPrescriberId(rx) {
+  const v = rx?.prescribed_by;
+  if (!v) return null;
+  if (typeof v === "object") {
+    return v.id ?? null;
+  }
+  return v;
+}
+
 export default function ProviderPharmacyPage() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
-  const page = Number(sp.get("page") || 1);
-  const limit = Number(sp.get("limit") || 20);
+  const page = Number(sp.get("page") || 1) || 1;
+  const limit = Number(sp.get("limit") || 20) || 20;
   const status = sp.get("status") || "";
   const patient = sp.get("patient") || "";
+  const start = sp.get("start") || "";
+  const end = sp.get("end") || "";
   const s = sp.get("s") || "";
 
-  // Backend scopes prescriptions by facility / role in PrescriptionViewSet.get_queryset()
   const { data, error, isLoading } = usePrescriptions({
     page,
     limit,
     status,
     patient,
+    start,
+    end,
     s,
   });
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
-  const total = Number(data?.count ?? rows.length);
+  // Current user – to know which prescriptions are "mine"
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+  const [onlyMine, setOnlyMine] = useState(true);
 
-  const updateQuery = (patch) => {
+  // NEW: details modal state
+  const [detailsId, setDetailsId] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/proxy/accounts/me/", {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          throw new Error("Failed to load current user");
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setMe(json);
+        }
+      } catch (err) {
+        console.error("Failed to fetch /accounts/me/ in provider pharmacy:", err);
+        if (!cancelled) {
+          setMe(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setMeLoading(false);
+        }
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const meId = me?.id ?? null;
+  const meRole = (me?.role || "").toUpperCase();
+  const providerType = (me?.provider?.provider_type || "").toUpperCase();
+
+  const isProviderPharmacist =
+    meRole === "PHARMACY" || providerType === "PHARMACIST";
+
+  const { rows: rawRows, total } = normalisePrescriptionsPayload(data);
+
+  // "My prescriptions" filter is applied client-side on the current page
+  const rows = useMemo(() => {
+    if (!onlyMine || !meId) return rawRows;
+    return rawRows.filter((rx) => getPrescriberId(rx) === meId);
+  }, [rawRows, onlyMine, meId]);
+
+  const stats = useMemo(() => {
+    let draft = 0;
+    let prescribed = 0;
+    let partial = 0;
+    let dispensed = 0;
+    let cancelled = 0;
+
+    for (const rx of rows) {
+      const v = String(rx.status || "").toUpperCase();
+      if (v === "DRAFT") draft += 1;
+      else if (v === "PRESCRIBED") prescribed += 1;
+      else if (v === "PARTIALLY_DISPENSED") partial += 1;
+      else if (v === "DISPENSED") dispensed += 1;
+      else if (v === "CANCELLED") cancelled += 1;
+    }
+
+    const pendingOnPage = prescribed + partial;
+    return { draft, prescribed, partial, dispensed, cancelled, pendingOnPage };
+  }, [rows]);
+
+  function updateQuery(patch) {
     const params = new URLSearchParams(sp?.toString() || "");
-    Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") {
-        params.delete(k);
+
+    Object.entries(patch).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") {
+        params.delete(key);
       } else {
-        params.set(k, String(v));
+        params.set(key, String(value));
       }
     });
-    if ("status" in patch || "patient" in patch || "s" in patch || "limit" in patch) {
+
+    if (
+      "status" in patch ||
+      "patient" in patch ||
+      "s" in patch ||
+      "start" in patch ||
+      "end" in patch ||
+      "limit" in patch
+    ) {
       params.set("page", "1");
     }
+
     router.push(`${pathname}?${params.toString()}`);
-  };
+  }
 
   if (isLoading && !data) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="mb-4 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-          Prescriptions
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+          Provider pharmacy
         </h1>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="-mt-6 mb-4 h-1.5 w-full rounded-t-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-          <p className="text-slate-500">Loading prescriptions…</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+          Loading prescriptions…
         </div>
       </main>
     );
@@ -83,262 +210,357 @@ export default function ProviderPharmacyPage() {
   if (error) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="mb-4 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-          Prescriptions
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+          Provider pharmacy
         </h1>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          Failed to load prescriptions: {error.message || "Unknown error"}
         </div>
       </main>
     );
   }
 
-  // Quick stats
-  const uniquePatients = new Set(
-    rows.map((r) => r.patient_name || r.patient)
-  ).size;
-  const drafts = rows.filter(
-    (r) => String(r.status || "").toUpperCase() === "DRAFT"
-  ).length;
-  const active = rows.filter((r) => {
-    const v = String(r.status || "").toUpperCase();
-    return v === "PENDING" || v === "DISPENSED";
-  }).length;
+  const headerTitle = isProviderPharmacist
+    ? "Pharmacy workspace"
+    : "My prescriptions";
+
+  const headerSubtitle = isProviderPharmacist
+    ? "Review prescriptions you’re involved with across facilities. Dispensing stays in the facility workspace."
+    : "View and track medications you’ve prescribed for your patients.";
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
+    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
+      {/* Soft background glows */}
+      <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-sky-100/60 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100/60 blur-3xl" />
+
       {/* Header */}
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <header className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
+          <div className="inline-flex items-center gap-2 rounded-full bg-sky-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-sky-700">
             <Pill className="h-3.5 w-3.5" />
-            Provider Pharmacy
+            Provider · Pharmacy
           </div>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Medication prescriptions for patients in my care
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+            {headerTitle}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Filter by patient, drug or status and review e-Rx activity.
-          </p>
+          <p className="mt-1 text-sm text-slate-600">{headerSubtitle}</p>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {/* Search drug / note */}
-          <div className="relative">
-            <input
-              type="search"
-              placeholder="Search drug / note…"
-              defaultValue={s}
-              onBlur={(e) => updateQuery({ s: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
-            />
-            <Activity className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
-
-          {/* Patient filter */}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Filter by patient ID…"
-              defaultValue={patient}
-              onBlur={(e) => updateQuery({ patient: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
-            />
-            <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
-
-          {/* Status */}
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
-          >
-            <option value="">All statuses</option>
-            <option value="DRAFT">Draft</option>
-            <option value="PENDING">Pending</option>
-            <option value="DISPENSED">Dispensed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-
-          {/* Page size */}
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-32"
-            value={String(limit)}
-            onChange={(e) => updateQuery({ limit: e.target.value })}
-          >
-            <option value="20">Show 20</option>
-            <option value="50">Show 50</option>
-            <option value="100">Show 100</option>
-          </select>
+        {/* Page-level stats (current page, filtered) */}
+        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+          <StatCard
+            label={onlyMine ? "My pending (page)" : "Pending (page)"}
+            value={stats.pendingOnPage}
+            icon={ClipboardList}
+            accent="from-sky-500 via-sky-600 to-sky-700"
+          />
+          <StatCard
+            label={onlyMine ? "My dispensed (page)" : "Dispensed (page)"}
+            value={stats.dispensed}
+            icon={Activity}
+            accent="from-emerald-500 via-emerald-600 to-emerald-700"
+          />
+          <StatCard
+            label="Total results (raw)"
+            value={total}
+            icon={UsersRound}
+            accent="from-slate-500 via-slate-600 to-slate-700"
+          />
         </div>
       </header>
 
-      {/* Quick stats */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          icon={UsersRound}
-          label="Patients in results"
-          value={uniquePatients || 0}
-          accent="from-blue-600 via-indigo-600 to-violet-600"
-        />
-        <StatTile
-          icon={ClipboardList}
-          label="Prescriptions on page"
-          value={rows.length}
-          accent="from-emerald-600 via-teal-600 to-cyan-600"
-        />
-        <StatTile
-          icon={Pill}
-          label="Active e-Rx (pending / dispensed)"
-          value={active}
-          accent="from-amber-600 via-orange-600 to-red-600"
-        />
-        <StatTile
-          icon={Activity}
-          label="Drafts on page"
-          value={drafts}
-          accent="from-fuchsia-600 via-pink-600 to-rose-600"
-        />
+      {/* My vs All toggle */}
+      <section className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-xs text-slate-600">
+          <span className="h-2 w-2 rounded-full bg-sky-500" />
+          <span className="font-medium">
+            View scope is applied on this page only
+          </span>
+        </div>
+
+        <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 text-xs shadow-sm">
+          <button
+            type="button"
+            onClick={() => setOnlyMine(true)}
+            className={
+              "rounded-full px-3 py-1.5 font-medium transition " +
+              (onlyMine
+                ? "bg-sky-600 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-50")
+            }
+          >
+            My prescriptions (page)
+          </button>
+          <button
+            type="button"
+            onClick={() => setOnlyMine(false)}
+            className={
+              "rounded-full px-3 py-1.5 font-medium transition " +
+              (!onlyMine
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-50")
+            }
+          >
+            All facility prescriptions (page)
+          </button>
+        </div>
       </section>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <Th>Patient</Th>
-              <Th>Medications</Th>
-              <Th>Status</Th>
-              <Th>Prescribed At</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((rx) => {
-              const meds = Array.isArray(rx.items)
-                ? rx.items
-                    .map(
-                      (i) =>
-                        i.drug_name ||
-                        i.medication ||
-                        i.product ||
-                        i.code
-                    )
-                    .filter(Boolean)
-                    .join(", ")
-                : rx.medications_display || "—";
+      {/* Filters + table */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-1.5 w-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500" />
 
-              return (
-                <tr
-                  key={rx.id}
-                  className="transition hover:bg-slate-50/60"
-                >
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
-                        <UsersRound className="h-4 w-4 text-blue-700" />
-                      </span>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          {rx.patient_name || rx.patient || "—"}
-                        </div>
-                        {rx.encounter_id && (
-                          <div className="text-xs text-slate-500">
-                            Encounter #{rx.encounter_id}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Td>
-                  <Td>
-                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                      <Pill className="h-3.5 w-3.5 text-slate-500" />
-                      <span className="line-clamp-2">{meds}</span>
-                    </span>
-                    {rx.sig && (
-                      <div className="mt-1 text-xs text-slate-500">
-                        {rx.sig}
-                      </div>
-                    )}
-                  </Td>
-                  <Td>
-                    <StatusPill value={rx.status} />
-                  </Td>
-                  <Td>
-                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                      <Clock className="h-3.5 w-3.5 text-slate-500" />
-                      {formatDateTime(rx.prescribed_at || rx.created_at)}
-                    </span>
-                  </Td>
-                </tr>
-              );
-            })}
+        {/* Filters */}
+        <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <Filter className="h-3.5 w-3.5 text-slate-400" />
+              Filters
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="relative w-full sm:w-64">
+                <input
+                  type="search"
+                  placeholder="Search drug / note / patient…"
+                  defaultValue={s}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      updateQuery({ s: e.currentTarget.value });
+                    }
+                  }}
+                  onBlur={(e) => updateQuery({ s: e.target.value })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
 
-            {!rows.length && (
+              <input
+                type="text"
+                placeholder="Patient ID…"
+                defaultValue={patient}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    updateQuery({ patient: e.currentTarget.value });
+                  }
+                }}
+                onBlur={(e) => updateQuery({ patient: e.target.value })}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
+              />
+
+              <select
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-44"
+                value={status}
+                onChange={(e) => updateQuery({ status: e.target.value })}
+              >
+                <option value="">All statuses</option>
+                <option value="DRAFT">Draft</option>
+                <option value="PRESCRIBED">Prescribed</option>
+                <option value="PARTIALLY_DISPENSED">Partially dispensed</option>
+                <option value="DISPENSED">Dispensed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+
+              <input
+                type="date"
+                value={start}
+                onChange={(e) => updateQuery({ start: e.target.value })}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
+              />
+
+              <input
+                type="date"
+                value={end}
+                onChange={(e) => updateQuery({ end: e.target.value })}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
+              />
+
+              <select
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-32"
+                value={String(limit)}
+                onChange={(e) => updateQuery({ limit: e.target.value })}
+              >
+                <option value="10">Show 10</option>
+                <option value="20">Show 20</option>
+                <option value="50">Show 50</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100 text-sm">
+            <thead className="bg-slate-50 text-slate-700">
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center">
-                  <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
-                    <Pill className="h-6 w-6 text-slate-400" />
-                  </div>
-                  <div className="text-sm font-medium text-slate-900">
-                    No prescriptions found
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    New prescriptions will appear here automatically.
-                  </div>
-                </td>
+                <Th>Created</Th>
+                <Th>Patient</Th>
+                <Th>Items</Th>
+                <Th>Status</Th>
+                <Th>Note</Th>
+                <Th>Details</Th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {rows.length ? (
+                rows.map((rx) => {
+                  const created = formatDateTime(rx.created_at);
+                  const patientLabel =
+                    rx.patient != null ? `Patient #${rx.patient}` : "—";
 
-      {/* Pager – aligned with vitals/imaging pattern */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
+                  let itemsSummary = "—";
+                  if (Array.isArray(rx.items) && rx.items.length) {
+                    const names = rx.items
+                      .map(
+                        (it) =>
+                          it.drug?.name ||
+                          it.drug?.code ||
+                          it.dose ||
+                          "Medication"
+                      )
+                      .filter(Boolean);
+                    if (names.length <= 2) {
+                      itemsSummary = names.join(", ");
+                    } else {
+                      itemsSummary = `${names.slice(0, 2).join(", ")} + ${
+                        names.length - 2
+                      } more`;
+                    }
+                  }
+
+                  return (
+                    <tr
+                      key={rx.id}
+                      className="transition hover:bg-slate-50/60"
+                    >
+                      <Td>
+                        <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
+                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          {created}
+                        </span>
+                      </Td>
+                      <Td>
+                        <span className="text-xs font-medium text-slate-900">
+                          {patientLabel}
+                        </span>
+                      </Td>
+                      <Td>
+                        <span className="text-xs text-slate-700">
+                          {itemsSummary}
+                        </span>
+                      </Td>
+                      <Td>
+                        <StatusPill value={rx.status} />
+                      </Td>
+                      <Td>
+                        <span className="line-clamp-2 text-xs text-slate-600">
+                          {rx.note || "—"}
+                        </span>
+                      </Td>
+                      <Td>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailsId(rx.id);
+                            setDetailsOpen(true);
+                          }}
+                          className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
+                        >
+                          View
+                        </button>
+                      </Td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-10 text-center text-sm text-slate-500"
+                  >
+                    <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                      <Pill className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <div className="text-sm font-medium text-slate-900">
+                      No prescriptions found
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Adjust your filters or check back later.
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
-          >
-            Next
-            <ArrowRight className="h-4 w-4" />
-          </button>
+
+        {/* Pager */}
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+          <span>
+            Page {page} · Showing {rows.length} of {total} prescription
+            {total === 1 ? "" : "s"} (raw)
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => updateQuery({ page: Math.max(1, page - 1) })}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-medium hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={rawRows.length < limit}
+              onClick={() => updateQuery({ page: page + 1 })}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-medium hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+            >
+              Next
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
+
+      {/* Details modal */}
+      <PrescriptionDetailsModal
+        open={detailsOpen}
+        id={detailsId}
+        onClose={() => setDetailsOpen(false)}
+      />
     </main>
   );
 }
 
-/* ─────────────── UI helpers (UI-only) ─────────────── */
+function Th({ children }) {
+  return (
+    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+      {children}
+    </th>
+  );
+}
 
-function StatTile({ icon: Icon, label, value, accent }) {
+function Td({ children }) {
+  return (
+    <td className="px-3 py-3 align-top text-xs text-slate-800">{children}</td>
+  );
+}
+
+function StatCard({ label, value, icon: Icon, accent }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
-      <div className="p-5">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-600">{label}</div>
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-            <Icon className="h-5 w-5 text-slate-700" />
+      <div className="flex items-center justify-between p-4">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            {label}
+          </div>
+          <div className="mt-1 text-2xl font-semibold text-slate-900">
+            {value}
           </div>
         </div>
-        <div className="mt-2 text-3xl font-semibold text-slate-900">
-          {value}
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
+          <Icon className="h-5 w-5 text-slate-700" />
         </div>
       </div>
     </div>
@@ -347,31 +569,35 @@ function StatTile({ icon: Icon, label, value, accent }) {
 
 function StatusPill({ value }) {
   const v = String(value || "").toUpperCase();
-  const map = {
-    DRAFT: "bg-slate-50 text-slate-700 ring-slate-200",
-    PENDING: "bg-amber-50 text-amber-700 ring-amber-200",
-    DISPENSED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
-  };
-  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
-  const label = (v || "—").replaceAll("_", " ");
+  const label =
+    v === "PARTIALLY_DISPENSED"
+      ? "Partially dispensed"
+      : v === "PRESCRIBED"
+      ? "Prescribed"
+      : v === "DISPENSED"
+      ? "Dispensed"
+      : v === "DRAFT"
+      ? "Draft"
+      : v === "CANCELLED"
+      ? "Cancelled"
+      : v || "Unknown";
+
+  let cls = "bg-slate-50 text-slate-700 ring-slate-200";
+  if (v === "PRESCRIBED") {
+    cls = "bg-sky-50 text-sky-700 ring-sky-200";
+  } else if (v === "PARTIALLY_DISPENSED") {
+    cls = "bg-amber-50 text-amber-700 ring-amber-200";
+  } else if (v === "DISPENSED") {
+    cls = "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  } else if (v === "CANCELLED") {
+    cls = "bg-rose-50 text-rose-700 ring-rose-200";
+  }
+
   return (
     <span
-      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+      className={`inline-flex items-center rounded-lg px-2 py-1 text-[11px] font-medium ring-1 ${cls}`}
     >
       {label}
     </span>
   );
-}
-
-function Th({ children }) {
-  return (
-    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-      {children}
-    </th>
-  );
-}
-
-function Td({ children }) {
-  return <td className="p-3 align-top text-sm text-slate-800">{children}</td>;
 }
