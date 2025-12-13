@@ -50,7 +50,7 @@ export default function FacilityNewImagingRequestPage() {
     async function fetchProviders() {
       try {
         setLoadingProviders(true);
-        const res = await apiFetch("/providers/?page=1&limit=50");
+        const res = await apiFetch("/providers/?facility=current&type=LAB_SCIENTIST&page=1&limit=50");
         if (cancelled) return;
         const items = Array.isArray(res) ? res : res?.results || [];
         setProviders(items);
