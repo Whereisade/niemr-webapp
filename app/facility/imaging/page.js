@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useImagingRequests } from "@/lib/useImagingRequests";
@@ -17,6 +17,12 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+
+// 🔹 role-based UI config
+import {
+  FACILITY_WORKSPACE_TYPES,
+  getFacilityWorkspaceConfig,
+} from "@/lib/roleUiConfig";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -56,6 +62,47 @@ export default function FacilityImagingRequestsPage() {
     patient,
     s,
   });
+
+  // 🔹 current user (for role-based UI)
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/proxy/accounts/me/", {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          throw new Error("Failed to load current user");
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setMe(json);
+        }
+      } catch (err) {
+        console.error("Failed to fetch /accounts/me/ in imaging page:", err);
+        if (!cancelled) {
+          setMe(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setMeLoading(false);
+        }
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const workspace = me ? getFacilityWorkspaceConfig(me.role) : null;
+  const isOwner = workspace?.type === FACILITY_WORKSPACE_TYPES.OWNER;
 
   // Normalize rows
   let rows = [];
@@ -187,20 +234,23 @@ export default function FacilityImagingRequestsPage() {
         </div>
 
         <div className="space-x-2">
-        <Link
-          href="/facility/imaging/procedures"
-          className="inline-flex items-center rounded-full bg-blue-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-        >
-          New imaging procedure
-        </Link>
+          {/* 🔐 Only facility OWNER/ADMIN should see this */}
+          {isOwner && (
+            <Link
+              href="/facility/imaging/procedures"
+              className="inline-flex items-center rounded-full bg-blue-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              New imaging procedure
+            </Link>
+          )}
 
-        <Link
-          href="/facility/imaging/new"
-          className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-        >
-          New imaging request
-        </Link>
-
+          {/* New imaging request is visible to all facility imaging-capable staff */}
+          <Link
+            href="/facility/imaging/new"
+            className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            New imaging request
+          </Link>
         </div>
       </header>
 
