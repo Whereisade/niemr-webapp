@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
@@ -20,6 +20,12 @@ import {
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
+
+// 🔹 role-based UI config
+import {
+  FACILITY_WORKSPACE_TYPES,
+  getFacilityWorkspaceConfig,
+} from "@/lib/roleUiConfig";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -68,6 +74,49 @@ export default function FacilityLabOrdersPage() {
   const [detailsOrderId, setDetailsOrderId] = useState(null);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [attachmentsOrderId, setAttachmentsOrderId] = useState(null);
+
+  // 🔹 current user (for role-based UI)
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/proxy/accounts/me/", {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        if (!res.ok) {
+          throw new Error("Failed to load current user");
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setMe(json);
+        }
+      } catch (err) {
+        console.error("Failed to fetch /accounts/me/ in labs page:", err);
+        if (!cancelled) {
+          setMe(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setMeLoading(false);
+        }
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const workspace = me ? getFacilityWorkspaceConfig(me.role) : null;
+  const isOwner = workspace?.type === FACILITY_WORKSPACE_TYPES.OWNER;
 
   // Normalize rows
   let rows = [];
@@ -194,21 +243,25 @@ export default function FacilityLabOrdersPage() {
         </div>
 
         <div className="space-x-2">
-        <Link
-          href="/facility/labs/catalog/"
-          className="inline-flex items-center rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-        >
-          <FileText className="mr-2 h-4 w-4" />
-          New lab catalog creation
-        </Link>
-        <Link
-          href="/facility/labs/new"
-          className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-        >
-          <FileText className="mr-2 h-4 w-4" />
-          New lab order
-        </Link>
+          {/* 🔐 Only facility OWNER/ADMIN should see this */}
+          {isOwner && (
+            <Link
+              href="/facility/labs/catalog/"
+              className="inline-flex items-center rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              New lab catalog creation
+            </Link>
+          )}
 
+          {/* New lab order is available to all lab-capable staff */}
+          <Link
+            href="/facility/labs/new"
+            className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            New lab order
+          </Link>
         </div>
       </header>
 
@@ -299,7 +352,7 @@ export default function FacilityLabOrdersPage() {
 
       {/* Table card */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200/70 px-5 py-4">
+        <div className="flex items-center justify_between border-b border-slate-200/70 px-5 py-4">
           <div className="flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
               <Activity className="h-5 w-5 text-slate-700" />
@@ -394,7 +447,6 @@ export default function FacilityLabOrdersPage() {
 
                       <Td>
                         <div className="flex flex-wrap gap-2">
-                          {/* View link to detail page */}
                           <Link
                             href={`/facility/labs/${order.id}`}
                             className="text-xs font-medium text-blue-600 hover:underline"
@@ -465,10 +517,7 @@ export default function FacilityLabOrdersPage() {
                 })
               ) : (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-10 text-center text-sm"
-                  >
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm">
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                       <Activity className="h-6 w-6 text-slate-400" />
                     </div>

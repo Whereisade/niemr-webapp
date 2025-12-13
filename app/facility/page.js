@@ -24,6 +24,12 @@ import {
   ClipboardClock,
 } from "lucide-react";
 
+import {
+  FACILITY_ROLES,
+  FACILITY_WORKSPACE_TYPES,
+  getFacilityWorkspaceConfig,
+} from "@/lib/roleUiConfig";
+
 const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
 
@@ -77,37 +83,6 @@ function normalizeListAndCount(payload) {
   return { list: [], count: 0 };
 }
 
-// 🔹 Facility role helpers
-const FACILITY_ROLES = [
-  "SUPER_ADMIN",
-  "ADMIN",
-  "FRONTDESK",
-  "DOCTOR",
-  "NURSE",
-  "LAB",
-  "PHARMACY",
-];
-
-function facilitySubtitle(role) {
-  if (!role) {
-    return "Monitor operations, clinical load, and financials across the facility.";
-  }
-
-  if (role === "FRONTDESK") {
-    return "Manage bookings, arrivals, and patient check-ins.";
-  }
-
-  if (role === "SUPER_ADMIN" || role === "ADMIN") {
-    return "Monitor operations, clinical load, and financials across the facility.";
-  }
-
-  if (["DOCTOR", "NURSE", "LAB", "PHARMACY"].includes(role)) {
-    return "See a quick overview of today’s activity at this facility.";
-  }
-
-  return "Facility workspace.";
-}
-
 export default async function FacilityDashboard() {
   const [notifications, todaysAppointments, providers, me] = await Promise.all([
     safeFetchJSON("/notifications/items/?since=7d", []),
@@ -124,6 +99,12 @@ export default async function FacilityDashboard() {
   if (!FACILITY_ROLES.includes(me.role)) {
     redirect("/login/facility");
   }
+
+  // Workspace flavour derived from role (OWNER / FRONTDESK / CLINICAL / GENERIC)
+  const workspace = getFacilityWorkspaceConfig(me.role);
+  const isOwner = workspace.type === FACILITY_WORKSPACE_TYPES.OWNER;
+  const isFrontdesk = workspace.type === FACILITY_WORKSPACE_TYPES.FRONTDESK;
+  const isClinical = workspace.type === FACILITY_WORKSPACE_TYPES.CLINICAL;
 
   const notifList = Array.isArray(notifications)
     ? notifications
@@ -158,32 +139,118 @@ export default async function FacilityDashboard() {
       : facilityName
     : greetingName;
 
-  const stats = [
-    {
-      label: "Total Appointments",
-      value: todaysApptCount,
-      icon: CalendarRange,
-      accent: "from-blue-600 via-indigo-600 to-violet-600",
-      href: "/facility/appointments",
-      cta: "Open schedule",
-    },
-    {
-      label: "Active Providers (preview)",
-      value: provs.length,
-      icon: Users2,
-      accent: "from-emerald-600 via-teal-600 to-cyan-600",
-      href: "/facility/providers",
-      cta: "View providers",
-    },
-    {
-      label: "Notifications (7d)",
-      value: unreadCount,
-      icon: BellRing,
-      accent: "from-amber-600 via-orange-600 to-red-600",
-      href: "/notifications",
-      cta: unreadCount > 0 ? "View unread" : "View notifications",
-    },
-  ];
+  // 🔹 Stats per workspace flavour
+  let stats;
+  if (isOwner) {
+    stats = [
+      {
+        label: "Total Appointments (today)",
+        value: todaysApptCount,
+        icon: CalendarRange,
+        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        href: "/facility/appointments",
+        cta: "Open schedule",
+      },
+      {
+        label: "Active Providers (preview)",
+        value: provs.length,
+        icon: Users2,
+        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        href: "/facility/providers",
+        cta: "View providers",
+      },
+      {
+        label: "Notifications (7d)",
+        value: unreadCount,
+        icon: BellRing,
+        accent: "from-amber-600 via-orange-600 to-red-600",
+        href: "/notifications",
+        cta: unreadCount > 0 ? "View unread" : "View notifications",
+      },
+    ];
+  } else if (isFrontdesk) {
+    stats = [
+      {
+        label: "Appointments Today",
+        value: todaysApptCount,
+        icon: CalendarRange,
+        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        href: "/facility/appointments",
+        cta: "Open schedule",
+      },
+      {
+        label: "Providers on Duty (preview)",
+        value: provs.length,
+        icon: Users2,
+        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        href: "/facility/providers",
+        cta: "View providers",
+      },
+      {
+        label: "Notifications (7d)",
+        value: unreadCount,
+        icon: BellRing,
+        accent: "from-amber-600 via-orange-600 to-red-600",
+        href: "/notifications",
+        cta: unreadCount > 0 ? "View unread" : "View notifications",
+      },
+    ];
+  } else if (isClinical) {
+    stats = [
+      {
+        label: "Appointments Today",
+        value: todaysApptCount,
+        icon: CalendarRange,
+        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        href: "/facility/appointments",
+        cta: "Open schedule",
+      },
+      {
+        label: "Providers (preview)",
+        value: provs.length,
+        icon: Users2,
+        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        href: "/facility/providers",
+        cta: "View colleagues",
+      },
+      {
+        label: "Notifications (7d)",
+        value: unreadCount,
+        icon: BellRing,
+        accent: "from-amber-600 via-orange-600 to-red-600",
+        href: "/notifications",
+        cta: unreadCount > 0 ? "View unread" : "View notifications",
+      },
+    ];
+  } else {
+    // Generic fallback
+    stats = [
+      {
+        label: "Total Appointments",
+        value: todaysApptCount,
+        icon: CalendarRange,
+        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        href: "/facility/appointments",
+        cta: "Open schedule",
+      },
+      {
+        label: "Active Providers (preview)",
+          value: provs.length,
+        icon: Users2,
+        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        href: "/facility/providers",
+        cta: "View providers",
+      },
+      {
+        label: "Notifications (7d)",
+        value: unreadCount,
+        icon: BellRing,
+        accent: "from-amber-600 via-orange-600 to-red-600",
+        href: "/notifications",
+        cta: unreadCount > 0 ? "View unread" : "View notifications",
+      },
+    ];
+  }
 
   return (
     <main className="relative mx-auto max-w-7xl p-6 md:p-10">
@@ -196,79 +263,86 @@ export default async function FacilityDashboard() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             <Building2 className="h-3.5 w-3.5" />
-            Facility Workspace
+            {workspace.headerBadge}
           </div>
           <GreetingLine
             name={greetingTarget}
             className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
           />
-          <p className="mt-1 text-slate-600">
-            {facilitySubtitle(me?.role)}
-          </p>
+          <p className="mt-1 text-slate-600">{workspace.subtitle}</p>
         </div>
 
         <div className="flex items-center gap-3">
           <NotificationsBell href="/notifications" />
 
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/facility/encounters"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-            >
-              Facility Encounters
-            </Link>
-            <Link
-              href="/facility/vitals"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-            >
-              Facility Vitals
-            </Link>
-            <Link
-              href="/facility/labs"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Facility Lab Orders
-            </Link>
-            <Link
-              href="/facility/imaging"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Facility Imaging Requests
-            </Link>
-
-            <Link
-              href="/facility/pharmacy"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Facility Prescriptions
-            </Link>
-
-            <Link
-              href="/notifications"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Facility Notifications
-            </Link>
-
-            <Link
-              href="/facility/billing"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Facility Billing
-            </Link>
-
-            <Link
-              href="/facility/payments"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Facility Payments
-            </Link>
+            {/* Everyone: appointments shortcut */}
+            {(isOwner || isClinical || isFrontdesk) && (
+              <Link
+                href="/facility/appointments"
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+              >
+                Facility Appointments
+              </Link>
+            )}
+            {/* Clinical + owner: clinical modules */}
+            {(isOwner || isClinical) && (
+              <>
+                <Link
+                  href="/facility/encounters"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+                >
+                  Facility Encounters
+                </Link>
+                <Link
+                  href="/facility/vitals"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
+                >
+                  Facility Vitals
+                </Link>
+                <Link
+                  href="/facility/labs"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Facility Lab Orders
+                </Link>
+                <Link
+                  href="/facility/imaging"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Facility Imaging Requests
+                </Link>
+                <Link
+                  href="/facility/pharmacy"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Facility Prescriptions
+                </Link>
+              </>
+            )}
+            {/* Owner-only: finance shortcuts */}
+            {isOwner && (
+              <>
+                <Link
+                  href="/facility/billing"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Facility Billing
+                </Link>
+                <Link
+                  href="/facility/payments"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Facility Payments
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
 
       {/* Stat tiles */}
-      <section className="grid gap-4 md:grid-cols-3 mb-8">
+      <section className="mb-8 grid gap-4 md:grid-cols-3">
         {stats.map(({ label, value, icon: Icon, accent, href, cta }) => (
           <a
             key={label}
@@ -294,7 +368,7 @@ export default async function FacilityDashboard() {
           </a>
         ))}
 
-        {/* Scheduling tile (extra CTA) */}
+        {/* Scheduling tile (extra CTA) – everyone sees this */}
         <a
           href="/facility/appointments"
           className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
@@ -318,19 +392,25 @@ export default async function FacilityDashboard() {
         </a>
       </section>
 
-      {/* At-a-glance (dummy mini charts / health) */}
+      {/* At-a-glance mini charts */}
       <section className="mb-10 grid gap-4 lg:grid-cols-3">
         <DummyMiniChart
-          title="Check-in vs. No-shows (7d)"
+          title={
+            isFrontdesk ? "Check-ins vs No-shows (7d)" : "Throughput (7d)"
+          }
           icon={Activity}
           gradient="from-emerald-500/10 to-emerald-600/10"
-          hint="Trending up by 6% WoW"
+          hint={
+            isFrontdesk
+              ? "Check-in rate trending up ~6% WoW"
+              : "Volume trending up ~6% WoW"
+          }
         />
         <DummyMiniChart
-          title="Avg. wait time today"
+          title="Average wait time today"
           icon={LineChart}
           gradient="from-amber-500/10 to-amber-600/10"
-          hint="~ 11 mins avg"
+          hint="~ 11 minutes average"
         />
         <DummyMiniChart
           title="Orders → Results (last 24h)"
@@ -403,46 +483,101 @@ export default async function FacilityDashboard() {
 
         {/* Right rail: quick actions + providers preview + compliance */}
         <aside className="space-y-6">
-          {/* Quick actions */}
+          {/* Quick actions – role based */}
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
             <div className="p-5">
-              <h3 className="text-slate-900 font-medium">Quick Actions</h3>
+              <h3 className="text-slate-900 font-medium">Quick actions</h3>
               <p className="mt-1 text-sm text-slate-600">
-                Jump into common workflows.
+                Start common facility tasks faster. Options adjust to your role.
               </p>
+
               <div className="mt-4 grid gap-2">
+                {/* Everyone: schedule */}
                 <QuickLink
                   href="/facility/appointments/new"
                   icon={CalendarRange}
-                  label="Schedule Appointment"
+                  label={
+                    isFrontdesk
+                      ? "Schedule / update appointment"
+                      : "Schedule appointment"
+                  }
                 />
-                <QuickLink
-                  href="/encounters/new"
-                  icon={Stethoscope}
-                  label="New Encounter"
-                />
-                <QuickLink
-                  href="/facility/patients"
-                  icon={Users2}
-                  label="Patients"
-                />
-                <QuickLink
-                  href="/facility/labs/new"
-                  icon={FileText}
-                  label="Order Lab"
-                />
-                <QuickLink
-                  href="/facility/imaging/new"
-                  icon={ClipboardList}
-                  label="Request Imaging"
-                />
-                <QuickLink href="/facility/wards" icon={Bed} label="Wards" />
-                <QuickLink
-                  href="/facility/bed-history"
-                  icon={ClipboardClock}
-                  label="Ward Bed History"
-                />
+
+                {/* FRONTDESK workspace */}
+                {isFrontdesk && (
+                  <>
+                    <QuickLink
+                      href="/facility/appointments?view=today"
+                      icon={ClipboardClock}
+                      label="Check-in patient"
+                    />
+                    <QuickLink
+                      href="/facility/patients"
+                      icon={Users2}
+                      label="Patients"
+                    />
+                  </>
+                )}
+
+                {/* OWNER workspace (SUPER_ADMIN / ADMIN) */}
+                {isOwner && (
+                  <>
+                    <QuickLink
+                      href="/facility/patients"
+                      icon={Users2}
+                      label="Patients"
+                    />
+                    <QuickLink
+                      href="/facility/wards"
+                      icon={Bed}
+                      label="Wards & beds"
+                    />
+                    <QuickLink
+                      href="/facility/bed-history"
+                      icon={ClipboardClock}
+                      label="Ward bed history"
+                    />
+                    <QuickLink
+                      href="/facility/audit"
+                      icon={ClipboardClock}
+                      label="Audit logs"
+                    />
+                  </>
+                )}
+
+                {/* CLINICAL workspace (facility DOCTOR / NURSE / LAB / PHARMACY) */}
+                {isClinical && (
+                  <>
+                    <QuickLink
+                      href="/encounters/new"
+                      icon={Stethoscope}
+                      label="New encounter"
+                    />
+                    <QuickLink
+                      href="/facility/labs/new"
+                      icon={FileText}
+                      label="Order lab"
+                    />
+                    <QuickLink
+                      href="/facility/imaging/new"
+                      icon={ClipboardList}
+                      label="Request imaging"
+                    />
+                    <QuickLink
+                      href="/facility/patients"
+                      icon={Users2}
+                      label="Patients"
+                    />
+                    <QuickLink
+                      href="/facility/wards"
+                      icon={Bed}
+                      label="Wards & beds"
+                    />
+                  </>
+                )}
+
+                {/* Shared: notifications for all roles */}
                 <QuickLink
                   href="/notifications"
                   icon={BellRing}
@@ -455,50 +590,55 @@ export default async function FacilityDashboard() {
                       : undefined
                   }
                 />
-                <QuickLink
-                  href="/facility/audit"
-                  icon={ClipboardClock}
-                  label="Audit logs"
-                />
-                <Link
-                  href="/facility/reports"
-                  className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm transition hover:border-slate-400 hover:shadow-md"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">
-                        Reports & PDFs
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Download encounter, lab, imaging and billing PDFs.
-                      </p>
-                    </div>
-                    <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900">
-                      <FileText className="h-4 w-4 text-white" />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[11px] font-medium text-slate-500">
-                    Facility staff only
-                  </p>
-                </Link>
 
-                <Link
-                  href="/facility/emails"
-                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      Email outbox
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Review sent and failed emails, and trigger resends when
-                      needed.
-                    </p>
-                  </div>
-                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
-                    Open outbox
-                  </span>
-                </Link>
+                {/* OWNER-only heavy admin cards */}
+                {isOwner && (
+                  <>
+                    {/* Reports & PDFs */}
+                    <Link
+                      href="/facility/reports"
+                      className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm transition hover:border-slate-400 hover:shadow-md"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">
+                            Reports & PDFs
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Download encounter, lab, imaging and billing PDFs.
+                          </p>
+                        </div>
+                        <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900">
+                          <FileText className="h-4 w-4 text-white" />
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[11px] font-medium text-slate-500">
+                        Facility staff only
+                      </p>
+                    </Link>
+
+                    {/* Email outbox */}
+                    <Link
+                      href="/facility/emails"
+                      className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          Email outbox
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Review sent and failed emails, and trigger resends
+                          when needed.
+                        </p>
+                      </div>
+                      <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
+                        Open outbox
+                      </span>
+                    </Link>
+                  </>
+                )}
+
+                {/* Everyone: account + notification settings */}
                 <Link
                   href="/settings/profile"
                   className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
@@ -516,6 +656,7 @@ export default async function FacilityDashboard() {
                     Open profile
                   </span>
                 </Link>
+
                 <Link
                   href="/settings/notifications"
                   className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
@@ -537,7 +678,7 @@ export default async function FacilityDashboard() {
             </div>
           </div>
 
-          {/* Providers preview */}
+          {/* Providers snapshot */}
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <CardHead
               title="Providers (preview)"
@@ -547,7 +688,7 @@ export default async function FacilityDashboard() {
             />
             <ul className="divide-y divide-slate-100">
               {provs.length ? (
-                provs.map((p, i) => (
+                provs.slice(0, 4).map((p, i) => (
                   <li
                     key={p.id || i}
                     className="flex items-center justify-between p-4"
@@ -558,11 +699,18 @@ export default async function FacilityDashboard() {
                       </div>
                       <div>
                         <div className="font-medium text-slate-900">
-                          {p.full_name || p.name || "Provider"}
+                          {p.user?.full_name ||
+                            [p.user?.first_name, p.user?.last_name]
+                              .filter(Boolean)
+                              .join(" ") ||
+                            p.user?.email ||
+                            "Provider"}
                         </div>
-                        <div className="text-xs text-slate-500">
-                          {p.provider_type || "—"}
-                        </div>
+                        {p.provider_type && (
+                          <div className="text-xs text-slate-500">
+                            {p.provider_type.replaceAll("_", " ")}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <Link
@@ -576,14 +724,14 @@ export default async function FacilityDashboard() {
               ) : (
                 <li className="p-6">
                   <div className="text-sm text-slate-600">
-                    No providers to show.
+                    Providers linked to this facility will appear here.
                   </div>
                 </li>
               )}
             </ul>
           </div>
 
-          {/* Compliance note (dummy info) */}
+          {/* Facility status / compliance */}
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="h-1.5 w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600" />
             <div className="p-5">
@@ -607,7 +755,7 @@ export default async function FacilityDashboard() {
                 <span className="rounded-lg border border-slate-200 px-3 py-2">
                   Retention: <b>24 mo</b>
                 </span>
-                <span className="rounded-lg border border-slate-200 px-3 py-2 col-span-2">
+                <span className="col-span-2 rounded-lg border border-slate-200 px-3 py-2">
                   Encryption: <b>AES-256 at rest</b>
                 </span>
               </div>
@@ -616,7 +764,7 @@ export default async function FacilityDashboard() {
         </aside>
       </div>
 
-      {/* Notifications */}
+      {/* Notifications list */}
       <section className="mt-10">
         <CardHead
           title="Recent Notifications"
@@ -648,7 +796,7 @@ export default async function FacilityDashboard() {
         </div>
       </section>
 
-      {/* Footer CTA (dummy) */}
+      {/* Footer CTA */}
       <section className="mt-10">
         <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
           <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
@@ -675,7 +823,7 @@ export default async function FacilityDashboard() {
   );
 }
 
-/* ────────────────────────── UI helpers (UI-only) ────────────────────────── */
+/* ─────────────── UI helpers ─────────────── */
 
 function CardHead({ title, href, icon: Icon, actionLabel }) {
   return (
@@ -747,8 +895,9 @@ function StatusPill({ value }) {
     CHECK_IN: "bg-blue-50 text-blue-700 ring-blue-200",
     COMPLETE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
+    NO_SHOW: "bg-amber-50 text-amber-700 ring-amber-200",
   };
-  const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
+  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
   const label = (v || "—").replaceAll("_", " ");
   return (
     <span
@@ -790,7 +939,7 @@ function DummyMiniChart({ title, icon: Icon, gradient, hint }) {
             <Icon className="h-5 w-5 text-slate-700" />
           </div>
         </div>
-        <div className="grid grid-cols-12 items-end gap-1.5 h-20">
+        <div className="grid h-20 grid-cols-12 items-end gap-1.5">
           {Array.from({ length: 12 }).map((_, i) => (
             <div
               key={i}

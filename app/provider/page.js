@@ -69,53 +69,135 @@ function normalizeListAndCount(payload) {
   return { list: [], count: 0 };
 }
 
-// 🔹 Role helpers for provider dashboard
+// 🔹 Role + provider-type helpers for provider dashboard
 const PROVIDER_ROLES = ["DOCTOR", "NURSE", "LAB", "PHARMACY"];
 
-function providerDashboardTitle(role) {
-  switch (role) {
+const ROLE_TO_PROVIDER_TYPE = {
+  DOCTOR: "DOCTOR",
+  NURSE: "NURSE",
+  LAB: "LAB_SCIENTIST",
+  PHARMACY: "PHARMACIST",
+};
+
+const PROVIDER_TYPE_LABELS = {
+  DOCTOR: "Medical Doctor",
+  NURSE: "Nurse",
+  PHARMACIST: "Pharmacist",
+  LAB_SCIENTIST: "Medical Lab Scientist",
+  DENTIST: "Dentist",
+  OPTOMETRIST: "Optometrist",
+  PHYSIOTHERAPIST: "Physiotherapist",
+  OTHER: "Healthcare Provider",
+};
+
+function getProviderType(me, profile) {
+  if (profile?.provider_type) {
+    return profile.provider_type;
+  }
+  if (me?.role && ROLE_TO_PROVIDER_TYPE[me.role]) {
+    return ROLE_TO_PROVIDER_TYPE[me.role];
+  }
+  return me?.role || "OTHER";
+}
+
+function providerDashboardTitle(providerType) {
+  switch (providerType) {
     case "DOCTOR":
       return "Doctor Workspace";
+    case "DENTIST":
+      return "Dentist Workspace";
+    case "OPTOMETRIST":
+      return "Optometrist Workspace";
+    case "PHYSIOTHERAPIST":
+      return "Physiotherapist Workspace";
     case "NURSE":
       return "Nurse Workspace";
-    case "LAB":
-      return "Lab Scientist Workspace";
+    case "PHARMACIST":
     case "PHARMACY":
       return "Pharmacy Workspace";
+    case "LAB_SCIENTIST":
+    case "LAB":
+      return "Lab Scientist Workspace";
     default:
       return "Provider Workspace";
   }
 }
 
-function providerSubtitle(role) {
-  switch (role) {
+function providerSubtitle(providerType) {
+  switch (providerType) {
+    case "LAB_SCIENTIST":
     case "LAB":
       return "Today’s lab orders and recent updates.";
+    case "PHARMACIST":
     case "PHARMACY":
       return "Prescriptions and medication requests at a glance.";
     case "NURSE":
       return "Today’s schedule, observations, and tasks.";
+    case "DENTIST":
+      return "Dental appointments and procedure pipeline.";
+    case "OPTOMETRIST":
+      return "Eye-care appointments and clinical worklist.";
+    case "PHYSIOTHERAPIST":
+      return "Therapy sessions, follow-ups, and progress notes.";
     case "DOCTOR":
     default:
       return "Today’s schedule and recent clinical updates.";
   }
 }
 
-function providerPrimaryMetricLabel(role) {
-  switch (role) {
+function providerPrimaryMetricLabel(providerType) {
+  switch (providerType) {
+    case "LAB_SCIENTIST":
     case "LAB":
       return "Lab Orders Today";
+    case "PHARMACIST":
     case "PHARMACY":
       return "Prescriptions Today";
+    case "PHYSIOTHERAPIST":
+      return "Sessions Today";
+    case "DENTIST":
+      return "Dental Appointments Today";
     default:
       return "Appointments Today";
   }
 }
 
+function computeProfileCompletion(profile) {
+  if (!profile) return null;
+  const fields = [
+    "provider_type",
+    "license_number",
+    "license_council",
+    "license_expiry",
+    "years_experience",
+    "specialties",
+  ];
+  let filled = 0;
+  let total = fields.length;
+
+  for (const field of fields) {
+    if (field === "specialties") {
+      if (Array.isArray(profile.specialties) && profile.specialties.length) {
+        filled += 1;
+      }
+    } else if (profile[field]) {
+      filled += 1;
+    }
+  }
+
+  if (!total) return null;
+  return Math.round((filled / total) * 100);
+}
+
+function mapProviderTypeToLabel(providerType) {
+  return PROVIDER_TYPE_LABELS[providerType] || PROVIDER_TYPE_LABELS.OTHER;
+}
+
 export default async function ProviderDashboard() {
-  const [notifications, myAppointments, me] = await Promise.all([
+  const [notifications, myAppointments, providersRaw, me] = await Promise.all([
     safeFetchJSON("/notifications/items/?since=7d", []),
     safeFetchJSON("/appointments/?date=today&mine=true&limit=10", []),
+    safeFetchJSON("/providers/?limit=50", []),
     fetchMe(),
   ]);
 
@@ -142,6 +224,14 @@ export default async function ProviderDashboard() {
     myAppointments
   );
 
+  const { list: providersList } = normalizeListAndCount(providersRaw);
+  const myProfile =
+    providersList.find(
+      (p) => p.user && (p.user.id === me.id || p.user.pk === me.id)
+    ) || null;
+
+  const providerType = getProviderType(me, myProfile);
+
   const greetingName =
     [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
     me?.email ||
@@ -149,7 +239,7 @@ export default async function ProviderDashboard() {
 
   const stats = [
     {
-      label: providerPrimaryMetricLabel(me.role),
+      label: providerPrimaryMetricLabel(providerType),
       value: todaysApptCount,
       icon: CalendarRange,
       accent: "from-blue-600 via-indigo-600 to-violet-600",
@@ -175,6 +265,31 @@ export default async function ProviderDashboard() {
     },
   ];
 
+  const typeLabel = mapProviderTypeToLabel(providerType);
+  const specialtiesText =
+    myProfile && Array.isArray(myProfile.specialties)
+      ? myProfile.specialties
+          .map((s) =>
+            typeof s === "string" ? s : s.name || s.title || s.code || ""
+          )
+          .filter(Boolean)
+          .join(", ")
+      : "";
+  const profileCompletion = computeProfileCompletion(myProfile);
+  const licenseCouncil = myProfile?.license_council;
+  const licenseNumber = myProfile?.license_number;
+  const licenseExpiry = myProfile?.license_expiry;
+  const verificationStatus = (myProfile?.verification_status || "PENDING")
+    .toString()
+    .toUpperCase();
+  const verificationLabelMap = {
+    APPROVED: "Verified",
+    PENDING: "Pending review",
+    REJECTED: "Rejected",
+  };
+  const verificationLabel =
+    verificationLabelMap[verificationStatus] || verificationStatus;
+
   return (
     <main className="relative mx-auto max-w-7xl p-6 md:p-10">
       {/* soft background accents */}
@@ -186,14 +301,14 @@ export default async function ProviderDashboard() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             <Stethoscope className="h-3.5 w-3.5" />
-            {providerDashboardTitle(me.role)}
+            {providerDashboardTitle(providerType)}
           </div>
           <GreetingLine
             name={greetingName}
             className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
           />
           <p className="mt-1 text-slate-600">
-            {providerSubtitle(me.role)}
+            {providerSubtitle(providerType)}
           </p>
         </div>
 
@@ -229,7 +344,7 @@ export default async function ProviderDashboard() {
       </header>
 
       {/* Stat tiles */}
-      <section className="grid gap-4 md:grid-cols-3 mb-8">
+      <section className="mb-8 grid gap-4 md:grid-cols-3">
         {stats.map(
           ({
             label,
@@ -359,7 +474,7 @@ export default async function ProviderDashboard() {
           </div>
         </section>
 
-        {/* Right rail: quick actions + profile tip + compliance */}
+        {/* Right rail: quick actions + profile + compliance */}
         <aside className="space-y-6">
           {/* Quick actions */}
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -468,7 +583,7 @@ export default async function ProviderDashboard() {
             </div>
           </div>
 
-          {/* Profile completeness (dummy) */}
+          {/* Profile & Verification – now driven by provider profile */}
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="h-1.5 w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600" />
             <div className="p-5">
@@ -481,19 +596,38 @@ export default async function ProviderDashboard() {
                     Profile & Verification
                   </h3>
                   <p className="text-xs text-slate-500">
-                    License on file · Expires: <b>2026-03-31</b>
+                    {licenseNumber ? (
+                      <>
+                        License on file
+                        {licenseExpiry && (
+                          <>
+                            {" · Expires: "}
+                            <b>{licenseExpiry}</b>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      "License details not complete yet."
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Role: <b>{typeLabel}</b> · Status: <b>{verificationLabel}</b>
                   </p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 text-xs">
                 <span className="rounded-lg border border-slate-200 px-3 py-2">
-                  Profile: <b>92%</b>
+                  Profile:{" "}
+                  <b>
+                    {profileCompletion != null ? `${profileCompletion}%` : "—"}
+                  </b>
                 </span>
                 <span className="rounded-lg border border-slate-200 px-3 py-2">
-                  e-Rx: <b>Enabled</b>
+                  e-Rx: <b>Configured</b>
                 </span>
-                <span className="rounded-lg border border-slate-200 px-3 py-2 col-span-3">
-                  Council: <b>MDCN</b> · Specialty: <b>General Practice</b>
+                <span className="col-span-3 rounded-lg border border-slate-200 px-3 py-2">
+                  Council: <b>{licenseCouncil || "—"}</b> · Specialty:{" "}
+                  <b>{specialtiesText || "—"}</b>
                 </span>
               </div>
             </div>
