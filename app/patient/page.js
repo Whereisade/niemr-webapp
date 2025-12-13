@@ -1,7 +1,7 @@
-// app/patient/page.js
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import GreetingLine from "@/components/GreetingLine";
 import NotificationsBell from "@/components/notifications/NotificationsBell";
@@ -54,6 +54,15 @@ export default async function PatientDashboard() {
     safeFetchJSON("/notifications/items/?since=7d", []),
     fetchMe(),
   ]);
+
+  // 🔐 Only patients should access /patient
+  if (!me) {
+    redirect("/login/patient");
+  }
+
+  if (me.role !== "PATIENT") {
+    redirect("/login/patient");
+  }
 
   const appts = Array.isArray(myAppointments)
     ? myAppointments

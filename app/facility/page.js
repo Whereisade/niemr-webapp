@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import GreetingLine from "@/components/GreetingLine";
 import LogoutButton from "@/components/LogoutButton";
@@ -76,6 +77,37 @@ function normalizeListAndCount(payload) {
   return { list: [], count: 0 };
 }
 
+// 🔹 Facility role helpers
+const FACILITY_ROLES = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "FRONTDESK",
+  "DOCTOR",
+  "NURSE",
+  "LAB",
+  "PHARMACY",
+];
+
+function facilitySubtitle(role) {
+  if (!role) {
+    return "Monitor operations, clinical load, and financials across the facility.";
+  }
+
+  if (role === "FRONTDESK") {
+    return "Manage bookings, arrivals, and patient check-ins.";
+  }
+
+  if (role === "SUPER_ADMIN" || role === "ADMIN") {
+    return "Monitor operations, clinical load, and financials across the facility.";
+  }
+
+  if (["DOCTOR", "NURSE", "LAB", "PHARMACY"].includes(role)) {
+    return "See a quick overview of today’s activity at this facility.";
+  }
+
+  return "Facility workspace.";
+}
+
 export default async function FacilityDashboard() {
   const [notifications, todaysAppointments, providers, me] = await Promise.all([
     safeFetchJSON("/notifications/items/?since=7d", []),
@@ -83,6 +115,15 @@ export default async function FacilityDashboard() {
     safeFetchJSON("/providers/?limit=5", []),
     fetchMe(),
   ]);
+
+  // 🔐 Only facility-linked staff should see this dashboard
+  if (!me) {
+    redirect("/login/facility");
+  }
+
+  if (!FACILITY_ROLES.includes(me.role)) {
+    redirect("/login/facility");
+  }
 
   const notifList = Array.isArray(notifications)
     ? notifications
@@ -119,7 +160,6 @@ export default async function FacilityDashboard() {
 
   const stats = [
     {
-      // CHANGED LABEL HERE
       label: "Total Appointments",
       value: todaysApptCount,
       icon: CalendarRange,
@@ -163,14 +203,13 @@ export default async function FacilityDashboard() {
             className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
           />
           <p className="mt-1 text-slate-600">
-            Monitor operations, clinical load, and financials across the
-            facility.
+            {facilitySubtitle(me?.role)}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <NotificationsBell href="/notifications" />
-         
+
           <div className="flex flex-wrap gap-2">
             <Link
               href="/facility/encounters"
@@ -388,17 +427,17 @@ export default async function FacilityDashboard() {
                   icon={Users2}
                   label="Patients"
                 />
-                <QuickLink href="/facility/labs/new" icon={FileText} label="Order Lab" />
+                <QuickLink
+                  href="/facility/labs/new"
+                  icon={FileText}
+                  label="Order Lab"
+                />
                 <QuickLink
                   href="/facility/imaging/new"
                   icon={ClipboardList}
                   label="Request Imaging"
                 />
-                <QuickLink
-                  href="/facility/wards"
-                  icon={Bed}
-                  label="Wards"
-                />
+                <QuickLink href="/facility/wards" icon={Bed} label="Wards" />
                 <QuickLink
                   href="/facility/bed-history"
                   icon={ClipboardClock}

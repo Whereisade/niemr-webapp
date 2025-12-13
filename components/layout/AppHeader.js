@@ -30,6 +30,9 @@ const STAFF_ROLES = [
   "FRONTDESK",
 ];
 
+// 🔹 Clinical provider roles (with or without facility)
+const PROVIDER_ROLES = ["DOCTOR", "NURSE", "LAB", "PHARMACY"];
+
 function classNames(...xs) {
   return xs.filter(Boolean).join(" ");
 }
@@ -42,7 +45,7 @@ function formatRole(role) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// Decide which nav items to show based on user role
+// Decide which nav items to show based on user role + facility
 function buildNavForUser(user) {
   if (!user) {
     // Guest
@@ -53,28 +56,45 @@ function buildNavForUser(user) {
     ];
   }
 
+  // Patient portal
   if (user.role === "PATIENT") {
     return [
       { href: "/patient", label: "Overview", icon: LayoutDashboard },
-      { href: "/patient/appointments", label: "Appointments", icon: CalendarClock },
+      {
+        href: "/patient/appointments",
+        label: "Appointments",
+        icon: CalendarClock,
+      },
       { href: "/patient/labs", label: "Labs", icon: FlaskConical },
       { href: "/patient/billing", label: "Billing", icon: CreditCard },
     ];
   }
 
-  if (STAFF_ROLES.includes(user.role)) {
+  const hasFacility = !!user.facility;
+
+  // Facility staff (Super admin, admin, clinical or frontdesk WITH facility)
+  if (hasFacility && STAFF_ROLES.includes(user.role)) {
     return [
       { href: "/facility", label: "Facility", icon: LayoutDashboard },
-      { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
+      {
+        href: "/facility/appointments",
+        label: "Appointments",
+        icon: CalendarClock,
+      },
       { href: "/facility/labs", label: "Labs", icon: FlaskConical },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
     ];
   }
 
-  if (user.role === "PROVIDER") {
+  // Independent providers (no facility, but clinical provider role)
+  if (!hasFacility && PROVIDER_ROLES.includes(user.role)) {
     return [
       { href: "/provider", label: "Worklist", icon: LayoutDashboard },
-      { href: "/provider/appointments", label: "Appointments", icon: CalendarClock },
+      {
+        href: "/provider/appointments",
+        label: "Appointments",
+        icon: CalendarClock,
+      },
       { href: "/provider/labs", label: "Labs", icon: FlaskConical },
     ];
   }
@@ -88,13 +108,12 @@ export default function AppHeader() {
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  // ⚠️ Expects /api/auth/me to return the current user or 401/404
   useEffect(() => {
     let cancelled = false;
 
     async function fetchUser() {
       try {
-        const res = await fetch("/accounts/me/", {
+        const res = await fetch("/api/proxy/accounts/me/", {
           method: "GET",
           credentials: "include",
         });
@@ -177,10 +196,7 @@ export default function AppHeader() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={classNames(
-                  baseClasses,
-                  active && "text-blue-700"
-                )}
+                className={classNames(baseClasses, active && "text-blue-700")}
               >
                 {Icon && <Icon className="h-4 w-4" />}
                 <span>{item.label}</span>

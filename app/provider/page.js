@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import GreetingLine from "@/components/GreetingLine";
 import NotificationsBell from "@/components/notifications/NotificationsBell";
@@ -68,12 +69,70 @@ function normalizeListAndCount(payload) {
   return { list: [], count: 0 };
 }
 
+// 🔹 Role helpers for provider dashboard
+const PROVIDER_ROLES = ["DOCTOR", "NURSE", "LAB", "PHARMACY"];
+
+function providerDashboardTitle(role) {
+  switch (role) {
+    case "DOCTOR":
+      return "Doctor Workspace";
+    case "NURSE":
+      return "Nurse Workspace";
+    case "LAB":
+      return "Lab Scientist Workspace";
+    case "PHARMACY":
+      return "Pharmacy Workspace";
+    default:
+      return "Provider Workspace";
+  }
+}
+
+function providerSubtitle(role) {
+  switch (role) {
+    case "LAB":
+      return "Today’s lab orders and recent updates.";
+    case "PHARMACY":
+      return "Prescriptions and medication requests at a glance.";
+    case "NURSE":
+      return "Today’s schedule, observations, and tasks.";
+    case "DOCTOR":
+    default:
+      return "Today’s schedule and recent clinical updates.";
+  }
+}
+
+function providerPrimaryMetricLabel(role) {
+  switch (role) {
+    case "LAB":
+      return "Lab Orders Today";
+    case "PHARMACY":
+      return "Prescriptions Today";
+    default:
+      return "Appointments Today";
+  }
+}
+
 export default async function ProviderDashboard() {
   const [notifications, myAppointments, me] = await Promise.all([
     safeFetchJSON("/notifications/items/?since=7d", []),
     safeFetchJSON("/appointments/?date=today&mine=true&limit=10", []),
     fetchMe(),
   ]);
+
+  // 🔐 Basic access control
+  if (!me) {
+    redirect("/login/provider");
+  }
+
+  // Backend roles that represent a clinical provider
+  if (!PROVIDER_ROLES.includes(me.role)) {
+    // If they’re facility staff, push them to facility dashboard instead
+    if (me.role !== "PATIENT" && me.facility) {
+      redirect("/facility");
+    }
+    // Otherwise, they shouldn’t be here
+    redirect("/login/provider");
+  }
 
   const notifList = Array.isArray(notifications)
     ? notifications
@@ -90,8 +149,7 @@ export default async function ProviderDashboard() {
 
   const stats = [
     {
-      // CHANGED LABEL
-      label: "Total Appointments",
+      label: providerPrimaryMetricLabel(me.role),
       value: todaysApptCount,
       icon: CalendarRange,
       accent: "from-blue-600 via-indigo-600 to-violet-600",
@@ -128,14 +186,14 @@ export default async function ProviderDashboard() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             <Stethoscope className="h-3.5 w-3.5" />
-            Provider Workspace
+            {providerDashboardTitle(me.role)}
           </div>
           <GreetingLine
             name={greetingName}
             className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
           />
           <p className="mt-1 text-slate-600">
-            Today’s schedule and recent updates.
+            {providerSubtitle(me.role)}
           </p>
         </div>
 

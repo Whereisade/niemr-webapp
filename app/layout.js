@@ -12,6 +12,7 @@ import {
 import SmartHomeLink from "@/components/SmartHomeLink";
 
 import LogoutButton from "@/components/LogoutButton";
+import AppHeader from "@/components/layout/AppHeader";
 
 export const metadata = { title: "NIEMR", description: "NIEMR Frontend" };
 
@@ -29,10 +30,10 @@ export default function RootLayout({ children }) {
           Skip to content
         </a>
 
-        {/* Header */}
-        <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        
+        {/* <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
           <div className="container h-16 flex items-center justify-between">
-            {/* Brand */}
+            
             <a href="/" className="group inline-flex items-center gap-3">
               <span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
                 <Activity className="h-5 w-5" />
@@ -47,7 +48,7 @@ export default function RootLayout({ children }) {
               </span>
             </a>
 
-            {/* Desktop nav */}
+            
             <nav className="hidden md:flex items-center gap-6 text-sm">
               <SmartHomeLink className="inline-flex items-center gap-2 text-slate-700 hover:text-blue-700 transition-colors">
                 <Home className="h-4 w-4" />
@@ -71,7 +72,7 @@ export default function RootLayout({ children }) {
               <LogoutButton />
             </nav>
 
-            {/* Mobile nav */}
+            
             <details className="md:hidden relative">
               <summary className="list-none inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm hover:border-blue-200 cursor-pointer">
                 <Menu className="h-5 w-5 text-slate-700" />
@@ -105,9 +106,10 @@ export default function RootLayout({ children }) {
             </details>
           </div>
 
-          {/* Accent rule */}
+          
           <div className="h-px bg-gradient-to-r from-blue-600/20 via-slate-200 to-transparent" />
-        </header>
+        </header> */}
+        <AppHeader />
 
         {/* Main */}
         <main id="main" className="container py-10">
