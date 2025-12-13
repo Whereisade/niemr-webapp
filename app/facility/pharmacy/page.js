@@ -1,9 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { usePrescriptions } from "@/lib/usePrescriptions";
-import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
 import {
   Pill,
   Filter,
@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
+import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -355,6 +356,7 @@ export default function FacilityPharmacyPage() {
                 <Th>Status</Th>
                 <Th>Note</Th>
                 <Th>Details</Th>
+                <Th>Billing</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -425,13 +427,25 @@ export default function FacilityPharmacyPage() {
                           View
                         </button>
                       </Td>
+                      <Td>
+                        {canDispense && rx.patient ? (
+                          <Link
+                            href={`/facility/billing?patient=${rx.patient}&prescription=${rx.id}`}
+                            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800"
+                          >
+                            View billing
+                          </Link>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
+                        )}
+                      </Td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
