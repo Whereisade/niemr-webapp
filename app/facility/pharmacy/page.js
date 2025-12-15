@@ -246,12 +246,21 @@ export default function FacilityPharmacyPage() {
 
         {/* Right side: catalog button + stats */}
         <div className="flex flex-col items-end gap-3">
+          <div className="flex flex-wrap justify-end gap-2">
           <Link
             href="/facility/pharmacy/catalog"
             className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
           >
             Add / view catalog
           </Link>
+          <Link
+            href="/facility/pharmacy/stock"
+            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+          >
+            Stock
+          </Link>
+
+          </div>
 
           {/* High-level stats (for current page) */}
           <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">

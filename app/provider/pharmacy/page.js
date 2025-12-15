@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { usePrescriptions } from "@/lib/usePrescriptions";
@@ -96,7 +97,7 @@ export default function ProviderPharmacyPage() {
   const [meLoading, setMeLoading] = useState(true);
   const [onlyMine, setOnlyMine] = useState(true);
 
-  // NEW: details modal state
+  // Details modal state
   const [detailsId, setDetailsId] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -247,26 +248,44 @@ export default function ProviderPharmacyPage() {
           <p className="mt-1 text-sm text-slate-600">{headerSubtitle}</p>
         </div>
 
-        {/* Page-level stats (current page, filtered) */}
-        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-          <StatCard
-            label={onlyMine ? "My pending (page)" : "Pending (page)"}
-            value={stats.pendingOnPage}
-            icon={ClipboardList}
-            accent="from-sky-500 via-sky-600 to-sky-700"
-          />
-          <StatCard
-            label={onlyMine ? "My dispensed (page)" : "Dispensed (page)"}
-            value={stats.dispensed}
-            icon={Activity}
-            accent="from-emerald-500 via-emerald-600 to-emerald-700"
-          />
-          <StatCard
-            label="Total results (raw)"
-            value={total}
-            icon={UsersRound}
-            accent="from-slate-500 via-slate-600 to-slate-700"
-          />
+        {/* Actions + stats */}
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link
+              href="/provider/pharmacy/catalog"
+              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+            >
+              View catalog
+            </Link>
+            <Link
+              href="/provider/pharmacy/stock"
+              className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50"
+            >
+              View stock
+            </Link>
+          </div>
+
+          {/* Page-level stats (current page, filtered) */}
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            <StatCard
+              label={onlyMine ? "My pending (page)" : "Pending (page)"}
+              value={stats.pendingOnPage}
+              icon={ClipboardList}
+              accent="from-sky-500 via-sky-600 to-sky-700"
+            />
+            <StatCard
+              label={onlyMine ? "My dispensed (page)" : "Dispensed (page)"}
+              value={stats.dispensed}
+              icon={Activity}
+              accent="from-emerald-500 via-emerald-600 to-emerald-700"
+            />
+            <StatCard
+              label="Total results (raw)"
+              value={total}
+              icon={UsersRound}
+              accent="from-slate-500 via-slate-600 to-slate-700"
+            />
+          </div>
         </div>
       </header>
 
