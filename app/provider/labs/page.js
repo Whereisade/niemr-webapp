@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
 import { downloadLabPdf } from "@/lib/reports";
+import {
+  markLabOrderCollected,
+  cancelLabOrder,
+} from "@/lib/labsStatusActions";
 import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
 import LabOrderAttachmentsModal from "@/components/labs/LabOrderAttachmentsModal";
 import {
@@ -17,6 +21,7 @@ import {
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
+import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -40,6 +45,8 @@ export default function ProviderLabOrdersPage() {
   const patient = sp.get("patient") || "";
   const s = sp.get("s") || "";
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   // Backend scopes by facility / role in LabOrderViewSet.get_queryset()
   const { data, error, isLoading } = useLabOrders({
     page,
@@ -47,6 +54,7 @@ export default function ProviderLabOrdersPage() {
     status,
     patient,
     s,
+    refreshKey,
   });
 
   const [downloadingId, setDownloadingId] = useState(null);
@@ -55,11 +63,65 @@ export default function ProviderLabOrdersPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsOrderId, setDetailsOrderId] = useState(null);
 
-  // NEW: attachments modal state
+  // attachments modal state
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [attachmentsOrderId, setAttachmentsOrderId] = useState(null);
 
-  // 🔧 Normalize data into a proper rows array (handles BFF numeric-key object)
+  // current user (for role gating)
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/proxy/accounts/me/", {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        if (!res.ok) {
+          throw new Error("Failed to load current user");
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setMe(json);
+        }
+      } catch (err) {
+        console.error(
+          "Failed to fetch /accounts/me/ in provider labs page:",
+          err
+        );
+        if (!cancelled) {
+          setMe(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setMeLoading(false);
+        }
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const meRole = (me?.role || "").toUpperCase();
+  const canCollect =
+    meRole === "LAB" || meRole === "ADMIN" || meRole === "SUPER_ADMIN";
+  const canCancel =
+    meRole === "DOCTOR" ||
+    meRole === "NURSE" ||
+    meRole === "ADMIN" ||
+    meRole === "SUPER_ADMIN";
+
+  const reload = () => setRefreshKey((k) => k + 1);
+
+  // Normalize data into a proper rows array (handles BFF numeric-key object)
   let rows = [];
 
   if (Array.isArray(data?.results)) {
@@ -317,7 +379,7 @@ export default function ProviderLabOrdersPage() {
                       View
                     </button>
 
-                    {/* NEW: Attachments button → opens attachments modal */}
+                    {/* Attachments button → opens attachments modal */}
                     <button
                       type="button"
                       onClick={() => {
@@ -328,6 +390,67 @@ export default function ProviderLabOrdersPage() {
                     >
                       Attachments
                     </button>
+
+                    {/* Mark sample collected – Lab / Admin only */}
+                    {String(order.status || "").toUpperCase() ===
+                      "PENDING" &&
+                      canCollect && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await markLabOrderCollected(order.id);
+                              reload();
+                            } catch (err) {
+                              console.error(
+                                "Failed to mark lab order collected",
+                                err
+                              );
+                              alert(
+                                err?.message ||
+                                  "Failed to mark sample collected."
+                              );
+                            }
+                          }}
+                          className="text-xs text-sky-700 hover:underline"
+                        >
+                          Mark sample collected
+                        </button>
+                      )}
+
+                    {/* Cancel order – Doctor/Nurse/Admin/Super-admin */}
+                    {String(order.status || "").toUpperCase() ===
+                      "PENDING" &&
+                      canCancel && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                "Cancel this lab order? This cannot be undone."
+                              )
+                            ) {
+                              return;
+                            }
+                            try {
+                              await cancelLabOrder(order.id);
+                              reload();
+                            } catch (err) {
+                              console.error(
+                                "Failed to cancel lab order",
+                                err
+                              );
+                              alert(
+                                err?.message ||
+                                  "Failed to cancel lab order. Please try again."
+                              );
+                            }
+                          }}
+                          className="text-xs text-rose-700 hover:underline"
+                        >
+                          Cancel order
+                        </button>
+                      )}
 
                     {/* PDF button */}
                     <button
@@ -396,7 +519,7 @@ export default function ProviderLabOrdersPage() {
         onClose={() => setDetailsOpen(false)}
       />
 
-      {/* NEW: Lab order attachments modal */}
+      {/* Lab order attachments modal */}
       <LabOrderAttachmentsModal
         orderId={attachmentsOrderId}
         open={attachmentsOpen}
@@ -429,18 +552,10 @@ function StatTile({ icon: Icon, label, value, accent }) {
 }
 
 function StatusPill({ value }) {
-  const v = String(value || "").toUpperCase();
-  const map = {
-    PENDING: "bg-amber-50 text-amber-700 ring-amber-200",
-    COLLECTED: "bg-blue-50 text-blue-700 ring-blue-200",
-    REPORTED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
-  };
-  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
-  const label = (v || "—").replaceAll("_", " ");
+  const { label, badgeClass } = getLabStatusMeta(value);
   return (
     <span
-      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${badgeClass}`}
     >
       {label}
     </span>

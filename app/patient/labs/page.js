@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -32,9 +33,7 @@ function normalizeLabOrdersPayload(body) {
 
   // Weird numeric-key object from BFF spread
   if (body && typeof body === "object") {
-    const numericKeys = Object.keys(body).filter((k) =>
-      /^\d+$/.test(k)
-    );
+    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
     if (numericKeys.length) {
       return numericKeys
         .sort((a, b) => Number(a) - Number(b))
@@ -43,21 +42,6 @@ function normalizeLabOrdersPayload(body) {
   }
 
   return [];
-}
-
-function buildStatusPillClasses(status) {
-  switch (status) {
-    case "PENDING":
-      return "bg-amber-50 text-amber-700";
-    case "COLLECTED":
-      return "bg-blue-50 text-blue-700";
-    case "REPORTED":
-      return "bg-emerald-50 text-emerald-700";
-    case "CANCELLED":
-      return "bg-slate-100 text-slate-600";
-    default:
-      return "bg-slate-50 text-slate-600";
-  }
 }
 
 export default function PatientLabOrdersPage() {
@@ -84,7 +68,7 @@ export default function PatientLabOrdersPage() {
         const qs = new URLSearchParams();
         qs.set("page", String(page));
         qs.set("limit", String(limit));
-        qs.set("mine", "true"); // 👈 scope to this patient if backend honours it
+        qs.set("mine", "true"); // scope to this patient if backend honours it
         if (status) qs.set("status", status);
 
         const body = await apiFetch(`/labs/orders/?${qs.toString()}`, {
@@ -150,8 +134,8 @@ export default function PatientLabOrdersPage() {
             My lab tests
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            View lab tests that have been ordered for you, including
-            their status and when results were reported.
+            View lab tests that have been ordered for you, including their
+            status and when results were reported.
           </p>
         </div>
 
@@ -162,9 +146,9 @@ export default function PatientLabOrdersPage() {
             className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none"
           >
             <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="COLLECTED">Collected</option>
-            <option value="REPORTED">Reported</option>
+            <option value="PENDING">Pending collection</option>
+            <option value="IN_PROGRESS">Sample collected</option>
+            <option value="COMPLETED">Reported</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
         </div>
@@ -244,6 +228,8 @@ export default function PatientLabOrdersPage() {
                     order.ordered_by ||
                     "—";
 
+                  const { label, badgeClass } = getLabStatusMeta(order.status);
+
                   return (
                     <tr key={order.id} className="hover:bg-slate-50">
                       <td className="p-3 text-xs text-slate-800">
@@ -253,13 +239,13 @@ export default function PatientLabOrdersPage() {
                         {testsText}
                       </td>
                       <td className="p-3 text-xs text-slate-800">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${buildStatusPillClasses(
-                            order.status
-                          )}`}
-                        >
-                          {order.status || "—"}
-                        </span>
+                        {(() => (
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}
+                          >
+                            {label}
+                          </span>
+                        ))()}
                       </td>
                       <td className="p-3 text-xs text-slate-800">
                         {facilityName}

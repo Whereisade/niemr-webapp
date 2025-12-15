@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
 import { downloadLabPdf } from "@/lib/reports";
-import { updateLabOrderStatus } from "@/lib/labsStatusActions";
+import {
+  markLabOrderCollected,
+  cancelLabOrder,
+} from "@/lib/labsStatusActions";
 import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
 import LabOrderAttachmentsModal from "@/components/labs/LabOrderAttachmentsModal";
 import {
@@ -27,6 +30,9 @@ import {
   getFacilityWorkspaceConfig,
 } from "@/lib/roleUiConfig";
 
+// 🔹 unified lab status UI helper
+import { getLabStatusMeta } from "@/lib/LabsUiConfig";
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -38,16 +44,7 @@ function formatDateTime(value) {
   }
 }
 
-function statusPillClasses(status) {
-  const v = String(status || "").toUpperCase();
-  const map = {
-    PENDING: "bg-amber-50 text-amber-700 ring-amber-200",
-    COLLECTED: "bg-sky-50 text-sky-700 ring-sky-200",
-    REPORTED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
-  };
-  return map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
-}
+const normalizeStatus = (s) => String(s || "").toUpperCase();
 
 export default function FacilityLabOrdersPage() {
   const sp = useSearchParams();
@@ -60,6 +57,8 @@ export default function FacilityLabOrdersPage() {
   const patient = sp.get("patient") || "";
   const s = sp.get("s") || "";
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   // Backend scopes by user.facility_id for staff roles
   const { data, error, isLoading } = useLabOrders({
     page,
@@ -67,6 +66,7 @@ export default function FacilityLabOrdersPage() {
     status,
     patient,
     s,
+    refreshKey,
   });
 
   const [downloadingId, setDownloadingId] = useState(null);
@@ -118,6 +118,17 @@ export default function FacilityLabOrdersPage() {
   const workspace = me ? getFacilityWorkspaceConfig(me.role) : null;
   const isOwner = workspace?.type === FACILITY_WORKSPACE_TYPES.OWNER;
 
+  const meRole = (me?.role || "").toUpperCase();
+  const canCollect =
+    meRole === "LAB" || meRole === "ADMIN" || meRole === "SUPER_ADMIN";
+  const canCancel =
+    meRole === "DOCTOR" ||
+    meRole === "NURSE" ||
+    meRole === "ADMIN" ||
+    meRole === "SUPER_ADMIN";
+
+  const reload = () => setRefreshKey((k) => k + 1);
+
   // Normalize rows
   let rows = [];
   if (Array.isArray(data?.results)) {
@@ -135,9 +146,16 @@ export default function FacilityLabOrdersPage() {
 
   const total = Number(data?.count ?? rows.length);
 
-  const pendingCount = rows.filter((o) => o.status === "PENDING").length;
-  const collectedCount = rows.filter((o) => o.status === "COLLECTED").length;
-  const reportedCount = rows.filter((o) => o.status === "REPORTED").length;
+  // 🔹 Use real backend statuses
+  const pendingCount = rows.filter(
+    (o) => normalizeStatus(o.status) === "PENDING"
+  ).length;
+  const collectedCount = rows.filter(
+    (o) => normalizeStatus(o.status) === "IN_PROGRESS"
+  ).length; // "Sample collected / in progress"
+  const reportedCount = rows.filter(
+    (o) => normalizeStatus(o.status) === "COMPLETED"
+  ).length; // "Reported"
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -169,28 +187,6 @@ export default function FacilityLabOrdersPage() {
       alert(err?.message || "Failed to download lab report.");
     } finally {
       setDownloadingId(null);
-    }
-  }
-
-  async function handleStatusChange(orderId, nextStatus) {
-    if (!orderId || !nextStatus) return;
-
-    if (nextStatus === "CANCELLED") {
-      const ok = window.confirm(
-        "Are you sure you want to cancel this lab order?"
-      );
-      if (!ok) return;
-    }
-
-    try {
-      await updateLabOrderStatus(orderId, nextStatus);
-      router.refresh();
-    } catch (err) {
-      console.error("Failed to update lab order status", err);
-      alert(
-        err?.message ||
-          "Failed to update lab order status. Please try again."
-      );
     }
   }
 
@@ -238,7 +234,7 @@ export default function FacilityLabOrdersPage() {
             Facility Lab Orders
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Track all lab tests requested for patients in this facility.
+            Lab scientist worklist for all tests requested in this facility.
           </p>
         </div>
 
@@ -278,7 +274,7 @@ export default function FacilityLabOrdersPage() {
           accent="from-amber-600 via-orange-500 to-red-500"
         />
         <StatTile
-          label="Collected"
+          label="In progress"
           value={collectedCount}
           accent="from-sky-600 via-cyan-500 to-teal-500"
         />
@@ -332,8 +328,8 @@ export default function FacilityLabOrdersPage() {
             >
               <option value="">All statuses</option>
               <option value="PENDING">Pending</option>
-              <option value="COLLECTED">Collected</option>
-              <option value="REPORTED">Reported</option>
+              <option value="IN_PROGRESS">In progress</option>
+              <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
             </select>
 
@@ -352,7 +348,7 @@ export default function FacilityLabOrdersPage() {
 
       {/* Table card */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify_between border-b border-slate-200/70 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-slate-200/70 px-5 py-4">
           <div className="flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
               <Activity className="h-5 w-5 text-slate-700" />
@@ -383,9 +379,7 @@ export default function FacilityLabOrdersPage() {
             <tbody className="divide-y divide-slate-100 bg-white">
               {rows.length ? (
                 rows.map((order) => {
-                  const labelStatus = order.status || "—";
-                  const pillCls = statusPillClasses(order.status);
-
+                  const statusCode = normalizeStatus(order.status);
                   return (
                     <tr
                       key={order.id}
@@ -419,17 +413,26 @@ export default function FacilityLabOrdersPage() {
                       </Td>
 
                       <Td>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ${pillCls}`}
-                        >
-                          {labelStatus}
-                        </span>
+                        {(() => {
+                          const { label, badgeClass } = getLabStatusMeta(
+                            order.status
+                          );
+                          return (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })()}
                       </Td>
 
                       <Td>
                         <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           <Clock className="h-3.5 w-3.5 text-slate-400" />
-                          {formatDateTime(order.ordered_at || order.created_at)}
+                          {formatDateTime(
+                            order.ordered_at || order.created_at
+                          )}
                         </div>
                       </Td>
 
@@ -447,6 +450,7 @@ export default function FacilityLabOrdersPage() {
 
                       <Td>
                         <div className="flex flex-wrap gap-2">
+                          {/* Always allow details + attachments */}
                           <Link
                             href={`/facility/labs/${order.id}`}
                             className="text-xs font-medium text-blue-600 hover:underline"
@@ -454,39 +458,69 @@ export default function FacilityLabOrdersPage() {
                             View
                           </Link>
 
-                          {order.status === "PENDING" && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleStatusChange(order.id, "COLLECTED")
-                                }
-                                className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100"
-                              >
-                                Mark collected
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleStatusChange(order.id, "CANCELLED")
-                                }
-                                className="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          )}
-
-                          {order.status === "COLLECTED" && (
+                          {/* 🔹 Lab workflow actions */}
+                          {statusCode === "PENDING" && canCollect && (
                             <button
                               type="button"
-                              onClick={() =>
-                                handleStatusChange(order.id, "REPORTED")
-                              }
+                              onClick={async () => {
+                                try {
+                                  await markLabOrderCollected(order.id);
+                                  reload();
+                                } catch (err) {
+                                  console.error(
+                                    "Failed to mark lab order collected",
+                                    err
+                                  );
+                                  alert(
+                                    err?.message ||
+                                      "Failed to mark sample collected."
+                                  );
+                                }
+                              }}
+                              className="text-xs text-sky-700 hover:underline"
+                            >
+                              Mark sample collected
+                            </button>
+                          )}
+
+                          {statusCode === "PENDING" && canCancel && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (
+                                  !window.confirm(
+                                    "Cancel this lab order? This cannot be undone."
+                                  )
+                                ) {
+                                  return;
+                                }
+                                try {
+                                  await cancelLabOrder(order.id);
+                                  reload();
+                                } catch (err) {
+                                  console.error(
+                                    "Failed to cancel lab order",
+                                    err
+                                  );
+                                  alert(
+                                    err?.message ||
+                                      "Failed to cancel lab order. Please try again."
+                                  );
+                                }
+                              }}
+                              className="text-xs text-rose-700 hover:underline"
+                            >
+                              Cancel order
+                            </button>
+                          )}
+
+                          {statusCode === "IN_PROGRESS" && canCollect && (
+                            <Link
+                              href={`/facility/labs/${order.id}`}
                               className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
                             >
-                              Mark reported
-                            </button>
+                              Enter result
+                            </Link>
                           )}
 
                           <button

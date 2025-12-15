@@ -13,6 +13,7 @@ import {
   Clock,
   FileText,
 } from "lucide-react";
+import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -23,17 +24,6 @@ function formatDateTime(value) {
   } catch {
     return String(value);
   }
-}
-
-function statusPillClasses(status) {
-  const s = String(status || "").toUpperCase();
-  const map = {
-    PENDING: "bg-amber-50 text-amber-700 ring-amber-200",
-    COLLECTED: "bg-blue-50 text-blue-700 ring-blue-200",
-    REPORTED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
-  };
-  return map[s] || "bg-slate-50 text-slate-700 ring-slate-200";
 }
 
 function priorityPillClasses(priority) {
@@ -103,8 +93,8 @@ export default function LabOrderDetailsModal({ orderId, onClose, open }) {
     if (e.target === e.currentTarget) onClose?.();
   };
 
-  const statusLabel = (order?.status || "—").replaceAll("_", " ");
   const priorityLabel = order?.priority || "—";
+  const { label: statusLabel, badgeClass } = getLabStatusMeta(order?.status);
 
   return (
     <div
@@ -183,9 +173,7 @@ export default function LabOrderDetailsModal({ orderId, onClose, open }) {
                       </span>
                     </div>
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${statusPillClasses(
-                        order.status
-                      )}`}
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${badgeClass}`}
                     >
                       {statusLabel}
                     </span>
