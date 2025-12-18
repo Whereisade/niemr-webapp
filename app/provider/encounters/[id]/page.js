@@ -1,10 +1,11 @@
 // app/provider/encounters/[id]/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { pauseEncounter, resumeEncounter } from "@/lib/encounterActions";
 import EncounterRelatedData from "@/components/encounters/EncounterRelatedData";
 
 function formatDateTime(value) {
@@ -44,9 +45,7 @@ function normalizeAttachmentsPayload(body) {
 
   // Weird numeric-key object from BFF spread
   if (body && typeof body === "object") {
-    const numericKeys = Object.keys(body).filter((k) =>
-      /^\d+$/.test(k)
-    );
+    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
     if (numericKeys.length) {
       return numericKeys
         .sort((a, b) => Number(a) - Number(b))
@@ -57,19 +56,107 @@ function normalizeAttachmentsPayload(body) {
   return [];
 }
 
+function NoteBlock({ label, value, wide = false }) {
+  const hasValue = Boolean(value && String(value).trim().length);
+
+  return (
+    <div
+      className={
+        wide
+          ? "md:col-span-2 rounded-xl border border-slate-100 bg-slate-50 p-3"
+          : "rounded-xl border border-slate-100 bg-slate-50 p-3"
+      }
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <div className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-900">
+        {hasValue ? value : "—"}
+      </div>
+    </div>
+  );
+}
+
 export default function ProviderEncounterDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id;
 
+  const [me, setMe] = useState(null);
+
   const [encounter, setEncounter] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Status update state (pause/resume)
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [statusUpdateError, setStatusUpdateError] = useState("");
 
   // Attachments state
   const [attachments, setAttachments] = useState([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState("");
+
+  async function refreshEncounter() {
+    if (!id) return;
+    const data = await apiFetch(`/encounters/${id}/`, { method: "GET" });
+    setEncounter(data);
+  }
+
+  async function handlePause() {
+    if (!id) return;
+    setStatusUpdateError("");
+    setStatusUpdating(true);
+    try {
+      await pauseEncounter(id);
+      await refreshEncounter();
+    } catch (err) {
+      setStatusUpdateError(err?.message || "Failed to pause encounter.");
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
+
+  async function handleResume() {
+    if (!id) return;
+    setStatusUpdateError("");
+    setStatusUpdating(true);
+    try {
+      await resumeEncounter(id);
+      await refreshEncounter();
+    } catch (err) {
+      setStatusUpdateError(err?.message || "Failed to resume encounter.");
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
+
+  async function openWorkflow() {
+    if (!id) return;
+    const statusUpper = String(encounter?.status || "").toUpperCase();
+    const base = `/provider/encounters/${id}/workflow`;
+    const target =
+      statusUpper === "WAITING_LABS" ? `${base}/waiting-labs` : `${base}/labs`;
+    router.push(target);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const data = await apiFetch(`/accounts/me/`, { method: "GET" });
+        if (!cancelled) setMe(data || null);
+      } catch {
+        if (!cancelled) setMe(null);
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load encounter itself
   useEffect(() => {
@@ -93,8 +180,7 @@ export default function ProviderEncounterDetailPage() {
         console.error("Failed to load encounter", err);
         if (!cancelled) {
           setError(
-            err?.message ||
-              "Failed to load encounter details. Please try again."
+            err?.message || "Failed to load encounter details. Please try again."
           );
         }
       } finally {
@@ -126,10 +212,9 @@ export default function ProviderEncounterDetailPage() {
         qs.set("owner_type", "encounter");
         qs.set("owner_id", String(id));
 
-        const body = await apiFetch(
-          `/attachments/?${qs.toString()}`,
-          { method: "GET" }
-        );
+        const body = await apiFetch(`/attachments/?${qs.toString()}`, {
+          method: "GET",
+        });
 
         if (cancelled) return;
 
@@ -139,8 +224,7 @@ export default function ProviderEncounterDetailPage() {
         console.error("Failed to load encounter attachments", err);
         if (!cancelled) {
           setAttachmentsError(
-            err?.message ||
-              "Attachments could not be loaded for this encounter."
+            err?.message || "Attachments could not be loaded for this encounter."
           );
           setAttachments([]);
         }
@@ -201,6 +285,31 @@ export default function ProviderEncounterDetailPage() {
     encounter?.created_by ||
     null;
 
+  const locked = Boolean(encounter?.locked);
+  const lockedAt = encounter?.locked_at || null;
+
+  const clinicalFields = {
+    chiefComplaint: encounter?.chief_complaint || encounter?.reason || "",
+    hpi: encounter?.hpi || "",
+    ros: encounter?.ros || "",
+    exam: encounter?.physical_exam || "",
+    diagnoses: encounter?.diagnoses || "",
+    plan: encounter?.plan || "",
+  };
+
+  const statusUpper = String(encounter?.status || "").toUpperCase();
+  const canPauseResume = ["OPEN", "IN_PROGRESS", "WAITING_LABS"].includes(
+    statusUpper
+  );
+
+  const canOpenWorkflow = useMemo(() => {
+    const role = String(me?.role || "").toUpperCase();
+    return ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role);
+  }, [me]);
+
+  const workflowBtnLabel =
+    statusUpper === "WAITING_LABS" ? "Go to Waiting Labs" : "Open Encounter Workflow";
+
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
       {/* Header / breadcrumbs */}
@@ -213,7 +322,7 @@ export default function ProviderEncounterDetailPage() {
           >
             ← Back
           </button>
-          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
             Encounter details
           </h1>
           <p className="text-sm text-slate-600">
@@ -223,14 +332,50 @@ export default function ProviderEncounterDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {canOpenWorkflow && (
+            <button
+              type="button"
+              onClick={openWorkflow}
+              className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+              title="Open encounter workflow (Labs → SOAP → Prescription)"
+            >
+              {workflowBtnLabel}
+            </button>
+          )}
+
+          {canPauseResume &&
+            (statusUpper === "WAITING_LABS" ? (
+              <button
+                type="button"
+                onClick={handleResume}
+                disabled={statusUpdating}
+                className="inline-flex items-center rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
+                title="Resume encounter"
+              >
+                {statusUpdating ? "Resuming…" : "Resume"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handlePause}
+                disabled={statusUpdating}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                title="Pause encounter (e.g., waiting on labs)"
+              >
+                {statusUpdating ? "Pausing…" : "Pause"}
+              </button>
+            ))}
+
           {encounter?.status && (
             <span
               className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                encounter.status === "OPEN"
+                statusUpper === "OPEN" || statusUpper === "IN_PROGRESS"
                   ? "bg-emerald-50 text-emerald-700"
-                  : encounter.status === "CLOSED"
+                  : statusUpper === "WAITING_LABS"
+                  ? "bg-amber-50 text-amber-700"
+                  : statusUpper === "CLOSED"
                   ? "bg-slate-100 text-slate-700"
-                  : encounter.status === "CROSSED_OUT"
+                  : statusUpper === "CROSSED_OUT"
                   ? "bg-red-50 text-red-700"
                   : "bg-slate-50 text-slate-600"
               }`}
@@ -240,6 +385,12 @@ export default function ProviderEncounterDetailPage() {
           )}
         </div>
       </div>
+
+      {statusUpdateError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {statusUpdateError}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -267,27 +418,21 @@ export default function ProviderEncounterDetailPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Patient
               </p>
-              <p className="text-sm font-medium text-slate-900">
-                {patientName}
-              </p>
+              <p className="text-sm font-medium text-slate-900">{patientName}</p>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Facility
               </p>
-              <p className="text-sm font-medium text-slate-900">
-                {facilityName}
-              </p>
+              <p className="text-sm font-medium text-slate-900">{facilityName}</p>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Provider
               </p>
-              <p className="text-sm font-medium text-slate-900">
-                {providerName}
-              </p>
+              <p className="text-sm font-medium text-slate-900">{providerName}</p>
             </div>
 
             <div className="space-y-1">
@@ -295,7 +440,11 @@ export default function ProviderEncounterDetailPage() {
                 Visit date
               </p>
               <p className="text-sm font-medium text-slate-900">
-                {formatDate(encounter.encounter_date || encounter.start_at)}
+                {formatDate(
+                  encounter.occurred_at ||
+                    encounter.encounter_date ||
+                    encounter.start_at
+                )}
               </p>
             </div>
           </div>
@@ -307,7 +456,9 @@ export default function ProviderEncounterDetailPage() {
                 Started at
               </p>
               <p className="text-sm text-slate-900">
-                {formatDateTime(encounter.start_at || encounter.created_at)}
+                {formatDateTime(
+                  encounter.start_at || encounter.created_at || encounter.occurred_at
+                )}
               </p>
             </div>
             <div className="space-y-1">
@@ -328,27 +479,42 @@ export default function ProviderEncounterDetailPage() {
             </div>
           </div>
 
-          {/* Reason / chief complaint */}
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Reason / chief complaint
-            </p>
-            <p className="text-sm text-slate-900">
-              {encounter.reason || encounter.chief_complaint || "—"}
-            </p>
-          </div>
+          {/* Clinical note (structured) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Clinical note
+              </p>
 
-          {/* Main note/body */}
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Clinical note
-            </p>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
-              {encounter.note ||
-                encounter.notes ||
-                encounter.summary ||
-                "No note recorded for this encounter."}
+              {locked && (
+                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                  Locked{lockedAt ? ` · ${formatDateTime(lockedAt)}` : ""}
+                </span>
+              )}
             </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <NoteBlock
+                label="Chief complaint"
+                value={clinicalFields.chiefComplaint}
+              />
+              <NoteBlock label="Diagnoses" value={clinicalFields.diagnoses} />
+              <NoteBlock label="HPI" value={clinicalFields.hpi} wide />
+              <NoteBlock label="ROS" value={clinicalFields.ros} wide />
+              <NoteBlock label="Physical exam" value={clinicalFields.exam} wide />
+              <NoteBlock label="Plan" value={clinicalFields.plan} wide />
+            </div>
+
+            {!clinicalFields.chiefComplaint &&
+              !clinicalFields.hpi &&
+              !clinicalFields.ros &&
+              !clinicalFields.exam &&
+              !clinicalFields.diagnoses &&
+              !clinicalFields.plan && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                  No clinical note recorded for this encounter yet.
+                </div>
+              )}
           </div>
 
           {/* Attachments section */}
@@ -358,15 +524,11 @@ export default function ProviderEncounterDetailPage() {
             </p>
 
             {attachmentsLoading && (
-              <p className="text-xs text-slate-500">
-                Loading attachments…
-              </p>
+              <p className="text-xs text-slate-500">Loading attachments…</p>
             )}
 
             {attachmentsError && (
-              <p className="text-xs text-red-600">
-                {attachmentsError}
-              </p>
+              <p className="text-xs text-red-600">{attachmentsError}</p>
             )}
 
             {!attachmentsLoading &&
@@ -380,8 +542,7 @@ export default function ProviderEncounterDetailPage() {
             {!attachmentsLoading && attachments.length > 0 && (
               <ul className="space-y-2">
                 {attachments.map((att) => {
-                  const fileUrl =
-                    att.file || att.url || att.download_url || "#";
+                  const fileUrl = att.file || att.url || att.download_url || "#";
 
                   const nameFromPath =
                     typeof att.file === "string"
@@ -432,10 +593,7 @@ export default function ProviderEncounterDetailPage() {
           </div>
 
           {/* Related orders & prescriptions */}
-          <EncounterRelatedData
-            encounter={encounter}
-            context="provider"
-          />
+          <EncounterRelatedData encounter={encounter} context="provider" />
 
           {/* Linked appointment (if any) */}
           <div className="mt-4 grid gap-4 md:grid-cols-3">

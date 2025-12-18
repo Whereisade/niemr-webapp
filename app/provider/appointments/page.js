@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
+import StartEncounterButton from "@/components/encounters/StartEncounterButton";
 import {
   postAppointmentAction,
   getAvailableActions,
@@ -262,21 +263,14 @@ export default function ProviderAppointmentsPage() {
                           <StatusPill value={statusValue} />
                         </Td>
                         <Td className="text-right">
-                          {actions.length === 0 ? (
-                            <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-col items-end gap-2">
+                            <StartEncounterButton scope="provider" appointment={a} />
+
+                            {actions.length === 0 ? (
                               <span className="text-xs text-slate-400">
                                 No quick actions
                               </span>
-                              <a
-                                href={`/provider/appointments/${a.id}`}
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
-                              >
-                                Open
-                                <ChevronRight className="h-4 w-4" />
-                              </a>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-end gap-1">
+                            ) : (
                               <div className="inline-flex flex-wrap justify-end gap-1">
                                 {actions.map((action) => (
                                   <button
@@ -289,15 +283,16 @@ export default function ProviderAppointmentsPage() {
                                   </button>
                                 ))}
                               </div>
-                              <a
-                                href={`/provider/appointments/${a.id}`}
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
-                              >
-                                Open
-                                <ChevronRight className="h-4 w-4" />
-                              </a>
-                            </div>
-                          )}
+                            )}
+
+                            <a
+                              href={`/provider/appointments/${a.id}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                            >
+                              Open
+                              <ChevronRight className="h-4 w-4" />
+                            </a>
+                          </div>
                         </Td>
                       </tr>
                     );

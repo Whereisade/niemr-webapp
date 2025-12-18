@@ -7,6 +7,7 @@ import {
   uploadPatientDocument,
   deletePatientDocument,
 } from "@/lib/patientDocuments";
+import { FileText, Upload, Loader2, Trash2 } from "lucide-react";
 
 const DOCUMENT_TYPES = [
   { value: "LAB_RESULT", label: "Lab result" },
@@ -165,222 +166,343 @@ export default function PatientDocumentsPage() {
     }
   }
 
+  const totalDocs = documents.length;
+
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
-      {/* Header */}
-      <header className="space-y-1">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-          My documents
-        </h1>
-        <p className="text-sm text-slate-600">
-          Upload lab results, imaging reports, or other medical documents so
-          clinicians can see a complete picture of your health.
-        </p>
-      </header>
+    <main className="min-h-screen bg-slate-50/80">
+      <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 md:py-8 lg:px-8 lg:py-10">
+        {/* Header / hero */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
+          {/* Soft gradient flair */}
+          <div className="pointer-events-none absolute inset-x-0 -top-16 h-32 bg-gradient-to-r from-blue-500/15 via-indigo-500/10 to-emerald-500/15 blur-3xl" />
+          {/* Top strip */}
+          <div className="relative h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500" />
 
-      {/* Alerts */}
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {success}
-        </div>
-      )}
+          <div className="relative flex flex-col gap-5 p-5 md:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+                  <FileText className="h-3.5 w-3.5" />
+                  Patient portal
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                    My documents
+                  </h1>
+                  <p className="mt-1 max-w-xl text-sm text-slate-600">
+                    Upload lab results, imaging reports, and other medical
+                    documents so your care team can see a complete picture of
+                    your health.
+                  </p>
+                </div>
+              </div>
 
-      {/* Upload form */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Upload a document
-        </h2>
-        <p className="mt-1 text-xs text-slate-600">
-          You can upload PDFs, images, or other document files. Each file will
-          be tied to your patient record.
-        </p>
-
-        <form
-          onSubmit={handleSubmit}
-          className="mt-4 space-y-4"
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">
-                Document type
-              </label>
-              <select
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                value={documentType}
-                onChange={(e) => setDocumentType(e.target.value)}
-              >
-                {DOCUMENT_TYPES.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              {/* Quick stats */}
+              <div className="grid grid-cols-2 gap-2 text-right text-[11px] text-slate-500 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2">
+                  <div className="font-medium text-slate-500">
+                    Total files
+                  </div>
+                  <div className="mt-0.5 text-lg font-semibold text-slate-900">
+                    {loading ? "…" : totalDocs}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2">
+                  <div className="font-medium text-slate-500">
+                    Latest upload
+                  </div>
+                  <div className="mt-0.5 text-xs font-semibold text-slate-900">
+                    {loading || !documents[0]
+                      ? "—"
+                      : formatDate(
+                          documents[0].created_at ||
+                            documents[0].uploaded_at ||
+                            documents[0].timestamp
+                        )}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2">
+                  <div className="font-medium text-slate-500">
+                    Status
+                  </div>
+                  <div className="mt-0.5 inline-flex items-center justify-end gap-1 text-xs font-semibold text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Active
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">
-                Title (optional)
-              </label>
-              <input
-                type="text"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="e.g. FBC result – Oct 2025"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
+            {/* Alerts */}
+            <div className="space-y-2">
+              {error && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {success}
+                </div>
+              )}
             </div>
           </div>
+        </section>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">
-              Notes (optional)
-            </label>
-            <textarea
-              rows={3}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Any context for your doctor (e.g. where the test was done)…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
+        {/* Upload form */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
+          {/* Top strip */}
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500" />
+
+          <div className="relative space-y-4 p-5 md:p-6">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                  Upload a document
+                </h2>
+                <p className="mt-1 text-xs text-slate-600 md:text-sm">
+                  You can upload PDFs, images, or other document files. Each
+                  file will be tied to your NIEMR patient record.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-50/80 px-3 py-2 text-[11px] text-slate-500">
+                Accepted formats: PDF, images, and common document types. Keep
+                files clear and readable.
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Document type
+                  </label>
+                  <select
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value)}
+                  >
+                    {DOCUMENT_TYPES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Title (optional)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="e.g. FBC result – Oct 2025"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">
+                  Notes (optional)
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="Any context for your doctor (e.g. where the test was done)…"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">
+                  File (PDF, image, or document)
+                </label>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600/10">
+                      <Upload className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-slate-900">
+                        Drop a file here or browse
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Maximum size depends on server configuration.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.tiff,.tif,.doc,.docx,image/*,application/pdf"
+                      onChange={handleFileChange}
+                      className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white file:hover:bg-blue-700"
+                    />
+                  </div>
+                  {file && (
+                    <p className="mt-2 rounded-2xl bg-white/80 px-3 py-2 text-xs text-slate-600">
+                      <span className="font-semibold text-slate-900">
+                        Selected:
+                      </span>{" "}
+                      {file.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-1">
+                <button
+                  type="submit"
+                  disabled={uploading}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Uploading…
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      Upload document
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
+        </section>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">
-              File (PDF, image, or document)
-            </label>
-            <input
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.tiff,.tif,.doc,.docx,image/*,application/pdf"
-              onChange={handleFileChange}
-              className="block w-full text-xs text-slate-700"
-            />
-            {file && (
-              <p className="mt-1 text-xs text-slate-500">
-                Selected: {file.name}
-              </p>
+        {/* Documents list */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
+          {/* Top strip */}
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500" />
+
+          <div className="relative p-5 md:p-6">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
+                  <FileText className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                    Uploaded documents
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    Files you&apos;ve shared with your care team.
+                  </p>
+                </div>
+              </div>
+              {!loading && documents.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  {documents.length} document
+                  {documents.length === 1 ? "" : "s"}
+                </p>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                <span>Loading documents…</span>
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-sm text-slate-500">
+                You haven&apos;t uploaded any documents yet. Once you upload
+                files, they&apos;ll appear here.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Type
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Title &amp; notes
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Uploaded
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        By
+                      </th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {documents.map((doc) => (
+                      <tr
+                        key={doc.id}
+                        className="align-top transition hover:bg-slate-50/70"
+                      >
+                        <td className="px-3 py-2 align-middle">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            {doc.document_type
+                              ? doc.document_type.replace(/_/g, " ")
+                              : "Unknown"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 align-middle">
+                          <div className="flex flex-col gap-1">
+                            <a
+                              href={doc.file || doc.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="max-w-xs truncate text-sm font-medium text-blue-600 hover:underline"
+                            >
+                              {doc.title || "View document"}
+                            </a>
+                            {doc.notes && (
+                              <span className="max-w-md text-xs text-slate-500 line-clamp-2">
+                                {doc.notes}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 align-middle">
+                          <span className="whitespace-nowrap text-xs text-slate-500">
+                            {formatDate(
+                              doc.created_at ||
+                                doc.uploaded_at ||
+                                doc.timestamp
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 align-middle">
+                          <span className="text-xs text-slate-500">
+                            {doc.uploaded_by_role ||
+                              doc.uploaded_by ||
+                              "PATIENT"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 align-middle text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(doc.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={uploading}
-              className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {uploading ? "Uploading…" : "Upload document"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* Documents list */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Uploaded documents
-          </h2>
-          {!loading && documents.length > 0 && (
-            <p className="text-xs text-slate-500">
-              {documents.length} document
-              {documents.length === 1 ? "" : "s"}
-            </p>
-          )}
-        </div>
-
-        {loading ? (
-          <p className="py-4 text-sm text-slate-500">
-            Loading documents…
-          </p>
-        ) : documents.length === 0 ? (
-          <p className="py-4 text-sm text-slate-500">
-            You haven&apos;t uploaded any documents yet.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Type
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Title
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Uploaded
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    By
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {documents.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 align-middle">
-                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-700">
-                        {doc.document_type
-                          ? doc.document_type.replace(/_/g, " ")
-                          : "Unknown"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 align-middle">
-                      <div className="flex flex-col">
-                        <a
-                          href={doc.file || doc.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-sm font-medium text-blue-600 hover:underline"
-                        >
-                          {doc.title || "View document"}
-                        </a>
-                        {doc.notes && (
-                          <span className="text-xs text-slate-500 line-clamp-2">
-                            {doc.notes}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 align-middle">
-                      <span className="text-xs text-slate-500">
-                        {formatDate(
-                          doc.created_at ||
-                            doc.uploaded_at ||
-                            doc.timestamp
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 align-middle">
-                      <span className="text-xs text-slate-500">
-                        {doc.uploaded_by_role ||
-                          doc.uploaded_by ||
-                          "PATIENT"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 align-middle text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(doc.id)}
-                        className="text-xs font-medium text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+        </section>
+      </div>
     </main>
   );
 }

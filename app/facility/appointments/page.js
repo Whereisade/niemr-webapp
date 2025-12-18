@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
 import StatusBadge from "@/components/StatusBadge";
 import Paginator from "@/components/Paginator";
+import StartEncounterButton from "@/components/encounters/StartEncounterButton";
 import {
   CalendarRange,
   Search,
@@ -248,6 +249,8 @@ export default function FacilityAppointmentsPage() {
                       </Td>
                       <Td className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <StartEncounterButton scope="facility" appointment={a} />
+
                           {actions.length > 0 && (
                             <div className="inline-flex flex-wrap justify-end gap-1">
                               {actions.map((action) => (

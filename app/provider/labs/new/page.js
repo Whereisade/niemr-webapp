@@ -14,16 +14,14 @@ const PRIORITY_OPTIONS = [
 export default function ProviderNewLabOrderPage() {
   const router = useRouter();
 
-  // Form state
   const [patientId, setPatientId] = useState("");
-  const [testCode, setTestCode] = useState("");
+  const [externalLabName, setExternalLabName] = useState("");
   const [priority, setPriority] = useState("ROUTINE");
   const [notes, setNotes] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Patients list
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
 
@@ -39,16 +37,13 @@ export default function ProviderNewLabOrderPage() {
         setPatients(items);
       } catch (err) {
         console.error("Failed to load patients", err);
-        if (!cancelled) {
-          setPatients([]);
-        }
+        if (!cancelled) setPatients([]);
       } finally {
         if (!cancelled) setLoadingPatients(false);
       }
     }
 
     fetchPatients();
-
     return () => {
       cancelled = true;
     };
@@ -60,45 +55,30 @@ export default function ProviderNewLabOrderPage() {
 
     const patient = Number(patientId);
     if (!patient || Number.isNaN(patient)) {
-      if (!loadingPatients && patients.length === 0) {
-        setError(
-          "No patients are available. Please create a patient profile first before ordering labs."
-        );
-      } else {
-        setError("Please select a patient.");
-      }
+      setError(
+        !loadingPatients && patients.length === 0
+          ? "No patients are available. Create a patient profile first."
+          : "Please select a patient."
+      );
       return;
     }
 
-    if (!testCode.trim()) {
-      setError("Please enter the lab test code.");
+    if (!externalLabName.trim()) {
+      setError("Please enter the external lab name.");
       return;
     }
 
-    // IMPORTANT: align with backend:
-    // {
-    //   "patient": 123,
-    //   "priority": "ROUTINE",
-    //   "note": "optional note",
-    //   "items": [ { "test_code": "FBC" } ],
-    //   "provider": 45   // optional
-    // }
+    if (!notes.trim()) {
+      setError("Please describe the tests requested (and clinical context).");
+      return;
+    }
+
     const payload = {
       patient,
       priority: priority || "ROUTINE",
-      items: [
-        {
-          test_code: testCode.trim(), // must match LabTest.code
-        },
-      ],
+      external_lab_name: externalLabName.trim(),
+      note: notes.trim(),
     };
-
-    if (notes.trim()) {
-      payload.note = notes.trim();
-    }
-
-    // Provider is implied from JWT (ordered_by), so we don't send provider id here.
-    // If backend later wants explicit provider, we can add it.
 
     setIsSubmitting(true);
     try {
@@ -106,10 +86,7 @@ export default function ProviderNewLabOrderPage() {
       router.push("/provider/labs");
     } catch (err) {
       console.error("Create lab order failed", err);
-      setError(
-        err?.message ||
-          "Failed to create lab order. Please check the fields and try again."
-      );
+      setError(err?.message || "Failed to create lab order.");
     } finally {
       setIsSubmitting(false);
     }
@@ -122,7 +99,7 @@ export default function ProviderNewLabOrderPage() {
           New lab order
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Create a lab request for one of your patients.
+          Independent providers outsource lab requests to external labs.
         </p>
       </header>
 
@@ -136,7 +113,6 @@ export default function ProviderNewLabOrderPage() {
           </div>
         )}
 
-        {/* Patient select */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
             Patient
@@ -166,29 +142,24 @@ export default function ProviderNewLabOrderPage() {
                 );
               })}
           </select>
-          <p className="mt-1 text-xs text-slate-500">
-            Patients are limited to the ones visible to your account/facility.
-          </p>
         </div>
 
-        {/* Test code */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Test code
+            External lab name
           </label>
           <input
             type="text"
-            value={testCode}
-            onChange={(e) => setTestCode(e.target.value)}
-            placeholder="e.g. FBC, FBC_HB"
+            value={externalLabName}
+            onChange={(e) => setExternalLabName(e.target.value)}
+            placeholder="e.g. Acme Diagnostics"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Code must match an existing lab test in the catalogue (LabTest.code).
+            You don’t have access to any facility’s internal lab catalog.
           </p>
         </div>
 
-        {/* Priority */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
             Priority
@@ -206,21 +177,19 @@ export default function ProviderNewLabOrderPage() {
           </select>
         </div>
 
-        {/* Notes */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Clinical note (optional)
+            Tests requested + clinical note
           </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="Provide context or special instructions for the lab team."
+            placeholder="Example: FBC + U&E. Patient has fatigue and dizziness; rule out anemia/electrolyte imbalance."
           />
         </div>
 
-        {/* Actions */}
         <div className="flex items-center justify-between gap-3 pt-2">
           <button
             type="button"

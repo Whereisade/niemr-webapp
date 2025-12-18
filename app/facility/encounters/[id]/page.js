@@ -1,10 +1,11 @@
 // app/facility/encounters/[id]/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { pauseEncounter, resumeEncounter } from "@/lib/encounterActions";
 import EncounterRelatedData from "@/components/encounters/EncounterRelatedData";
 import DownloadReportButton from "@/components/DownloadReportButton";
 
@@ -42,9 +43,7 @@ function normalizeAttachmentsPayload(body) {
   }
 
   if (body && typeof body === "object") {
-    const numericKeys = Object.keys(body).filter((k) =>
-      /^\d+$/.test(k)
-    );
+    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
     if (numericKeys.length) {
       return numericKeys
         .sort((a, b) => Number(a) - Number(b))
@@ -55,10 +54,33 @@ function normalizeAttachmentsPayload(body) {
   return [];
 }
 
+function NoteBlock({ label, value, wide = false }) {
+  const hasValue = Boolean(value && String(value).trim().length);
+
+  return (
+    <div
+      className={
+        wide
+          ? "md:col-span-2 rounded-xl border border-slate-100 bg-slate-50 p-3"
+          : "rounded-xl border border-slate-100 bg-slate-50 p-3"
+      }
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <div className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-900">
+        {hasValue ? value : "—"}
+      </div>
+    </div>
+  );
+}
+
 export default function FacilityEncounterDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id;
+
+  const [me, setMe] = useState(null);
 
   const [encounter, setEncounter] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +89,70 @@ export default function FacilityEncounterDetailPage() {
   const [attachments, setAttachments] = useState([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState("");
+
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [statusUpdateError, setStatusUpdateError] = useState("");
+
+  async function refreshEncounter() {
+    if (!id) return;
+    const data = await apiFetch(`/encounters/${id}/`, { method: "GET" });
+    setEncounter(data);
+  }
+
+  async function handlePause() {
+    if (!id) return;
+    setStatusUpdateError("");
+    setStatusUpdating(true);
+    try {
+      await pauseEncounter(id);
+      await refreshEncounter();
+    } catch (err) {
+      setStatusUpdateError(err?.message || "Failed to pause encounter.");
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
+
+  async function handleResume() {
+    if (!id) return;
+    setStatusUpdateError("");
+    setStatusUpdating(true);
+    try {
+      await resumeEncounter(id);
+      await refreshEncounter();
+    } catch (err) {
+      setStatusUpdateError(err?.message || "Failed to resume encounter.");
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
+
+  async function openWorkflow() {
+    if (!id) return;
+    const statusUpper = String(encounter?.status || "").toUpperCase();
+    const base = `/facility/encounters/${id}/workflow`;
+    const target =
+      statusUpper === "WAITING_LABS" ? `${base}/waiting-labs` : `${base}/labs`;
+    router.push(target);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const data = await apiFetch(`/accounts/me/`, { method: "GET" });
+        if (!cancelled) setMe(data || null);
+      } catch {
+        if (!cancelled) setMe(null);
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -88,8 +174,7 @@ export default function FacilityEncounterDetailPage() {
         console.error("Failed to load facility encounter", err);
         if (!cancelled) {
           setError(
-            err?.message ||
-              "Failed to load encounter details. Please try again."
+            err?.message || "Failed to load encounter details. Please try again."
           );
         }
       } finally {
@@ -117,10 +202,9 @@ export default function FacilityEncounterDetailPage() {
         qs.set("owner_type", "encounter");
         qs.set("owner_id", String(id));
 
-        const body = await apiFetch(
-          `/attachments/?${qs.toString()}`,
-          { method: "GET" }
-        );
+        const body = await apiFetch(`/attachments/?${qs.toString()}`, {
+          method: "GET",
+        });
 
         if (cancelled) return;
 
@@ -130,8 +214,7 @@ export default function FacilityEncounterDetailPage() {
         console.error("Failed to load facility encounter attachments", err);
         if (!cancelled) {
           setAttachmentsError(
-            err?.message ||
-              "Attachments could not be loaded for this encounter."
+            err?.message || "Attachments could not be loaded for this encounter."
           );
           setAttachments([]);
         }
@@ -166,8 +249,7 @@ export default function FacilityEncounterDetailPage() {
     encounter?.patient ||
     "—";
 
-  const facilityName =
-    encounter?.facility_name || encounter?.facility?.name || "—";
+  const facilityName = encounter?.facility_name || encounter?.facility?.name || "—";
 
   const providerName =
     encounter?.provider_name ||
@@ -189,10 +271,45 @@ export default function FacilityEncounterDetailPage() {
     encounter?.created_by ||
     null;
 
+  const locked = Boolean(encounter?.locked);
+  const lockedAt = encounter?.locked_at || null;
+
+  const clinicalFields = {
+    chiefComplaint: encounter?.chief_complaint || encounter?.reason || "",
+    hpi: encounter?.hpi || "",
+    ros: encounter?.ros || "",
+    exam: encounter?.physical_exam || "",
+    diagnoses: encounter?.diagnoses || "",
+    plan: encounter?.plan || "",
+  };
+
   const isForDependent =
     encounter?.patient_is_dependent === true ||
     encounter?.is_dependent === true ||
     false;
+
+  const statusUpper = String(encounter?.status || "").toUpperCase();
+
+  const statusPillClass =
+    statusUpper === "OPEN" || statusUpper === "IN_PROGRESS"
+      ? "bg-emerald-50 text-emerald-700"
+      : statusUpper === "WAITING_LABS"
+      ? "bg-amber-50 text-amber-700"
+      : statusUpper === "CLOSED"
+      ? "bg-slate-100 text-slate-700"
+      : statusUpper === "CROSSED_OUT"
+      ? "bg-red-50 text-red-700"
+      : "bg-slate-50 text-slate-600";
+
+  const canPauseResume = ["OPEN", "IN_PROGRESS", "WAITING_LABS"].includes(statusUpper);
+
+  const canOpenWorkflow = useMemo(() => {
+    const role = String(me?.role || "").toUpperCase();
+    return ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role);
+  }, [me]);
+
+  const workflowBtnLabel =
+    statusUpper === "WAITING_LABS" ? "Go to Waiting Labs" : "Open Encounter Workflow";
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
@@ -206,7 +323,7 @@ export default function FacilityEncounterDetailPage() {
           >
             ← Back
           </button>
-          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
             Encounter details
           </h1>
           <p className="text-sm text-slate-600">
@@ -218,30 +335,58 @@ export default function FacilityEncounterDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           {encounter?.status && (
             <span
-              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                encounter.status === "OPEN"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : encounter.status === "CLOSED"
-                  ? "bg-slate-100 text-slate-700"
-                  : encounter.status === "CROSSED_OUT"
-                  ? "bg-red-50 text-red-700"
-                  : "bg-slate-50 text-slate-600"
-              }`}
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusPillClass}`}
             >
               {encounter.status}
             </span>
           )}
 
+          {canOpenWorkflow && (
+            <button
+              type="button"
+              onClick={openWorkflow}
+              className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+              title="Open encounter workflow (Labs → SOAP → Prescription)"
+            >
+              {workflowBtnLabel}
+            </button>
+          )}
+
+          {canPauseResume &&
+            (statusUpper === "WAITING_LABS" ? (
+              <button
+                type="button"
+                onClick={handleResume}
+                disabled={statusUpdating}
+                className="inline-flex items-center rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
+                title="Resume encounter"
+              >
+                {statusUpdating ? "Resuming…" : "Resume"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handlePause}
+                disabled={statusUpdating}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                title="Pause encounter (e.g., waiting on labs)"
+              >
+                {statusUpdating ? "Pausing…" : "Pause"}
+              </button>
+            ))}
+
           <DownloadReportButton
             type="encounter"
-            refId={
-              encounter?.reference ||
-              encounter?.ref ||
-              encounter?.id
-            }
+            refId={encounter?.reference || encounter?.ref || encounter?.id}
           />
         </div>
       </div>
+
+      {statusUpdateError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {statusUpdateError}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -270,9 +415,7 @@ export default function FacilityEncounterDetailPage() {
                 Patient
               </p>
               <div className="flex flex-col gap-0.5">
-                <p className="text-sm font-medium text-slate-900">
-                  {patientName}
-                </p>
+                <p className="text-sm font-medium text-slate-900">{patientName}</p>
                 {isForDependent && (
                   <span className="inline-flex w-fit rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                     Dependent
@@ -285,18 +428,14 @@ export default function FacilityEncounterDetailPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Facility
               </p>
-              <p className="text-sm font-medium text-slate-900">
-                {facilityName}
-              </p>
+              <p className="text-sm font-medium text-slate-900">{facilityName}</p>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Provider
               </p>
-              <p className="text-sm font-medium text-slate-900">
-                {providerName}
-              </p>
+              <p className="text-sm font-medium text-slate-900">{providerName}</p>
             </div>
 
             <div className="space-y-1">
@@ -304,7 +443,7 @@ export default function FacilityEncounterDetailPage() {
                 Visit date
               </p>
               <p className="text-sm font-medium text-slate-900">
-                {formatDate(encounter.encounter_date || encounter.start_at)}
+                {formatDate(encounter.occurred_at || encounter.encounter_date || encounter.start_at)}
               </p>
             </div>
           </div>
@@ -316,24 +455,20 @@ export default function FacilityEncounterDetailPage() {
                 Started at
               </p>
               <p className="text-sm text-slate-900">
-                {formatDateTime(encounter.start_at || encounter.created_at)}
+                {formatDateTime(encounter.occurred_at || encounter.start_at || encounter.created_at)}
               </p>
             </div>
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Ended at
               </p>
-              <p className="text-sm text-slate-900">
-                {formatDateTime(encounter.end_at)}
-              </p>
+              <p className="text-sm text-slate-900">{formatDateTime(encounter.end_at)}</p>
             </div>
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Recorded by
               </p>
-              <p className="text-sm text-slate-900">
-                {createdByName || providerName || "—"}
-              </p>
+              <p className="text-sm text-slate-900">{createdByName || providerName || "—"}</p>
             </div>
           </div>
 
@@ -348,16 +483,38 @@ export default function FacilityEncounterDetailPage() {
           </div>
 
           {/* Clinical note */}
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Clinical note
-            </p>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
-              {encounter.note ||
-                encounter.notes ||
-                encounter.summary ||
-                "No note recorded for this encounter."}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Clinical note
+              </p>
+
+              {locked && (
+                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                  Locked{lockedAt ? ` · ${formatDateTime(lockedAt)}` : ""}
+                </span>
+              )}
             </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <NoteBlock label="Chief complaint" value={clinicalFields.chiefComplaint} />
+              <NoteBlock label="Diagnoses" value={clinicalFields.diagnoses} />
+              <NoteBlock label="HPI" value={clinicalFields.hpi} wide />
+              <NoteBlock label="ROS" value={clinicalFields.ros} wide />
+              <NoteBlock label="Physical exam" value={clinicalFields.exam} wide />
+              <NoteBlock label="Plan" value={clinicalFields.plan} wide />
+            </div>
+
+            {!clinicalFields.chiefComplaint &&
+              !clinicalFields.hpi &&
+              !clinicalFields.ros &&
+              !clinicalFields.exam &&
+              !clinicalFields.diagnoses &&
+              !clinicalFields.plan && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                  No clinical note recorded for this encounter yet.
+                </div>
+              )}
           </div>
 
           {/* Attachments */}
@@ -366,42 +523,26 @@ export default function FacilityEncounterDetailPage() {
               Attachments
             </p>
 
-            {attachmentsLoading && (
+            {attachmentsLoading && <p className="text-xs text-slate-500">Loading attachments…</p>}
+
+            {attachmentsError && <p className="text-xs text-red-600">{attachmentsError}</p>}
+
+            {!attachmentsLoading && !attachmentsError && attachments.length === 0 && (
               <p className="text-xs text-slate-500">
-                Loading attachments…
+                No files attached to this encounter yet.
               </p>
             )}
-
-            {attachmentsError && (
-              <p className="text-xs text-red-600">
-                {attachmentsError}
-              </p>
-            )}
-
-            {!attachmentsLoading &&
-              !attachmentsError &&
-              attachments.length === 0 && (
-                <p className="text-xs text-slate-500">
-                  No files attached to this encounter yet.
-                </p>
-              )}
 
             {!attachmentsLoading && attachments.length > 0 && (
               <ul className="space-y-2">
                 {attachments.map((att) => {
-                  const fileUrl =
-                    att.file || att.url || att.download_url || "#";
+                  const fileUrl = att.file || att.url || att.download_url || "#";
 
                   const nameFromPath =
-                    typeof att.file === "string"
-                      ? att.file.split("/").slice(-1)[0]
-                      : null;
+                    typeof att.file === "string" ? att.file.split("/").slice(-1)[0] : null;
 
                   const label =
-                    att.filename ||
-                    att.name ||
-                    nameFromPath ||
-                    `Attachment #${att.id}`;
+                    att.filename || att.name || nameFromPath || `Attachment #${att.id}`;
 
                   return (
                     <li
@@ -409,9 +550,7 @@ export default function FacilityEncounterDetailPage() {
                       className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium text-slate-900">
-                          {label}
-                        </span>
+                        <span className="font-medium text-slate-900">{label}</span>
                         {att.description && (
                           <span className="mt-0.5 text-[11px] text-slate-600">
                             {att.description}
@@ -441,10 +580,7 @@ export default function FacilityEncounterDetailPage() {
           </div>
 
           {/* Related orders & prescriptions */}
-          <EncounterRelatedData
-            encounter={encounter}
-            context="facility"
-          />
+          <EncounterRelatedData encounter={encounter} context="facility" />
 
           {/* Linked appointment (if any) */}
           <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -453,9 +589,7 @@ export default function FacilityEncounterDetailPage() {
                 Appointment
               </p>
               {encounter.appointment_id ? (
-                <p className="text-sm text-slate-800">
-                  #{encounter.appointment_id}
-                </p>
+                <p className="text-sm text-slate-800">#{encounter.appointment_id}</p>
               ) : (
                 <p className="text-sm text-slate-500">None linked</p>
               )}
