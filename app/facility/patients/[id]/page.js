@@ -7,8 +7,9 @@ import { apiFetch } from "@/lib/api";
 import PatientDocumentsProvider from "@/components/patient/PatientDocumentsProvider";
 import PatientDocumentUploadProvider from "@/components/patient/PatientDocumentUploadProvider";
 import PatientVitalsHistory from "@/components/patient/PatientVitalsHistory";
+import PatientAllergies from "@/components/patient/Patientallergies";
 import NurseWorkflow from "@/components/nurse/NurseWorkflow";
-import { Activity, FileText, Stethoscope } from "lucide-react";
+import { Activity, FileText, Stethoscope, AlertTriangle } from "lucide-react";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -227,6 +228,29 @@ export default function FacilityPatientDetailPage() {
           </div>
         </section>
 
+        {/* Allergies (stacked) */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-500 via-orange-500 to-amber-500" />
+          <div className="relative p-4 md:p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                    Allergies
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    Known allergies and adverse reactions.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <PatientAllergies patientId={patientId} />
+          </div>
+        </section>
+
         {/* Vitals History (stacked) */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500" />
@@ -299,5 +323,3 @@ export default function FacilityPatientDetailPage() {
     </main>
   );
 }
-
-
