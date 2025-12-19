@@ -158,6 +158,7 @@ export default function AppHeader() {
   })();
 
   const roleLabel = user?.role ? formatRole(user.role) : null;
+  const facilityName = user?.facility?.name || null;
 
   const isActive = (href) =>
     href === "/"
@@ -223,6 +224,7 @@ export default function AppHeader() {
                   {roleLabel && (
                     <div className="text-[10px] text-slate-500">
                       {roleLabel}
+                      {facilityName && <span className="text-slate-400"> · {facilityName}</span>}
                     </div>
                   )}
                 </div>
