@@ -22,6 +22,7 @@ import {
   Plus,
   Bed,
   ClipboardClock,
+  Shield,
 } from "lucide-react";
 
 import {
@@ -105,6 +106,7 @@ export default async function FacilityDashboard() {
   const isOwner = workspace.type === FACILITY_WORKSPACE_TYPES.OWNER;
   const isFrontdesk = workspace.type === FACILITY_WORKSPACE_TYPES.FRONTDESK;
   const isClinical = workspace.type === FACILITY_WORKSPACE_TYPES.CLINICAL;
+  const isSuperAdmin = me.role === "SUPER_ADMIN";
 
   const notifList = Array.isArray(notifications)
     ? notifications
@@ -424,7 +426,7 @@ export default async function FacilityDashboard() {
         {/* Appointments table */}
         <section className="lg:col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <CardHead
-            title="Today’s Appointments"
+            title="Today's Appointments"
             href="/facility/appointments"
             icon={CalendarRange}
             actionLabel="View all"
@@ -529,6 +531,11 @@ export default async function FacilityDashboard() {
                       label="Patients"
                     />
                     <QuickLink
+                      href="/facility/providers"
+                      icon={Stethoscope}
+                      label="Providers"
+                    />
+                    <QuickLink
                       href="/facility/wards"
                       icon={Bed}
                       label="Wards & beds"
@@ -544,6 +551,15 @@ export default async function FacilityDashboard() {
                       label="Audit logs"
                     />
                   </>
+                )}
+
+                {/* SUPER_ADMIN only: Manage facility admins & staff */}
+                {isSuperAdmin && (
+                  <QuickLink
+                    href="/facility/admins"
+                    icon={Shield}
+                    label="Manage Admins & Staff"
+                  />
                 )}
 
                 {/* CLINICAL workspace (facility DOCTOR / NURSE / LAB / PHARMACY) */}
