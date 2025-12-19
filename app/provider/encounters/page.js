@@ -7,7 +7,6 @@ import { useEncounters } from "@/lib/useEncounters";
 import { downloadEncounterPdf } from "@/lib/reports";
 import {
   closeEncounter,
-  crossOutEncounter,
 } from "@/lib/encounterActions";
 import AttachmentList from "@/components/attachments/AttachmentList";
 import {
@@ -99,9 +98,8 @@ export default function ProviderEncountersPage() {
   const closedCount = rows.filter(
     (r) => (r.status || "").toUpperCase() === "CLOSED"
   ).length;
-  const crossedOut = rows.filter(
-    (r) => (r.status || "").toUpperCase() === "CROSSED_OUT"
-  ).length;
+  // Cross-out is no longer supported in the product. We keep legacy statuses
+  // display-only, but do not surface actions/filters.
 
   async function handleDownload(enc) {
     if (!enc?.id) return;
@@ -154,7 +152,6 @@ export default function ProviderEncountersPage() {
               <option value="">All statuses</option>
               <option value="OPEN">Open</option>
               <option value="CLOSED">Closed</option>
-              <option value="CROSSED_OUT">Crossed Out</option>
             </select>
             <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           </div>
@@ -162,7 +159,7 @@ export default function ProviderEncountersPage() {
       </header>
 
       {/* Stats row */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatTile
           icon={FileText}
           label="Encounters on page"
@@ -180,12 +177,6 @@ export default function ProviderEncountersPage() {
           label="Closed"
           value={closedCount}
           gradient="from-amber-600 via-orange-600 to-red-600"
-        />
-        <StatTile
-          icon={CalendarClock}
-          label="Crossed Out"
-          value={crossedOut}
-          gradient="from-fuchsia-600 via-pink-600 to-rose-600"
         />
       </section>
 
@@ -271,7 +262,7 @@ export default function ProviderEncountersPage() {
                     </button>
                   </td>
 
-                  {/* Actions: Close / Cross out */}
+                  {/* Actions */}
                   <td className="p-3 text-xs text-slate-800 text-right">
                     <div className="flex flex-wrap justify-end gap-2">
                       <button
@@ -298,37 +289,6 @@ export default function ProviderEncountersPage() {
                         {updatingId === enc.id ? "Closing…" : "Close"}
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const ok = window.confirm(
-                            "Are you sure you want to cross out this encounter? This is usually used to invalidate a note."
-                          );
-                          if (!ok) return;
-
-                          setUpdateError("");
-                          setUpdatingId(enc.id);
-                          try {
-                            await crossOutEncounter(enc.id);
-                            router.refresh();
-                          } catch (err) {
-                            console.error(
-                              "Cross out encounter failed",
-                              err
-                            );
-                            setUpdateError(
-                              err?.message ||
-                                "Failed to cross out encounter. Please try again."
-                            );
-                          } finally {
-                            setUpdatingId(null);
-                          }
-                        }}
-                        disabled={updatingId === enc.id}
-                        className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {updatingId === enc.id ? "Updating…" : "Cross out"}
-                      </button>
                     </div>
                   </td>
                 </tr>

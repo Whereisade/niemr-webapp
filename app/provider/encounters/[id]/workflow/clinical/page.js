@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import { finalizeEncounterNote, resumeEncounter } from "@/lib/encounterActions";
+import {
+  addEncounterAmendment,
+  finalizeEncounterNote,
+  listEncounterAmendments,
+  resumeEncounter,
+} from "@/lib/encounterActions";
+import { uploadAttachments } from "@/lib/attachments";
+import VersionedSoapSection from "@/components/encounters/VersionedSoapSection";
 import {
   ArrowLeft,
   Loader2,
@@ -25,6 +32,24 @@ function fmtDateTime(v) {
   }
 }
 
+function normalizeList(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (data?.results && Array.isArray(data.results)) return data.results;
+
+  if (typeof data === "object") {
+    const keys = Object.keys(data);
+    if (keys.length && keys.every((k) => String(+k) === k)) {
+      return keys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => data[k])
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
 export default function ProviderEncounterClinicalPage() {
   const params = useParams();
   const router = useRouter();
@@ -40,6 +65,11 @@ export default function ProviderEncounterClinicalPage() {
 
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState("");
+
+  // Amendments (per-section corrections after lock)
+  const [amendments, setAmendments] = useState([]);
+  const [amendmentsLoading, setAmendmentsLoading] = useState(false);
+  const [amendmentsError, setAmendmentsError] = useState("");
 
   // Form
   const [chiefComplaint, setChiefComplaint] = useState("");
@@ -63,7 +93,9 @@ export default function ProviderEncounterClinicalPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiFetch(`/encounters/${encounterId}/`, { method: "GET" });
+      const data = await apiFetch(`/encounters/${encounterId}/`, {
+        method: "GET",
+      });
       setEncounter(data);
 
       setChiefComplaint(data?.chief_complaint || "");
@@ -87,13 +119,100 @@ export default function ProviderEncounterClinicalPage() {
   }, [encounterId]);
 
   const role = String(me?.role || "").toUpperCase();
-  const canEdit = useMemo(() => ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role), [role]);
+  const canEdit = useMemo(
+    () => ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role),
+    [role]
+  );
 
-  const isWaitingLabs = String(encounter?.status || "").toUpperCase() === "WAITING_LABS";
-  const isCrossedOut = String(encounter?.status || "").toUpperCase() === "CROSSED_OUT";
+  const isWaitingLabs =
+    String(encounter?.status || "").toUpperCase() === "WAITING_LABS";
+  const isCrossedOut =
+    String(encounter?.status || "").toUpperCase() === "CROSSED_OUT";
   const isLocked = Boolean(encounter?.locked || encounter?.locked_at);
 
   const readOnly = !canEdit || isWaitingLabs || isCrossedOut || isLocked;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAmendments() {
+      if (!encounterId || !isLocked) {
+        setAmendments([]);
+        return;
+      }
+
+      setAmendmentsLoading(true);
+      setAmendmentsError("");
+      try {
+        const res = await listEncounterAmendments(encounterId);
+        if (cancelled) return;
+        setAmendments(normalizeList(res));
+      } catch (err) {
+        if (cancelled) return;
+        setAmendmentsError(err?.message || "Failed to load section corrections.");
+      } finally {
+        if (!cancelled) setAmendmentsLoading(false);
+      }
+    }
+
+    loadAmendments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [encounterId, isLocked]);
+
+  const amendmentsBySection = useMemo(() => {
+    const out = {};
+    for (const a of amendments || []) {
+      const key = String(a?.section || "").toUpperCase() || "UNKNOWN";
+      if (!out[key]) out[key] = [];
+      out[key].push(a);
+    }
+
+    for (const key of Object.keys(out)) {
+      out[key].sort((x, y) => {
+        const ax = new Date(x?.created_at || 0).getTime();
+        const ay = new Date(y?.created_at || 0).getTime();
+        return ax - ay;
+      });
+    }
+
+    return out;
+  }, [amendments]);
+
+  async function refreshAmendments() {
+    if (!encounterId || !isLocked) return;
+    try {
+      const res = await listEncounterAmendments(encounterId);
+      setAmendments(normalizeList(res));
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleCreateCorrection({ section, reason, content, files }) {
+    if (!encounterId) throw new Error("Missing encounter id");
+
+    const created = await addEncounterAmendment(encounterId, {
+      section,
+      reason,
+      content,
+    });
+
+    if (files?.length) {
+      await uploadAttachments({
+        refType: "ENCOUNTER_AMENDMENT",
+        refId: created.id,
+        files,
+        patient: encounter?.patient,
+        tag: "SOAP_CORRECTION",
+      });
+    }
+
+    await refreshAmendments();
+    return created;
+  }
 
   async function handleSave() {
     if (!encounterId) return;
@@ -128,26 +247,10 @@ export default function ProviderEncounterClinicalPage() {
     setFinalizing(true);
     try {
       await finalizeEncounterNote(encounterId);
+      await loadEncounter();
       router.push(`/provider/encounters/${encounterId}/workflow/prescription`);
     } catch (err) {
-      setFinalizeError(err?.message || "Failed to finalize note.");
-    } finally {
-      setFinalizing(false);
-    }
-  }
-
-  async function handleSkipLabs() {
-    if (!encounterId) return;
-    setFinalizeError("");
-    setFinalizing(true);
-    try {
-      await apiFetch(`/encounters/${encounterId}/skip_labs/`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      await loadEncounter();
-    } catch (err) {
-      setFinalizeError(err?.message || "Failed to skip labs.");
+      setFinalizeError(err?.message || "Failed to finalize.");
     } finally {
       setFinalizing(false);
     }
@@ -161,7 +264,23 @@ export default function ProviderEncounterClinicalPage() {
       await resumeEncounter(encounterId);
       await loadEncounter();
     } catch (err) {
-      setFinalizeError(err?.message || "Failed to resume encounter.");
+      setFinalizeError(err?.message || "Failed to resume.");
+    } finally {
+      setFinalizing(false);
+    }
+  }
+
+  async function handleSkipLabs() {
+    if (!encounterId) return;
+    setFinalizeError("");
+    setFinalizing(true);
+    try {
+      await apiFetch(`/encounters/${encounterId}/skip_labs/`, {
+        method: "POST",
+      });
+      await loadEncounter();
+    } catch (err) {
+      setFinalizeError(err?.message || "Failed to skip labs.");
     } finally {
       setFinalizing(false);
     }
@@ -170,29 +289,28 @@ export default function ProviderEncounterClinicalPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="flex items-center gap-2 text-slate-700">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading…
+        <div className="flex items-center gap-2 text-sm text-slate-700">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
       </div>
     );
   }
 
-  if (error && !encounter) {
+  if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
-          <div className="font-semibold">Could not open SOAP note</div>
-          <div className="mt-1 text-sm">{error}</div>
-          <div className="mt-3">
-            <Link
-              href={`/provider/encounters/${encounterId}`}
-              className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Encounter
-            </Link>
-          </div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!encounter) {
+    return (
+      <div className="p-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+          Encounter not found.
         </div>
       </div>
     );
@@ -223,38 +341,38 @@ export default function ProviderEncounterClinicalPage() {
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
             <span>Encounter #{encounterId}</span>
             <span>•</span>
-            <span>
-              Status:{" "}
-              <span className="font-medium text-slate-900">{encounter?.status || "—"}</span>
-            </span>
+            <span>Status: {encounter?.status || "—"}</span>
             {isLocked ? (
               <>
                 <span>•</span>
-                <span className="inline-flex items-center gap-1 font-medium text-slate-900">
-                  <Lock className="h-4 w-4" />
-                  Locked
-                </span>
-              </>
-            ) : null}
-            {lockDueAt ? (
-              <>
-                <span>•</span>
-                <span>
-                  Lock due:{" "}
-                  <span className="font-medium text-slate-900">{fmtDateTime(lockDueAt)}</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-800">
+                  <Lock className="h-3.5 w-3.5" /> Locked
                 </span>
               </>
             ) : null}
           </div>
+
+          {lockDueAt ? (
+            <div className="mt-1 text-sm text-slate-600">
+              Lock due: <span className="font-medium">{fmtDateTime(lockDueAt)}</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/provider/encounters/${encounterId}/workflow/labs`}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
+          <button
+            onClick={handleSave}
+            disabled={saving || readOnly}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            title="Save SOAP note"
           >
-            Order Labs
-          </Link>
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save
+          </button>
 
           <button
             onClick={handleFinalize}
@@ -320,113 +438,189 @@ export default function ProviderEncounterClinicalPage() {
 
       {isLocked ? (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900">
-          This encounter is locked (clinical fields are read-only).
+          This note is locked. You can only correct individual sections by adding
+          a new version (the previous version will be struck through).
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Chief Complaint
-            </span>
-            <textarea
-              value={chiefComplaint}
-              onChange={(e) => setChiefComplaint(e.target.value)}
-              rows={3}
-              disabled={readOnly}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-            />
-          </label>
+      {isLocked ? (
+        <div className="space-y-4">
+          {amendmentsError ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+              {amendmentsError}
+            </div>
+          ) : null}
 
-          <label className="mt-3 grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              HPI
-            </span>
-            <textarea
-              value={hpi}
-              onChange={(e) => setHpi(e.target.value)}
-              rows={6}
-              disabled={readOnly}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-            />
-          </label>
+          {amendmentsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading section
+              corrections…
+            </div>
+          ) : null}
 
-          <label className="mt-3 grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              ROS
-            </span>
-            <textarea
-              value={ros}
-              onChange={(e) => setRos(e.target.value)}
-              rows={5}
-              disabled={readOnly}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-            />
-          </label>
+          <VersionedSoapSection
+            label="Chief Complaint"
+            section="CHIEF_COMPLAINT"
+            original={chiefComplaint}
+            amendments={amendmentsBySection.CHIEF_COMPLAINT || []}
+            onCreate={handleCreateCorrection}
+            disabled={!canEdit || finalizing}
+          />
+
+          <VersionedSoapSection
+            label="HPI"
+            section="HPI"
+            original={hpi}
+            amendments={amendmentsBySection.HPI || []}
+            onCreate={handleCreateCorrection}
+            disabled={!canEdit || finalizing}
+          />
+
+          <VersionedSoapSection
+            label="ROS"
+            section="ROS"
+            original={ros}
+            amendments={amendmentsBySection.ROS || []}
+            onCreate={handleCreateCorrection}
+            disabled={!canEdit || finalizing}
+          />
+
+          <VersionedSoapSection
+            label="Physical Exam"
+            section="PHYSICAL_EXAM"
+            original={physicalExam}
+            amendments={amendmentsBySection.PHYSICAL_EXAM || []}
+            onCreate={handleCreateCorrection}
+            disabled={!canEdit || finalizing}
+          />
+
+          <VersionedSoapSection
+            label="Diagnoses"
+            section="DIAGNOSES"
+            original={diagnoses}
+            amendments={amendmentsBySection.DIAGNOSES || []}
+            onCreate={handleCreateCorrection}
+            disabled={!canEdit || finalizing}
+          />
+
+          <VersionedSoapSection
+            label="Plan"
+            section="PLAN"
+            original={plan}
+            amendments={amendmentsBySection.PLAN || []}
+            onCreate={handleCreateCorrection}
+            disabled={!canEdit || finalizing}
+          />
         </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Chief Complaint
+              </span>
+              <textarea
+                value={chiefComplaint}
+                onChange={(e) => setChiefComplaint(e.target.value)}
+                rows={3}
+                disabled={readOnly}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              />
+            </label>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Physical Exam
-            </span>
-            <textarea
-              value={physicalExam}
-              onChange={(e) => setPhysicalExam(e.target.value)}
-              rows={6}
-              disabled={readOnly}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-            />
-          </label>
+            <label className="mt-3 grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                HPI
+              </span>
+              <textarea
+                value={hpi}
+                onChange={(e) => setHpi(e.target.value)}
+                rows={6}
+                disabled={readOnly}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              />
+            </label>
 
-          <label className="mt-3 grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Diagnoses
-            </span>
-            <textarea
-              value={diagnoses}
-              onChange={(e) => setDiagnoses(e.target.value)}
-              rows={4}
-              disabled={readOnly}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-            />
-          </label>
+            <label className="mt-3 grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                ROS
+              </span>
+              <textarea
+                value={ros}
+                onChange={(e) => setRos(e.target.value)}
+                rows={5}
+                disabled={readOnly}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              />
+            </label>
+          </div>
 
-          <label className="mt-3 grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Plan
-            </span>
-            <textarea
-              value={plan}
-              onChange={(e) => setPlan(e.target.value)}
-              rows={5}
-              disabled={readOnly}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-            />
-          </label>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Physical Exam
+              </span>
+              <textarea
+                value={physicalExam}
+                onChange={(e) => setPhysicalExam(e.target.value)}
+                rows={6}
+                disabled={readOnly}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              />
+            </label>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving || readOnly}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save
-            </button>
+            <label className="mt-3 grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Diagnoses
+              </span>
+              <textarea
+                value={diagnoses}
+                onChange={(e) => setDiagnoses(e.target.value)}
+                rows={4}
+                disabled={readOnly}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              />
+            </label>
 
-            <button
-              onClick={handleFinalize}
-              disabled={finalizing || readOnly}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-            >
-              {finalizing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Finalize → Prescription
-            </button>
+            <label className="mt-3 grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Plan
+              </span>
+              <textarea
+                value={plan}
+                onChange={(e) => setPlan(e.target.value)}
+                rows={5}
+                disabled={readOnly}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              />
+            </label>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={handleSave}
+                disabled={saving || readOnly}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </button>
+
+              <button
+                onClick={handleFinalize}
+                disabled={finalizing || readOnly}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+              >
+                {finalizing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Finalize → Prescription
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

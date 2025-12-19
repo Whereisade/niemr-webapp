@@ -8,7 +8,6 @@ import { downloadEncounterPdf } from "@/lib/reports";
 import AttachmentList from "@/components/attachments/AttachmentList";
 import {
   closeEncounter,
-  crossOutEncounter,
 } from "@/lib/encounterActions";
 import {
   Building2,
@@ -88,7 +87,6 @@ export default function FacilityEncountersPage() {
     (e) => e.status === "OPEN" || e.status === "IN_PROGRESS"
   ).length;
   const closedCount = rows.filter((e) => e.status === "CLOSED").length;
-  const crossedOutCount = rows.filter((e) => e.status === "CROSSED_OUT").length;
 
   function setQuery(next) {
     const sp = new URLSearchParams(searchParams.toString());
@@ -158,7 +156,7 @@ export default function FacilityEncountersPage() {
       </header>
 
       {/* Summary tiles */}
-      <section className="mb-6 grid gap-3 sm:grid-cols-4">
+      <section className="mb-6 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-slate-500">Total</p>
@@ -183,12 +181,6 @@ export default function FacilityEncountersPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
-          <p className="text-xs font-medium text-rose-700">Crossed out</p>
-          <p className="mt-2 text-2xl font-semibold text-rose-900">
-            {crossedOutCount}
-          </p>
-        </div>
       </section>
 
       {/* Filters + search */}
@@ -198,7 +190,6 @@ export default function FacilityEncountersPage() {
             { label: "All", value: "" },
             { label: "Open", value: "OPEN" },
             { label: "Closed", value: "CLOSED" },
-            { label: "Crossed out", value: "CROSSED_OUT" },
           ].map((opt) => {
             const active = status === opt.value;
             return (
@@ -348,10 +339,6 @@ export default function FacilityEncountersPage() {
                         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                           Closed
                         </span>
-                      ) : enc.status === "CROSSED_OUT" ? (
-                        <span className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
-                          Crossed out
-                        </span>
                       ) : (
                         <span className="inline-flex rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                           {enc.status || "—"}
@@ -433,53 +420,6 @@ export default function FacilityEncountersPage() {
                           className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         >
                           {updatingId === enc.id ? "Closing…" : "Close"}
-                        </button>
-
-                        {/* Cross out encounter */}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const ok = window.confirm(
-                              "Are you sure you want to cross out this encounter? This should only be used to invalidate an incorrect note."
-                            );
-                            if (!ok) return;
-
-                            setUpdateError("");
-                            setUpdatingId(enc.id);
-                            try {
-                              const res = await crossOutEncounter(enc.id);
-
-                              const newStatus =
-                                res &&
-                                typeof res === "object" &&
-                                res.status
-                                  ? res.status
-                                  : "CROSSED_OUT";
-
-                              setRows((prev) =>
-                                prev.map((e) =>
-                                  e.id === enc.id
-                                    ? { ...e, status: newStatus }
-                                    : e
-                                )
-                              );
-                            } catch (err) {
-                              console.error(
-                                "Facility cross-out encounter failed",
-                                err
-                              );
-                              setUpdateError(
-                                err?.message ||
-                                  "Failed to cross out encounter. Please try again."
-                              );
-                            } finally {
-                              setUpdatingId(null);
-                            }
-                          }}
-                          disabled={updatingId === enc.id}
-                          className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          {updatingId === enc.id ? "Updating…" : "Cross out"}
                         </button>
 
                         {/* View details (existing behavior) */}
