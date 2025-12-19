@@ -45,7 +45,7 @@ export default function PatientEncountersPage() {
     limit,
     status: status || undefined,
     s: s || undefined,
-    
+    scope: "patient",
   });
 
   const rows = Array.isArray(data?.results)
