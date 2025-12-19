@@ -152,18 +152,22 @@ export default function VersionedSoapSection({
                   Attachments
                 </p>
                 <div className="flex flex-col gap-1">
-                  {v.attachments.map((f) => (
-                    <a
-                      key={f.id || f.url}
-                      href={f.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-                    >
-                      <span className="truncate">{f.name || "file"}</span>
-                      <span className="text-slate-400">Open</span>
-                    </a>
-                  ))}
+                  {v.attachments.map((f) => {
+                    const fileUrl = f.file || f.url || f.download_url || "#";
+                    const fileName = f.name || f.original_name || f.filename || "file";
+                    return (
+                      <a
+                        key={f.id || fileUrl}
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                      >
+                        <span className="truncate">{fileName}</span>
+                        <span className="text-slate-400">Open</span>
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}

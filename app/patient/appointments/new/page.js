@@ -217,7 +217,7 @@ export default function PatientNewAppointmentPage() {
 
   const canSubmit = !isSubmitting && !!date && !!time;
 
-  // 🔹 Use p.user (User id) instead of profile id
+  // Use p.user (User id) instead of profile id
   const selectedProvider = providers.find(
     (p) => String(p.user) === String(providerId)
   );
@@ -599,5 +599,3 @@ export default function PatientNewAppointmentPage() {
     </main>
   );
 }
-
-

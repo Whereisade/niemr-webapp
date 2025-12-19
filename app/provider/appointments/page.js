@@ -8,6 +8,9 @@ import {
   postAppointmentAction,
   getAvailableActions,
   APPT_ACTION_LABELS,
+  canStartEncounter,
+  TERMINAL_STATUSES,
+  getStatusBadgeInfo,
 } from "@/lib/appointmentsActions";
 import {
   CalendarRange,
@@ -18,22 +21,20 @@ import {
   UserRound,
   ArrowLeft,
   ArrowRight,
+  AlertCircle,
+  Building2,
 } from "lucide-react";
 
-/**
- * Provider list pulls your own (“mine”) appointments.
- * You’ll see /api/proxy/appointments/?mine=true... in DevTools and Django logs.
- */
 export default function ProviderAppointmentsPage() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
-  const page   = Number(sp.get("page") || 1);
-  const limit  = Number(sp.get("limit") || 10);
+  const page = Number(sp.get("page") || 1);
+  const limit = Number(sp.get("limit") || 10);
   const status = sp.get("status") || "";
-  const date   = sp.get("date")   || "today";
-  const q      = sp.get("q")      || "";
+  const date = sp.get("date") || "today";
+  const q = sp.get("q") || "";
 
   const { data, error, isLoading, mutate } = useAppointments({
     page,
@@ -54,7 +55,6 @@ export default function ProviderAppointmentsPage() {
       if (v === undefined || v === null || v === "") params.delete(k);
       else params.set(k, String(v));
     });
-    // reset page when changing filters/search/limit/date/status
     if ("q" in patch || "status" in patch || "limit" in patch || "date" in patch) {
       params.set("page", "1");
     }
@@ -64,7 +64,7 @@ export default function ProviderAppointmentsPage() {
   const handleAction = async (apptId, action) => {
     try {
       await postAppointmentAction(apptId, action);
-      await mutate(); // refresh list after status change
+      await mutate();
     } catch (err) {
       console.error("Failed to update appointment", err);
       alert(
@@ -101,7 +101,8 @@ export default function ProviderAppointmentsPage() {
             Appointments
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Filter, search, and manage visits across <span className="font-medium">{dateLabel.toLowerCase()}</span>.
+            Filter, search, and manage visits across{" "}
+            <span className="font-medium">{dateLabel.toLowerCase()}</span>.
           </p>
         </div>
 
@@ -116,11 +117,11 @@ export default function ProviderAppointmentsPage() {
           <StatChip label="Total" value={total} />
           <StatChip label="Page" value={page} />
           <button
-            onClick={() => updateQuery({})}
+            onClick={() => mutate()}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
           >
             <RefreshCw className="h-4 w-4" />
-            Reset filters
+            Refresh
           </button>
         </div>
       </header>
@@ -144,7 +145,11 @@ export default function ProviderAppointmentsPage() {
             />
             {q ? (
               <div className="mt-1 text-xs text-slate-400">
-                Press <span className="rounded border border-slate-200 px-1">Enter</span> to apply search
+                Press{" "}
+                <span className="rounded border border-slate-200 px-1">
+                  Enter
+                </span>{" "}
+                to apply search
               </div>
             ) : null}
           </div>
@@ -202,9 +207,14 @@ export default function ProviderAppointmentsPage() {
 
       {/* Table card */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <CardHead title="My Appointments" subtitle={`${dateLabel} · ${total} total`} />
+        <CardHead
+          title="My Appointments"
+          subtitle={`${dateLabel} · ${total} total`}
+        />
         {isLoading ? (
-          <div className="p-6 text-sm text-slate-600">Loading appointments…</div>
+          <div className="p-6 text-sm text-slate-600">
+            Loading appointments…
+          </div>
         ) : error ? (
           <div className="p-6 text-sm text-rose-700 bg-rose-50 border-t border-rose-100">
             Failed to load: {String(error?.message || error)}
@@ -218,6 +228,7 @@ export default function ProviderAppointmentsPage() {
                   <Th>Reason</Th>
                   <Th>Time</Th>
                   <Th>Status</Th>
+                  <Th>Encounter</Th>
                   <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
@@ -226,11 +237,29 @@ export default function ProviderAppointmentsPage() {
                   rows.map((a) => {
                     const time =
                       a.scheduled_for || a.start_time || a.date || a.time || "—";
-                    const statusValue = a.status || "SCHEDULED";
-                    const actions = getAvailableActions(statusValue);
+                    const apptStatus = (a.status || "SCHEDULED").toUpperCase();
+                    const isTerminal = TERMINAL_STATUSES.includes(apptStatus);
+
+                    // Use backend-computed values if available
+                    const showStartEncounter =
+                      typeof a.can_start_encounter === "boolean"
+                        ? a.can_start_encounter
+                        : canStartEncounter(a);
+
+                    const actions = Array.isArray(a.available_actions)
+                      ? a.available_actions
+                      : getAvailableActions(apptStatus, {
+                          hasEncounter: a.has_encounter || !!a.encounter_id,
+                          encounterStatus: a.encounter_status,
+                        });
 
                     return (
-                      <tr key={a.id} className="transition hover:bg-slate-50/60">
+                      <tr
+                        key={a.id}
+                        className={`transition hover:bg-slate-50/60 ${
+                          isTerminal ? "opacity-60" : ""
+                        }`}
+                      >
                         <Td>
                           <div className="flex items-center gap-2">
                             <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
@@ -241,7 +270,8 @@ export default function ProviderAppointmentsPage() {
                                 {a.patient_name || a.patient || "—"}
                               </div>
                               {a.facility_name ? (
-                                <div className="text-xs text-slate-500">
+                                <div className="flex items-center gap-1 text-xs text-slate-500">
+                                  <Building2 className="h-3 w-3" />
                                   {a.facility_name}
                                 </div>
                               ) : null}
@@ -260,17 +290,38 @@ export default function ProviderAppointmentsPage() {
                           </span>
                         </Td>
                         <Td>
-                          <StatusPill value={statusValue} />
+                          <StatusPill value={apptStatus} />
+                        </Td>
+                        <Td>
+                          {a.encounter_id || a.has_encounter ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                Linked #{a.encounter_id}
+                              </span>
+                              {a.encounter_status && (
+                                <span className="text-xs text-slate-500">
+                                  {a.encounter_status}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              No encounter
+                            </span>
+                          )}
                         </Td>
                         <Td className="text-right">
                           <div className="flex flex-col items-end gap-2">
-                            <StartEncounterButton scope="provider" appointment={a} />
+                            {/* Start Encounter button - only show if allowed */}
+                            {showStartEncounter && (
+                              <StartEncounterButton
+                                scope="provider"
+                                appointment={a}
+                              />
+                            )}
 
-                            {actions.length === 0 ? (
-                              <span className="text-xs text-slate-400">
-                                No quick actions
-                              </span>
-                            ) : (
+                            {/* Action buttons */}
+                            {actions.length > 0 && (
                               <div className="inline-flex flex-wrap justify-end gap-1">
                                 {actions.map((action) => (
                                   <button
@@ -283,6 +334,14 @@ export default function ProviderAppointmentsPage() {
                                   </button>
                                 ))}
                               </div>
+                            )}
+
+                            {/* Terminal status indicator */}
+                            {isTerminal && actions.length === 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">
+                                <AlertCircle className="h-3 w-3" />
+                                Final
+                              </span>
                             )}
 
                             <a
@@ -299,10 +358,10 @@ export default function ProviderAppointmentsPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={5}>
+                    <td colSpan={6}>
                       <EmptyState
                         title="No appointments"
-                        subtitle="When you’re booked, visits will appear here automatically."
+                        subtitle="When you're booked, visits will appear here automatically."
                         icon={CalendarRange}
                         ctaHref="/provider/appointments/new"
                         ctaLabel="Create appointment"
@@ -413,23 +472,13 @@ function EmptyState({ icon: Icon, title, subtitle, ctaHref, ctaLabel }) {
 }
 
 function StatusPill({ value }) {
-  const v = String(value || "").toUpperCase();
-  const map = {
-    SCHEDULED: "bg-slate-50 text-slate-700 ring-slate-200",
-    CHECKED_IN: "bg-blue-50 text-blue-700 ring-blue-200",
-    COMPLETED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
-    NO_SHOW: "bg-amber-50 text-amber-700 ring-amber-200",
-  };
-  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
-  const label = (v || "—").replaceAll("_", " ");
-
+  const info = getStatusBadgeInfo(value);
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
+      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ring-1 ${info.colorClass}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      {label}
+      {info.label}
     </span>
   );
 }

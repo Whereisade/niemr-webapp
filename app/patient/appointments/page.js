@@ -13,10 +13,15 @@ import {
   UserRound,
   Stethoscope,
   ChevronRight,
+  Building2,
+  CheckCircle2,
+  Link2,
 } from "lucide-react";
 import {
   postAppointmentAction,
   APPT_STATUS,
+  TERMINAL_STATUSES,
+  getAvailableActions,
 } from "@/lib/appointmentsActions";
 import { fetchDependents } from "@/lib/dependents";
 
@@ -29,6 +34,11 @@ function formatDateTime(value) {
   } catch {
     return String(value);
   }
+}
+
+function isTerminalStatus(status) {
+  const normalized = (status || "").toUpperCase();
+  return (TERMINAL_STATUSES || ["COMPLETED", "CANCELLED", "NO_SHOW"]).includes(normalized);
 }
 
 export default function PatientAppointmentsPage() {
@@ -67,13 +77,15 @@ export default function PatientAppointmentsPage() {
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  // For patients: only allow Cancel on SCHEDULED
-  const getPatientActions = (status) => {
-    if (
-      status === APPT_STATUS.SCHEDULED ||
-      status === "SCHEDULED" ||
-      status === "scheduled"
-    ) {
+  // For patients: use backend-computed available_actions, fallback to cancel for SCHEDULED
+  const getPatientActions = (appt) => {
+    // Prefer backend-computed actions
+    if (Array.isArray(appt.available_actions)) {
+      return appt.available_actions;
+    }
+    // Fallback: patients can only cancel SCHEDULED appointments
+    const statusValue = (appt.status || "").toUpperCase();
+    if (statusValue === "SCHEDULED") {
       return ["cancel"];
     }
     return [];
@@ -256,34 +268,41 @@ export default function PatientAppointmentsPage() {
               <tr>
                 <Th>Patient</Th>
                 <Th>Doctor / Provider</Th>
+                <Th>Facility</Th>
                 <Th>When</Th>
                 <Th>Status</Th>
+                <Th>Encounter</Th>
                 <Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading && !data ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-slate-600">
+                  <td colSpan={7} className="p-6 text-slate-600">
                     Loading appointments…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-rose-700 bg-rose-50">
+                  <td colSpan={7} className="p-6 text-rose-700 bg-rose-50">
                     Failed to load: {error.message || "Unknown error"}
                   </td>
                 </tr>
               ) : rows.length ? (
                 rows.map((a) => {
-                  const statusValue = a.status || "SCHEDULED";
-                  const actions = getPatientActions(statusValue);
+                  const statusValue = (a.status || "SCHEDULED").toUpperCase();
+                  const actions = getPatientActions(a);
+                  const isFinal = isTerminalStatus(statusValue);
 
-                  const patientLabel =
-                    a.patient_name || a.patient || "—";
+                  const patientLabel = a.patient_name || a.patient || "—";
                   const isDependent = dependents.some(
                     (dep) => String(dep.id) === String(a.patient)
                   );
+
+                  // Encounter info from backend
+                  const hasEncounter = a.has_encounter || !!a.encounter_id;
+                  const encounterStatus = a.encounter_status || null;
+                  const facilityName = a.facility_name || a.facility?.name || "—";
 
                   return (
                     <tr
@@ -314,6 +333,14 @@ export default function PatientAppointmentsPage() {
                         </span>
                       </Td>
 
+                      {/* Facility */}
+                      <Td>
+                        <span className="inline-flex items-center gap-2 text-slate-700">
+                          <Building2 className="h-4 w-4 text-slate-400" />
+                          {facilityName}
+                        </span>
+                      </Td>
+
                       {/* When */}
                       <Td>
                         <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
@@ -325,28 +352,59 @@ export default function PatientAppointmentsPage() {
 
                       {/* Status */}
                       <Td>
-                        <StatusBadge value={a.status} />
+                        <div className="flex flex-col gap-1">
+                          <StatusBadge value={a.status} />
+                          {isFinal && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Final
+                            </span>
+                          )}
+                        </div>
+                      </Td>
+
+                      {/* Encounter */}
+                      <Td>
+                        {hasEncounter ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                              <Link2 className="h-3 w-3" />
+                              Linked
+                            </span>
+                            {encounterStatus && (
+                              <span className="text-[11px] text-slate-500">
+                                {encounterStatus}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </Td>
 
                       {/* Actions */}
                       <Td className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {actions.length > 0 && (
+                          {/* For patients: only Cancel action if available */}
+                          {actions.length > 0 && !isFinal && (
                             <div className="inline-flex flex-wrap justify-end gap-1">
                               {actions.map((action) => (
                                 <button
                                   key={action}
                                   type="button"
-                                  onClick={() =>
-                                    handleAction(a.id, action)
-                                  }
+                                  onClick={() => handleAction(a.id, action)}
                                   className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                                 >
-                                  {/* For patients, only "Cancel" appears */}
-                                  Cancel
+                                  {action === "cancel" ? "Cancel" : action}
                                 </button>
                               ))}
                             </div>
+                          )}
+
+                          {isFinal && actions.length === 0 && (
+                            <span className="text-xs text-slate-400 italic">
+                              No actions
+                            </span>
                           )}
 
                           <a
@@ -363,7 +421,7 @@ export default function PatientAppointmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="p-8">
+                  <td colSpan={7} className="p-8">
                     <EmptyState
                       title="No appointments found"
                       subtitle="Try adjusting your search or status filter."

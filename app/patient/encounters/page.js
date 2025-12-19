@@ -40,7 +40,13 @@ export default function PatientEncountersPage() {
   const s = sp.get("s") || "";
 
   // Backend scopes encounters by PATIENT automatically for patient role
-  const { data, error, isLoading } = useEncounters({ page, limit, status, s });
+  const { data, error, isLoading } = useEncounters({
+    page,
+    limit,
+    status: status || undefined,
+    s: s || undefined,
+    
+  });
 
   const rows = Array.isArray(data?.results)
     ? data.results

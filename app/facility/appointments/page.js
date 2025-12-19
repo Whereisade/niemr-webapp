@@ -14,11 +14,14 @@ import {
   Users2,
   Stethoscope,
   ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 import {
   postAppointmentAction,
   getAvailableActions,
   APPT_ACTION_LABELS,
+  canStartEncounter,
+  TERMINAL_STATUSES,
 } from "@/lib/appointmentsActions";
 
 function formatDateTime(value) {
@@ -114,7 +117,7 @@ export default function FacilityAppointmentsPage() {
           <Chip icon={CalendarRange} label="Total" value={total} />
           <Chip icon={Users2} label="Page" value={page} />
           <button
-            onClick={() => updateQuery({})}
+            onClick={() => mutate()}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-blue-200 hover:text-blue-700"
           >
             <RefreshCw className="h-4 w-4" />
@@ -156,12 +159,11 @@ export default function FacilityAppointmentsPage() {
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             >
               <option value="">All statuses</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="checked_in">Checked In</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="no_show">No-show</option>
+              <option value="SCHEDULED">Scheduled</option>
+              <option value="CHECKED_IN">Checked In</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No-show</option>
             </select>
 
             <select
@@ -191,20 +193,21 @@ export default function FacilityAppointmentsPage() {
                 <Th>Provider</Th>
                 <Th>When</Th>
                 <Th>Status</Th>
+                <Th>Encounter</Th>
                 <Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading && !data ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-slate-600">
+                  <td colSpan={6} className="p-6 text-slate-600">
                     Loading appointments…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="p-6 text-rose-700 bg-rose-50"
                   >
                     Failed to load:{" "}
@@ -213,13 +216,29 @@ export default function FacilityAppointmentsPage() {
                 </tr>
               ) : rows.length ? (
                 rows.map((a) => {
-                  const status = a.status || "SCHEDULED";
-                  const actions = getAvailableActions(status);
+                  const apptStatus = (a.status || "SCHEDULED").toUpperCase();
+                  const isTerminal = TERMINAL_STATUSES.includes(apptStatus);
+                  
+                  // Use backend-computed values if available, otherwise calculate
+                  const showStartEncounter =
+                    typeof a.can_start_encounter === "boolean"
+                      ? a.can_start_encounter
+                      : canStartEncounter(a);
+
+                  // Get available actions - use backend computed if available
+                  const actions = Array.isArray(a.available_actions)
+                    ? a.available_actions
+                    : getAvailableActions(apptStatus, {
+                        hasEncounter: a.has_encounter || !!a.encounter_id,
+                        encounterStatus: a.encounter_status,
+                      });
 
                   return (
                     <tr
                       key={a.id}
-                      className="transition hover:bg-slate-50/60"
+                      className={`transition hover:bg-slate-50/60 ${
+                        isTerminal ? "opacity-60" : ""
+                      }`}
                     >
                       <Td className="font-medium text-slate-900">
                         <span className="inline-flex items-center gap-2">
@@ -247,10 +266,35 @@ export default function FacilityAppointmentsPage() {
                       <Td>
                         <StatusBadge value={a.status} />
                       </Td>
+                      <Td>
+                        {a.encounter_id || a.has_encounter ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                              Linked #{a.encounter_id}
+                            </span>
+                            {a.encounter_status && (
+                              <span className="text-xs text-slate-500">
+                                {a.encounter_status}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            No encounter
+                          </span>
+                        )}
+                      </Td>
                       <Td className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <StartEncounterButton scope="facility" appointment={a} />
+                          {/* Only show Start Encounter if appointment allows it */}
+                          {showStartEncounter && (
+                            <StartEncounterButton
+                              scope="facility"
+                              appointment={a}
+                            />
+                          )}
 
+                          {/* Show actions only if there are any */}
                           {actions.length > 0 && (
                             <div className="inline-flex flex-wrap justify-end gap-1">
                               {actions.map((action) => (
@@ -269,6 +313,14 @@ export default function FacilityAppointmentsPage() {
                             </div>
                           )}
 
+                          {/* Terminal status indicator */}
+                          {isTerminal && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">
+                              <AlertCircle className="h-3 w-3" />
+                              Final
+                            </span>
+                          )}
+
                           <a
                             href={`/facility/appointments/${a.id}`}
                             className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
@@ -283,7 +335,7 @@ export default function FacilityAppointmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="p-8">
+                  <td colSpan={6} className="p-8">
                     <EmptyState
                       title="No appointments found"
                       subtitle="Try adjusting your search or status filters."
@@ -335,6 +387,7 @@ function Th({ children, className = "" }) {
     </th>
   );
 }
+
 function Td({ children, className = "" }) {
   return (
     <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>

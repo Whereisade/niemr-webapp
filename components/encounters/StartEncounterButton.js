@@ -1,175 +1,211 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { createEncounter } from "@/lib/encounterActions";
-import { PlayCircle, ExternalLink, Loader2 } from "lucide-react";
+import { canStartEncounter, TERMINAL_STATUSES } from "@/lib/appointmentsActions";
+import { Stethoscope, Loader2 } from "lucide-react";
 
-function pickFirst(...values) {
-  for (const v of values) {
-    if (v === 0) return v;
-    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
-  }
-  return null;
-}
+/**
+ * Button to start an encounter from an appointment.
+ *
+ * Props:
+ * - scope: "facility" | "provider" - determines redirect path
+ * - appointment: appointment object with id, status, encounter_id, etc.
+ * - size: "sm" | "md" (default "sm")
+ * - className: additional CSS classes
+ * - onSuccess: callback after successful encounter creation
+ */
+export default function StartEncounterButton({
+  scope = "facility",
+  appointment,
+  size = "sm",
+  className = "",
+  onSuccess,
+}) {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-function toISO(value) {
-  if (!value) return null;
-  // If it's already ISO-ish, just pass through.
-  if (typeof value === "string" && value.includes("T")) return value;
-  try {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toISOString();
-  } catch {
+  // Don't render if no appointment
+  if (!appointment?.id) {
     return null;
   }
-}
 
-function buildAppointmentLinkPayload(appt, encounterId) {
-  const start = pickFirst(
-    appt?.start_at,
-    appt?.start_time,
-    appt?.scheduled_for,
-    appt?.date,
-    appt?.time
-  );
-  const end = pickFirst(appt?.end_at, appt?.end_time, appt?.end);
+  // Check if we can start an encounter
+  // Use backend-computed value if available, otherwise calculate locally
+  const canStart =
+    typeof appointment.can_start_encounter === "boolean"
+      ? appointment.can_start_encounter
+      : canStartEncounter(appointment);
 
-  // The backend AppointmentUpdateSerializer.validate() currently requires
-  // start_at and end_at even on PATCH, so we include them.
-  const payload = {
-    patient: appt?.patient,
-    provider: appt?.provider ?? null,
-    appt_type: pickFirst(appt?.appt_type, appt?.type, "CONSULT"),
-    reason: appt?.reason ?? "",
-    notes: appt?.notes ?? "",
-    start_at: start,
-    end_at: end,
-    encounter_id: encounterId,
+  // Don't render if can't start
+  if (!canStart) {
+    return null;
+  }
+
+  const handleStartEncounter = async () => {
+    if (isLoading) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiFetch("/encounters/start-from-appointment/", {
+        method: "POST",
+        body: JSON.stringify({
+          appointment_id: appointment.id,
+        }),
+      });
+
+      const encounterId = response?.id;
+
+      if (!encounterId) {
+        throw new Error("No encounter ID returned from server");
+      }
+
+      // Call success callback if provided
+      if (onSuccess) {
+        onSuccess(response);
+      }
+
+      // Navigate to the encounter workflow
+      const basePath = scope === "provider" ? "/provider" : "/facility";
+      router.push(`${basePath}/encounters/${encounterId}/workflow/labs`);
+    } catch (err) {
+      console.error("Failed to start encounter:", err);
+      setError(err?.message || "Failed to start encounter. Please try again.");
+
+      // Show error via alert if no other error handling
+      alert(err?.message || "Failed to start encounter. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Facility is read-only on update, but the backend validate() can still
-  // use initial_data['facility'] when the staff user has no facility.
-  if (appt?.facility) payload.facility = appt.facility;
+  // Size variants
+  const sizeClasses = {
+    sm: "px-2.5 py-1 text-xs",
+    md: "px-3 py-1.5 text-sm",
+  };
 
-  return payload;
+  return (
+    <button
+      type="button"
+      onClick={handleStartEncounter}
+      disabled={isLoading}
+      className={`
+        inline-flex items-center gap-1.5 rounded-full font-medium
+        bg-emerald-600 text-white shadow-sm
+        hover:bg-emerald-700 
+        disabled:opacity-60 disabled:cursor-not-allowed
+        transition-colors
+        ${sizeClasses[size] || sizeClasses.sm}
+        ${className}
+      `}
+      title={
+        appointment.encounter_id
+          ? "Continue to existing encounter"
+          : "Start a new encounter for this appointment"
+      }
+    >
+      {isLoading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Stethoscope className="h-3.5 w-3.5" />
+      )}
+      <span>
+        {isLoading
+          ? "Starting…"
+          : appointment.encounter_id
+          ? "Continue Encounter"
+          : "Start Encounter"}
+      </span>
+    </button>
+  );
 }
 
 /**
- * Start (or open) an encounter from an appointment.
- *
- * - If appointment.encounter_id exists: opens the encounter workflow.
- * - Else: creates an encounter (patient + occurred_at), then links the appointment.
+ * A variant that shows as a link-styled button for detail pages
  */
-export default function StartEncounterButton({
-  scope = "facility", // "facility" | "provider"
+export function StartEncounterLink({
+  scope = "facility",
   appointment,
   className = "",
-  size = "sm", // "sm" | "md"
+  onSuccess,
 }) {
   const router = useRouter();
-  const [starting, setStarting] = useState(false);
-  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const encounterId = appointment?.encounter_id;
-
-  const label = encounterId ? "Open encounter" : "Start encounter";
-  const Icon = encounterId ? ExternalLink : PlayCircle;
-
-  const btnClass = useMemo(() => {
-    const base =
-      "inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white font-semibold text-slate-800 hover:border-blue-200 hover:text-blue-700 disabled:opacity-60";
-    const pad = size === "md" ? "px-4 py-2 text-sm" : "px-3 py-1.5 text-xs";
-    return [base, pad, className].join(" ");
-  }, [className, size]);
-
-  async function goToEncounter(encId) {
-    const base = scope === "provider" ? "/provider" : "/facility";
-    router.push(`${base}/encounters/${encId}/workflow/labs`);
+  if (!appointment?.id) {
+    return null;
   }
 
-  async function handleClick() {
-    if (!appointment?.id) return;
+  const canStart =
+    typeof appointment.can_start_encounter === "boolean"
+      ? appointment.can_start_encounter
+      : canStartEncounter(appointment);
 
-    setError("");
+  if (!canStart) {
+    return null;
+  }
 
-    if (encounterId) {
-      await goToEncounter(encounterId);
-      return;
-    }
+  const handleStartEncounter = async () => {
+    if (isLoading) return;
 
-    setStarting(true);
+    setIsLoading(true);
+
     try {
-      const occurredAtRaw = pickFirst(
-        appointment?.start_at,
-        appointment?.start_time,
-        appointment?.scheduled_for,
-        appointment?.date,
-        appointment?.time
-      );
+      const response = await apiFetch("/encounters/start-from-appointment/", {
+        method: "POST",
+        body: JSON.stringify({
+          appointment_id: appointment.id,
+        }),
+      });
 
-      const occurred_at = toISO(occurredAtRaw) || new Date().toISOString();
+      const encounterId = response?.id;
 
-      const encounterPayload = {
-        patient: appointment?.patient,
-        facility: appointment?.facility || undefined,
-        occurred_at,
-        chief_complaint: appointment?.reason || "",
-      };
-
-      if (!encounterPayload.patient) {
-        throw new Error("This appointment is missing a patient id.");
+      if (!encounterId) {
+        throw new Error("No encounter ID returned from server");
       }
 
-      const created = await createEncounter(encounterPayload);
-      const newId = created?.id || created?.pk;
-      if (!newId) {
-        throw new Error("Encounter was created but no id was returned.");
+      if (onSuccess) {
+        onSuccess(response);
       }
 
-      // Best effort: link appointment.encounter_id to the created encounter.
-      // (Backend validate() requires start_at + end_at on PATCH.)
-      try {
-        const linkPayload = buildAppointmentLinkPayload(appointment, newId);
-        await apiFetch(`/appointments/${appointment.id}/`, {
-          method: "PATCH",
-          body: JSON.stringify(linkPayload),
-        });
-      } catch (e) {
-        // If linking fails, still continue to the encounter.
-        console.warn("Failed to link appointment to encounter", e);
-      }
-
-      await goToEncounter(newId);
+      const basePath = scope === "provider" ? "/provider" : "/facility";
+      router.push(`${basePath}/encounters/${encounterId}/workflow/labs`);
     } catch (err) {
-      setError(err?.message || "Failed to start encounter.");
+      console.error("Failed to start encounter:", err);
+      alert(err?.message || "Failed to start encounter. Please try again.");
     } finally {
-      setStarting(false);
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="inline-flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={starting}
-        className={btnClass}
-      >
-        {starting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Icon className="h-4 w-4" />
-        )}
-        {label}
-      </button>
-      {error ? (
-        <div className="max-w-[220px] text-right text-[11px] text-rose-700">
-          {error}
-        </div>
-      ) : null}
-    </div>
+    <button
+      type="button"
+      onClick={handleStartEncounter}
+      disabled={isLoading}
+      className={`
+        inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800
+        font-medium disabled:opacity-60 disabled:cursor-not-allowed
+        ${className}
+      `}
+    >
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Stethoscope className="h-4 w-4" />
+      )}
+      <span>
+        {isLoading
+          ? "Starting…"
+          : appointment.encounter_id
+          ? "Continue Encounter"
+          : "Start Encounter"}
+      </span>
+    </button>
   );
 }
