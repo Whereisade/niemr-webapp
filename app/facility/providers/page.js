@@ -5,6 +5,18 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import {
+  UserPlus,
+  Search,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Users2,
+} from "lucide-react";
 
 function formatName(p) {
   const first = (p.first_name || "").trim();
@@ -31,6 +43,46 @@ function deriveStatus(p) {
   if (p.status) return p.status;
   if (p.verification_status) return p.verification_status.toUpperCase();
   return "UNKNOWN";
+}
+
+function StatusBadge({ status }) {
+  const config = {
+    APPROVED: {
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+      ring: "ring-emerald-600/20",
+      icon: CheckCircle2,
+    },
+    PENDING: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      ring: "ring-amber-600/20",
+      icon: Clock,
+    },
+    REJECTED: {
+      bg: "bg-red-50",
+      text: "text-red-700",
+      ring: "ring-red-600/20",
+      icon: XCircle,
+    },
+  };
+
+  const c = config[status] || {
+    bg: "bg-slate-50",
+    text: "text-slate-600",
+    ring: "ring-slate-600/20",
+    icon: MoreHorizontal,
+  };
+  const Icon = c.icon;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${c.bg} ${c.text} ${c.ring}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {status}
+    </span>
+  );
 }
 
 export default function FacilityProvidersPage() {
@@ -269,53 +321,73 @@ export default function FacilityProvidersPage() {
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-6 md:p-10">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-            Providers &amp; staff
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Manage doctors, nurses, and other providers associated with
-            this facility. Approve or reject new provider accounts.
-          </p>
+      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-200">
+            <Users2 className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">
+              Providers &amp; Staff
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Manage doctors, nurses, and other providers associated with
+              this facility.
+            </p>
+          </div>
         </div>
 
+        <Link
+          href="/facility/providers/new"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
+        >
+          <UserPlus className="h-4 w-4" />
+          Add Provider
+        </Link>
+      </header>
+
+      {/* Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <form
           onSubmit={handleSearchSubmit}
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-1 flex-wrap items-center gap-2"
         >
-          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search by name or email…"
-              className="flex-1 border-none bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
             />
           </div>
 
-          <select
-            value={statusFilterInput}
-            onChange={handleStatusFilterChange}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none"
-          >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Rejected</option>
-          </select>
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <select
+              value={statusFilterInput}
+              onChange={handleStatusFilterChange}
+              className="appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-8 text-sm text-slate-800 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+            >
+              <option value="">All statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
 
           <button
             type="submit"
-            className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+            className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
-            Apply
+            Search
           </button>
         </form>
-      </header>
+      </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -326,22 +398,22 @@ export default function FacilityProvidersPage() {
           <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Email
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Role
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Facility
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Status
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Actions
                 </th>
               </tr>
@@ -351,9 +423,12 @@ export default function FacilityProvidersPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="p-4 text-center text-sm text-slate-500"
+                    className="p-8 text-center text-sm text-slate-500"
                   >
-                    Loading providers…
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+                      Loading providers…
+                    </div>
                   </td>
                 </tr>
               )}
@@ -363,35 +438,23 @@ export default function FacilityProvidersPage() {
                   const status = deriveStatus(p);
 
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-800">
+                    <tr key={p.id} className="transition hover:bg-slate-50/60">
+                      <td className="px-4 py-3.5 text-sm font-medium text-slate-900">
                         {formatName(p)}
                       </td>
-                      <td className="p-3 text-sm text-slate-800">
+                      <td className="px-4 py-3.5 text-sm text-slate-600">
                         {p.email || "—"}
                       </td>
-                      <td className="p-3 text-sm text-slate-800">
+                      <td className="px-4 py-3.5 text-sm text-slate-600">
                         {formatRoles(p)}
                       </td>
-                      <td className="p-3 text-sm text-slate-800">
+                      <td className="px-4 py-3.5 text-sm text-slate-600">
                         {formatFacility(p)}
                       </td>
-                      <td className="p-3 text-xs font-medium text-slate-800">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 ${
-                            status === "APPROVED"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : status === "PENDING"
-                              ? "bg-amber-50 text-amber-700"
-                              : status === "REJECTED"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-slate-50 text-slate-600"
-                          }`}
-                        >
-                          {status}
-                        </span>
+                      <td className="px-4 py-3.5">
+                        <StatusBadge status={status} />
                       </td>
-                      <td className="p-3 text-sm text-slate-800">
+                      <td className="px-4 py-3.5">
                         <div className="flex flex-wrap gap-2">
                           {status === "PENDING" && (
                             <>
@@ -403,8 +466,9 @@ export default function FacilityProvidersPage() {
                                     "APPROVED"
                                   )
                                 }
-                                className="rounded-full border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
                               >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
                                 Approve
                               </button>
                               <button
@@ -415,20 +479,13 @@ export default function FacilityProvidersPage() {
                                     "REJECTED"
                                   )
                                 }
-                                className="rounded-full border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
                               >
+                                <XCircle className="h-3.5 w-3.5" />
                                 Reject
                               </button>
                             </>
                           )}
-
-                          {/* example placeholder for a future detail page */}
-                          {/* <Link
-                            href={`/facility/providers/${p.id}`}
-                            className="rounded-full border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            View
-                          </Link> */}
                         </div>
                       </td>
                     </tr>
@@ -439,9 +496,27 @@ export default function FacilityProvidersPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="p-4 text-center text-sm text-slate-500"
+                    className="p-10 text-center"
                   >
-                    No providers found.
+                    <div className="mx-auto max-w-sm">
+                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+                        <Users2 className="h-7 w-7 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-900">
+                        No providers found
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Get started by adding your first provider to this
+                        facility.
+                      </p>
+                      <Link
+                        href="/facility/providers/new"
+                        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Add Provider
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -449,79 +524,96 @@ export default function FacilityProvidersPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-600">
-          <span>
-            Page {page} · Showing {rows.length} provider
-            {rows.length === 1 ? "" : "s"}
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => goToPage(page - 1)}
-              disabled={!hasPrevPage}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={() => goToPage(page + 1)}
-              disabled={!hasNextPage}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              Next
-            </button>
+        {rows.length > 0 && (
+          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+            <span className="text-sm text-slate-600">
+              Page {page} · Showing {rows.length} provider
+              {rows.length === 1 ? "" : "s"}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => goToPage(page - 1)}
+                disabled={!hasPrevPage}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => goToPage(page + 1)}
+                disabled={!hasNextPage}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* Pending provider applications */}
-      <section className="mt-10">
-        <h2 className="text-sm font-semibold text-slate-800">
-          Pending provider applications
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          These providers have requested to join your facility. Approving will
-          attach them to this facility and mark their profile as approved.
-        </p>
+      <section className="mt-8">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Pending Applications
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            These providers have requested to join your facility. Approving will
+            attach them to this facility and mark their profile as approved.
+          </p>
+        </div>
 
         {loadingApplications ? (
-          <p className="mt-3 text-xs text-slate-500">
-            Loading applications…
-          </p>
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+            <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+              Loading applications…
+            </div>
+          </div>
         ) : applications.length === 0 ? (
-          <p className="mt-3 text-xs text-slate-400">
-            No pending applications.
-          </p>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
+              <Clock className="h-6 w-6 text-slate-400" />
+            </div>
+            <p className="text-sm font-medium text-slate-700">
+              No pending applications
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Provider applications will appear here when submitted.
+            </p>
+          </div>
         ) : (
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-full divide-y divide-slate-200 text-xs">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-4 py-2 text-left font-medium text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Provider
                   </th>
-                  <th className="px-4 py-2 text-left font-medium text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Facility
                   </th>
-                  <th className="px-4 py-2 text-left font-medium text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Message
                   </th>
-                  <th className="px-4 py-2 text-right font-medium text-slate-500">
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {applications.map((app) => (
-                  <tr key={app.id}>
-                    <td className="px-4 py-2 text-slate-800">
+                  <tr key={app.id} className="transition hover:bg-slate-50/60">
+                    <td className="px-4 py-3.5 font-medium text-slate-900">
                       {app.provider_name}
                     </td>
-                    <td className="px-4 py-2 text-slate-500">
+                    <td className="px-4 py-3.5 text-slate-600">
                       {app.facility_name}
                     </td>
-                    <td className="px-4 py-2 text-slate-500">
+                    <td className="px-4 py-3.5 text-slate-600 max-w-xs truncate">
                       {app.message ? (
                         app.message
                       ) : (
@@ -530,15 +622,16 @@ export default function FacilityProvidersPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="px-4 py-3.5 text-right">
                       <div className="inline-flex gap-2">
                         <button
                           type="button"
                           onClick={() =>
                             handleApplicationDecision(app.id, "approve")
                           }
-                          className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700"
                         >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
                           Approve
                         </button>
                         <button
@@ -546,8 +639,9 @@ export default function FacilityProvidersPage() {
                           onClick={() =>
                             handleApplicationDecision(app.id, "reject")
                           }
-                          className="rounded-lg bg-red-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                          className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
                         >
+                          <XCircle className="h-3.5 w-3.5" />
                           Reject
                         </button>
                       </div>
@@ -562,5 +656,3 @@ export default function FacilityProvidersPage() {
     </main>
   );
 }
-
-
