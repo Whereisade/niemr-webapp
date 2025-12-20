@@ -1,4 +1,3 @@
-// app/facility/labs/[id]/page.js
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -11,7 +10,6 @@ import {
   Building2,
   Stethoscope,
   FileText,
-  Paperclip,
   Loader2,
   CheckCircle2,
   AlertTriangle,
@@ -21,7 +19,6 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { submitLabResult, markLabOrderCollected } from "@/lib/labsStatusActions";
-import DownloadReportButton from "@/components/DownloadReportButton";
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
 function formatDateTime(value) {
@@ -35,21 +32,6 @@ function formatDateTime(value) {
   }
 }
 
-function normalizeAttachmentsPayload(body) {
-  if (!body) return [];
-  if (Array.isArray(body.results)) return body.results;
-  if (Array.isArray(body)) return body;
-  if (body && typeof body === "object") {
-    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
-    if (numericKeys.length) {
-      return numericKeys
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => body[k]);
-    }
-  }
-  return [];
-}
-
 function flagBadgeClass(flag) {
   const f = String(flag || "").toUpperCase();
   if (f === "CRIT") return "bg-rose-100 text-rose-800 border-rose-200";
@@ -59,7 +41,7 @@ function flagBadgeClass(flag) {
   return "bg-slate-100 text-slate-600 border-slate-200";
 }
 
-export default function FacilityLabOrderDetailPage() {
+export default function IndependentLabOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id;
@@ -68,11 +50,7 @@ export default function FacilityLabOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [attachments, setAttachments] = useState([]);
-  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
-  const [attachmentsError, setAttachmentsError] = useState("");
-
-  // Current user for role-based UI
+  // Current user
   const [me, setMe] = useState(null);
   const [meLoading, setMeLoading] = useState(true);
 
@@ -108,8 +86,7 @@ export default function FacilityLabOrderDetailPage() {
   }, []);
 
   const meRole = (me?.role || "").toUpperCase();
-  const canEnterResults = ["LAB", "ADMIN", "SUPER_ADMIN"].includes(meRole);
-  const canCollect = ["LAB", "ADMIN", "SUPER_ADMIN"].includes(meRole);
+  const isLabRole = meRole === "LAB";
 
   // Load lab order
   async function loadOrder() {
@@ -120,7 +97,7 @@ export default function FacilityLabOrderDetailPage() {
       const data = await apiFetch(`/labs/orders/${id}/`, { method: "GET" });
       setOrder(data);
 
-      // Initialize result forms for items without results
+      // Initialize result forms for items
       const forms = {};
       (data?.items || []).forEach((item) => {
         forms[item.id] = {
@@ -143,35 +120,6 @@ export default function FacilityLabOrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Load attachments
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-
-    async function loadAttachments() {
-      try {
-        setAttachmentsLoading(true);
-        setAttachmentsError("");
-        const qs = new URLSearchParams();
-        qs.set("owner_type", "lab_order");
-        qs.set("owner_id", String(id));
-        const body = await apiFetch(`/attachments/?${qs.toString()}`, { method: "GET" });
-        if (cancelled) return;
-        setAttachments(normalizeAttachmentsPayload(body));
-      } catch (err) {
-        if (!cancelled) {
-          setAttachmentsError(err?.message || "Attachments could not be loaded.");
-          setAttachments([]);
-        }
-      } finally {
-        if (!cancelled) setAttachmentsLoading(false);
-      }
-    }
-
-    loadAttachments();
-    return () => { cancelled = true; };
-  }, [id]);
-
   // Handle form changes for a specific item
   function handleFormChange(itemId, field, value) {
     setResultForms((prev) => ({
@@ -190,7 +138,7 @@ export default function FacilityLabOrderDetailPage() {
     const form = resultForms[itemId];
     if (!form) return;
 
-    // Validate - need at least result_value or result_text
+    // Validate
     if (!form.result_value && !form.result_text?.trim()) {
       setResultError("Please enter a result value or text for this test.");
       return;
@@ -212,7 +160,7 @@ export default function FacilityLabOrderDetailPage() {
       await submitLabResult(id, payload);
       setResultSuccess(`Result saved for test item #${itemId}`);
 
-      // Reload order to get updated data
+      // Reload order
       await loadOrder();
     } catch (err) {
       setResultError(err?.message || "Failed to submit result.");
@@ -247,21 +195,51 @@ export default function FacilityLabOrderDetailPage() {
     );
   }
 
+  if (meLoading) {
+    return (
+      <main className="mx-auto max-w-4xl p-6 md:p-10">
+        <div className="flex items-center gap-2 text-slate-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
+      </main>
+    );
+  }
+
+  if (!isLabRole) {
+    return (
+      <main className="mx-auto max-w-4xl p-6 md:p-10">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+          <h1 className="text-lg font-semibold text-amber-900">Access Restricted</h1>
+          <p className="mt-2 text-sm text-amber-800">
+            This page is for independent lab scientists. Your current role is: <strong>{me?.role || "Unknown"}</strong>
+          </p>
+          <Link
+            href="/"
+            className="mt-4 inline-flex items-center gap-1 rounded-full bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+          >
+            Go to Dashboard
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   const patientName =
     order?.patient_name ||
     (order?.patient_first_name || order?.patient_last_name
       ? `${order?.patient_first_name || ""} ${order?.patient_last_name || ""}`.trim()
       : "") ||
-    order?.patient ||
+    `Patient #${order?.patient}` ||
     "—";
 
-  const facilityName = order?.facility_name || order?.facility?.name || "—";
+  const facilityName = order?.facility_name || order?.facility?.name || `Facility #${order?.facility}` || "—";
   const orderedBy =
     order?.ordered_by_name ||
     (order?.ordered_by_first_name || order?.ordered_by_last_name
       ? `${order?.ordered_by_first_name || ""} ${order?.ordered_by_last_name || ""}`.trim()
       : "") ||
-    order?.ordered_by ||
+    `User #${order?.ordered_by}` ||
     "—";
 
   const priority = order?.priority || "—";
@@ -276,32 +254,31 @@ export default function FacilityLabOrderDetailPage() {
 
   return (
     <main className="relative mx-auto max-w-5xl space-y-6 p-6 md:p-10">
-      {/* Soft background accents */}
-      <div className="pointer-events-none absolute -top-28 -left-32 h-52 w-52 rounded-full bg-blue-100/60 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-28 -right-32 h-56 w-56 rounded-full bg-emerald-100/50 blur-3xl" />
+      {/* Background accents */}
+      <div className="pointer-events-none absolute -top-28 -left-32 h-52 w-52 rounded-full bg-teal-100/60 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -right-32 h-56 w-56 rounded-full bg-cyan-100/50 blur-3xl" />
 
-      {/* Page header */}
+      {/* Header */}
       <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
+          <Link
+            href="/lab/orders"
             className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
-          </button>
+            Back to Orders
+          </Link>
 
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
+            <div className="inline-flex items-center gap-2 rounded-full bg-teal-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-teal-700">
               <FlaskConical className="h-3.5 w-3.5" />
               Lab Order #{id}
             </div>
             <h1 className="mt-2 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-              Lab Order Details
+              Enter Lab Results
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              View order details and enter test results.
+              Process this lab order and enter test results.
             </p>
           </div>
         </div>
@@ -321,23 +298,17 @@ export default function FacilityLabOrderDetailPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </button>
-
-          <DownloadReportButton
-            type="lab"
-            refId={order?.reference || order?.order_number || order?.id}
-          />
         </div>
       </div>
 
       {error && (
-        <div className="relative rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {loading && !order && (
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="-mx-5 -mt-5 mb-4 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading lab order…</span>
@@ -346,16 +317,16 @@ export default function FacilityLabOrderDetailPage() {
       )}
 
       {!loading && !error && !order && (
-        <div className="relative rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
-          Lab order not found.
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
+          Lab order not found or you don't have access.
         </div>
       )}
 
       {order && (
         <>
           {/* Order summary */}
-          <section className="relative space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-teal-600 via-cyan-500 to-sky-500" />
 
             <div className="grid gap-4 md:grid-cols-3">
               <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
@@ -373,7 +344,7 @@ export default function FacilityLabOrderDetailPage() {
                   <Building2 className="h-4 w-4 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Facility</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Requesting Facility</p>
                   <p className="text-sm font-medium text-slate-900">{facilityName}</p>
                 </div>
               </div>
@@ -389,7 +360,7 @@ export default function FacilityLabOrderDetailPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div className="space-y-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ordered at</p>
                 <p className="text-sm text-slate-900">{formatDateTime(order.ordered_at || order.created_at)}</p>
@@ -398,15 +369,11 @@ export default function FacilityLabOrderDetailPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Priority</p>
                 <p className="text-sm text-slate-900">{priority}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">External lab</p>
-                <p className="text-sm text-slate-900">{order.external_lab_name || "—"}</p>
-              </div>
             </div>
 
             {order.note && (
-              <div className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clinical note</p>
+              <div className="mt-4 space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clinical Note</p>
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
                   {order.note}
                 </div>
@@ -414,9 +381,9 @@ export default function FacilityLabOrderDetailPage() {
             )}
           </section>
 
-          {/* Lab results entry section */}
-          <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500" />
+          {/* Results entry section */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-lime-500" />
 
             <div className="flex items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
@@ -424,9 +391,8 @@ export default function FacilityLabOrderDetailPage() {
                 <h2 className="text-sm font-semibold text-slate-900">Test Results</h2>
               </div>
 
-              {/* Action buttons based on status */}
               <div className="flex items-center gap-2">
-                {statusNorm === "PENDING" && canCollect && (
+                {statusNorm === "PENDING" && (
                   <button
                     type="button"
                     onClick={handleCollectSamples}
@@ -463,7 +429,7 @@ export default function FacilityLabOrderDetailPage() {
             )}
 
             {/* Pending items - editable */}
-            {pendingItems.length > 0 && canEnterResults && (
+            {pendingItems.length > 0 && (
               <div className="mb-6">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
                   Pending Results ({pendingItems.length})
@@ -506,7 +472,7 @@ export default function FacilityLabOrderDetailPage() {
                             value={resultForms[item.id]?.result_value ?? ""}
                             onChange={(e) => handleFormChange(item.id, "result_value", e.target.value)}
                             placeholder="e.g. 12.5"
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                           />
                         </div>
 
@@ -532,7 +498,7 @@ export default function FacilityLabOrderDetailPage() {
                             value={resultForms[item.id]?.ref_low ?? ""}
                             onChange={(e) => handleFormChange(item.id, "ref_low", e.target.value)}
                             placeholder={item.test?.ref_low ?? "—"}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                           />
                         </div>
 
@@ -546,7 +512,7 @@ export default function FacilityLabOrderDetailPage() {
                             value={resultForms[item.id]?.ref_high ?? ""}
                             onChange={(e) => handleFormChange(item.id, "ref_high", e.target.value)}
                             placeholder={item.test?.ref_high ?? "—"}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                           />
                         </div>
 
@@ -577,32 +543,11 @@ export default function FacilityLabOrderDetailPage() {
                           onChange={(e) => handleFormChange(item.id, "result_text", e.target.value)}
                           placeholder="e.g. Positive, Negative, or descriptive findings..."
                           rows={2}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                         />
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* Pending items - read only for non-lab staff */}
-            {pendingItems.length > 0 && !canEnterResults && (
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                  Pending Results ({pendingItems.length})
-                </h3>
-                <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-                  <p className="text-sm text-amber-800">
-                    {pendingItems.length} test(s) are awaiting results from the lab team.
-                  </p>
-                  <ul className="mt-2 space-y-1">
-                    {pendingItems.map((item) => (
-                      <li key={item.id} className="text-sm text-slate-700">
-                        • {item.display_name || item.test?.name || item.requested_name || "Unknown Test"}
-                      </li>
-                    ))}
-                  </ul>
                 </div>
               </div>
             )}
@@ -674,76 +619,14 @@ export default function FacilityLabOrderDetailPage() {
             )}
           </section>
 
-          {/* Attachments section */}
-          <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Paperclip className="h-4 w-4 text-slate-500" />
-              <h2 className="text-sm font-semibold text-slate-900">Attachments</h2>
-            </div>
-
-            {attachmentsLoading && (
-              <p className="flex items-center gap-2 text-xs text-slate-500">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Loading attachments…</span>
-              </p>
-            )}
-
-            {attachmentsError && (
-              <p className="text-xs text-red-600">{attachmentsError}</p>
-            )}
-
-            {!attachmentsLoading && !attachmentsError && attachments.length === 0 && (
-              <p className="text-xs text-slate-500">No files attached to this lab order.</p>
-            )}
-
-            {!attachmentsLoading && attachments.length > 0 && (
-              <ul className="space-y-2">
-                {attachments.map((att) => {
-                  const fileUrl = att.file || att.url || att.download_url || "#";
-                  const nameFromPath = typeof att.file === "string" ? att.file.split("/").slice(-1)[0] : null;
-                  const label = att.filename || att.name || att.original_name || nameFromPath || `Attachment #${att.id}`;
-
-                  return (
-                    <li
-                      key={att.id || `${label}-${fileUrl}`}
-                      className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium text-slate-900">{label}</span>
-                        {att.description && <span className="mt-0.5 text-[11px] text-slate-600">{att.description}</span>}
-                        {att.created_at && <span className="mt-0.5 text-[11px] text-slate-500">Uploaded {formatDateTime(att.created_at)}</span>}
-                      </div>
-                      {fileUrl && fileUrl !== "#" && (
-                        <a
-                          href={fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ml-3 inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[11px] font-medium text-blue-600 shadow-sm hover:bg-blue-50"
-                        >
-                          <FileText className="h-3.5 w-3.5" />
-                          Open
-                        </a>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
           {/* Footer nav */}
           <div className="flex items-center justify-between text-xs">
-            <button
-              type="button"
-              onClick={() => router.back()}
+            <Link
+              href="/lab/orders"
               className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
-            </button>
-
-            <Link href="/facility/labs" className="text-slate-600 hover:text-slate-900">
-              Back to lab orders
+              Back to Orders
             </Link>
           </div>
         </>
