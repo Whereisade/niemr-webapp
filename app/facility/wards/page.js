@@ -13,6 +13,7 @@ export default function FacilityWardsPage() {
   const [facility, setFacility] = useState(null);
   const [wardSummary, setWardSummary] = useState([]);
   const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState(null); // ✅ Track user role
 
   // Patients (for bed assignments)
   const [patients, setPatients] = useState([]);
@@ -60,6 +61,10 @@ export default function FacilityWardsPage() {
       // 1. Who am I?
       const me = await apiFetch("/accounts/me/");
       const facilityId = me?.facility?.id;
+      const role = me?.role; // ✅ Extract user role
+      
+      setUserRole(role); // ✅ Store user role
+      
       if (!facilityId) {
         throw new Error(
           "Your account is not linked to any facility. Please contact an administrator."
@@ -373,6 +378,9 @@ export default function FacilityWardsPage() {
     setHistoryError(null);
   }
 
+  // ✅ Check if user can create wards
+  const canCreateWard = userRole === "SUPER_ADMIN" || userRole === "ADMIN";
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50/80 p-6">
@@ -526,113 +534,115 @@ export default function FacilityWardsPage() {
         </div>
 
         {/* Top grid: create ward + overview */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)]">
-          {/* New Ward Form */}
-          <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500" />
-            <div className="relative space-y-4">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-900">
-                  Create new ward
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Define a new inpatient ward with capacity, type, and gender
-                  policy. Beds can be generated later in bulk.
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleCreateWard}
-                className="grid gap-3 md:grid-cols-2"
-              >
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Ward name
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                    placeholder="e.g. Male Surgical Ward"
-                    value={newWardName}
-                    onChange={(e) => setNewWardName(e.target.value)}
-                  />
-                </div>
-
+        <div className={`grid gap-6 ${canCreateWard ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)]" : ""}`}>
+          {/* ✅ Only show New Ward Form to SUPER_ADMIN and ADMIN */}
+          {canCreateWard && (
+            <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500" />
+              <div className="relative space-y-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Capacity (beds)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                    value={newWardCapacity}
-                    onChange={(e) => setNewWardCapacity(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Ward type
-                  </label>
-                  <select
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                    value={newWardType}
-                    onChange={(e) => setNewWardType(e.target.value)}
-                  >
-                    <option value="GENERAL">General</option>
-                    <option value="ICU">ICU</option>
-                    <option value="PICU">Pediatric ICU</option>
-                    <option value="NICU">Neonatal ICU</option>
-                    <option value="MATERNITY">Maternity</option>
-                    <option value="ISOLATION">Isolation</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Gender policy
-                  </label>
-                  <select
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                    value={newWardGender}
-                    onChange={(e) => setNewWardGender(e.target.value)}
-                  >
-                    <option value="MIXED">Mixed</option>
-                    <option value="MALE_ONLY">Male only</option>
-                    <option value="FEMALE_ONLY">Female only</option>
-                  </select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Floor / Block (optional)
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                    placeholder="e.g. Ground, 1st floor, Block B"
-                    value={newWardFloor}
-                    onChange={(e) => setNewWardFloor(e.target.value)}
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex items-center justify-between gap-3 pt-1">
-                  <p className="text-[11px] text-slate-500">
-                    Wards define the shell. You can generate individual bed
-                    numbers for each ward below.
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                    Create new ward
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Define a new inpatient ward with capacity, type, and gender
+                    policy. Beds can be generated later in bulk.
                   </p>
-                  <button
-                    type="submit"
-                    disabled={creatingWard}
-                    className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {creatingWard ? "Creating…" : "Add ward"}
-                  </button>
                 </div>
-              </form>
-            </div>
-          </section>
+
+                <form
+                  onSubmit={handleCreateWard}
+                  className="grid gap-3 md:grid-cols-2"
+                >
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Ward name
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="e.g. Male Surgical Ward"
+                      value={newWardName}
+                      onChange={(e) => setNewWardName(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Capacity (beds)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                      value={newWardCapacity}
+                      onChange={(e) => setNewWardCapacity(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Ward type
+                    </label>
+                    <select
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                      value={newWardType}
+                      onChange={(e) => setNewWardType(e.target.value)}
+                    >
+                      <option value="GENERAL">General</option>
+                      <option value="ICU">ICU</option>
+                      <option value="PICU">Pediatric ICU</option>
+                      <option value="NICU">Neonatal ICU</option>
+                      <option value="MATERNITY">Maternity</option>
+                      <option value="ISOLATION">Isolation</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Gender policy
+                    </label>
+                    <select
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                      value={newWardGender}
+                      onChange={(e) => setNewWardGender(e.target.value)}
+                    >
+                      <option value="MIXED">Mixed</option>
+                      <option value="MALE_ONLY">Male only</option>
+                      <option value="FEMALE_ONLY">Female only</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Floor / Block (optional)
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="e.g. Ground, 1st floor, Block B"
+                      value={newWardFloor}
+                      onChange={(e) => setNewWardFloor(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 flex items-center justify-between gap-3 pt-1">
+                    <p className="text-[11px] text-slate-500">
+                      Wards define the shell. You can generate individual bed
+                      numbers for each ward below.
+                    </p>
+                    <button
+                      type="submit"
+                      disabled={creatingWard}
+                      className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {creatingWard ? "Creating…" : "Add ward"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </section>
+          )}
 
           {/* Ward Summary Table */}
           <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
@@ -652,8 +662,9 @@ export default function FacilityWardsPage() {
 
               {wardSummary.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500">
-                  No wards have been configured yet. Create your first ward on
-                  the left to get started.
+                  {canCreateWard 
+                    ? "No wards have been configured yet. Create your first ward on the left to get started."
+                    : "No wards have been configured yet. Please contact an administrator to create wards."}
                 </p>
               ) : (
                 <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-100">
@@ -742,8 +753,9 @@ export default function FacilityWardsPage() {
 
             {wards.length === 0 ? (
               <p className="text-sm text-slate-500">
-                No wards have been configured yet. Use the form above to add
-                your first ward.
+                {canCreateWard
+                  ? "No wards have been configured yet. Use the form above to add your first ward."
+                  : "No wards have been configured yet. Please contact an administrator to create wards."}
               </p>
             ) : (
               <div className="space-y-4">
@@ -1224,5 +1236,3 @@ export default function FacilityWardsPage() {
     </div>
   );
 }
-
-
