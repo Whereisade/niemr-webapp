@@ -13,6 +13,10 @@ import {
   Activity,
   ArrowLeft,
   ArrowRight,
+  FileText,
+  Eye,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 function formatDateTime(value) {
@@ -49,6 +53,7 @@ export default function FacilityAuditPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandedRow, setExpandedRow] = useState(null);
 
   const [searchInput, setSearchInput] = useState(searchParams.get("q") || "");
 
@@ -120,11 +125,11 @@ export default function FacilityAuditPage() {
   }
 
   const uniqueUsers = new Set(
-    rows.map((r) => r.user_name || r.user || r.username).filter(Boolean)
+    rows.map((r) => r.actor_email || r.actor_display || r.actor).filter(Boolean)
   ).size;
 
   return (
-    <main className="relative mx-auto max-w-6xl space-y-6 p-6 md:p-10">
+    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
       {/* Soft glow background accents */}
       <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100/60 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100/60 blur-3xl" />
@@ -155,7 +160,7 @@ export default function FacilityAuditPage() {
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Filter by user, action, path, IP…"
+            placeholder="Filter by user, action, target, IP…"
             className="flex-1 border-none bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
           />
           <button
@@ -212,17 +217,18 @@ export default function FacilityAuditPage() {
               <tr>
                 <Th>When</Th>
                 <Th>User</Th>
-                <Th>Method</Th>
-                <Th>Path</Th>
-                <Th>Status</Th>
+                <Th>Action</Th>
+                <Th>Target</Th>
+                <Th>Message</Th>
                 <Th>IP</Th>
+                <Th className="w-10"></Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {loading && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="p-6 text-center text-sm text-slate-500"
                   >
                     Loading audit logs…
@@ -232,65 +238,107 @@ export default function FacilityAuditPage() {
 
               {!loading &&
                 rows.map((log) => {
-                  const ts =
-                    log.timestamp || log.created_at || log.request_at;
-                  const user =
-                    log.user_name || log.user || log.username || "—";
-                  const method = log.method || log.http_method || "—";
-                  const path =
-                    log.path ||
-                    log.url_path ||
-                    log.request_path ||
-                    "—";
-                  const status =
-                    log.status_code || log.response_status || "—";
-                  const ip =
-                    log.ip_address || log.remote_addr || "—";
+                  const ts = log.created_at || log.timestamp;
+                  const actorDisplay = log.actor_display || log.actor_email || "System";
+                  const verb = log.verb || "—";
+                  const targetModel = log.target_model || "—";
+                  const targetDisplay = log.target_display || log.target_id || "—";
+                  const targetId = log.target_id || "";
+                  const message = log.message || "—";
+                  const ip = log.ip_address || "—";
+                  const hasChanges = log.changes && Object.keys(log.changes).length > 0;
+                  const isExpanded = expandedRow === log.id;
 
                   return (
-                    <tr
-                      key={log.id}
-                      className="transition hover:bg-slate-50/60"
-                    >
-                      <Td>
-                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
-                          {formatDateTime(ts)}
-                        </span>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center gap-2">
-                          <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
-                            <UserRound className="h-4 w-4 text-blue-700" />
+                    <>
+                      <tr
+                        key={log.id}
+                        className={`transition hover:bg-slate-50/60 ${isExpanded ? "bg-slate-50/40" : ""}`}
+                      >
+                        <Td>
+                          <span className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
+                            {formatDateTime(ts)}
                           </span>
-                          <span className="text-xs font-medium text-slate-900">
-                            {user}
+                        </Td>
+                        <Td>
+                          <div className="flex items-center gap-2">
+                            <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
+                              <UserRound className="h-4 w-4 text-blue-700" />
+                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-medium text-slate-900 max-w-[140px] truncate" title={actorDisplay}>
+                                {actorDisplay}
+                              </span>
+                              {log.actor_email && actorDisplay !== log.actor_email && (
+                                <span className="text-[10px] text-slate-500 max-w-[140px] truncate" title={log.actor_email}>
+                                  {log.actor_email}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </Td>
+                        <Td>
+                          <VerbPill value={verb} />
+                        </Td>
+                        <Td>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-medium text-slate-900 max-w-[180px] truncate" title={targetDisplay}>
+                              {/* {targetDisplay} */}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 capitalize">
+                                {targetModel}
+                              </span>
+                              {targetId && (
+                                <span className="text-[10px] text-slate-400 font-mono truncate max-w-[80px]" title={targetId}>
+                                  #{targetId.length > 8 ? targetId.slice(0, 8) + "…" : targetId}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </Td>
+                        <Td>
+                          <span className="text-xs text-slate-700 max-w-[120px] truncate block" title={message}>
+                            {message}
                           </span>
-                        </div>
-                      </Td>
-                      <Td>
-                        <MethodPill value={method} />
-                      </Td>
-                      <Td>
-                        <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] text-slate-800">
-                          {path}
-                        </span>
-                      </Td>
-                      <Td>
-                        <StatusPill value={status} />
-                      </Td>
-                      <Td>
-                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
-                          {ip}
-                        </span>
-                      </Td>
-                    </tr>
+                        </Td>
+                        <Td>
+                          <span className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
+                            {ip}
+                          </span>
+                        </Td>
+                        <Td>
+                          {hasChanges && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedRow(isExpanded ? null : log.id)}
+                              className="grid h-6 w-6 place-items-center rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-700"
+                              title="View changes"
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </button>
+                          )}
+                        </Td>
+                      </tr>
+                      {isExpanded && hasChanges && (
+                        <tr key={`${log.id}-changes`}>
+                          <td colSpan={7} className="bg-slate-50/70 px-4 py-3">
+                            <ChangesDisplay changes={log.changes} />
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   );
                 })}
 
               {!loading && !rows.length && !error && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
@@ -368,9 +416,9 @@ function StatTile({ icon: Icon, label, value, accent, isText = false }) {
   );
 }
 
-function Th({ children }) {
+function Th({ children, className = "" }) {
   return (
-    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+    <th className={`px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 ${className}`}>
       {children}
     </th>
   );
@@ -380,44 +428,130 @@ function Td({ children }) {
   return <td className="px-3 py-3 align-top text-xs text-slate-800">{children}</td>;
 }
 
-function MethodPill({ value }) {
+function VerbPill({ value }) {
   const v = String(value || "").toUpperCase();
   const map = {
-    GET: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    POST: "bg-blue-50 text-blue-700 ring-blue-200",
-    PUT: "bg-amber-50 text-amber-700 ring-amber-200",
-    PATCH: "bg-purple-50 text-purple-700 ring-purple-200",
-    DELETE: "bg-rose-50 text-rose-700 ring-rose-200",
+    CREATE: { cls: "bg-emerald-50 text-emerald-700 ring-emerald-200", label: "Created" },
+    UPDATE: { cls: "bg-blue-50 text-blue-700 ring-blue-200", label: "Updated" },
+    DELETE: { cls: "bg-rose-50 text-rose-700 ring-rose-200", label: "Deleted" },
+    M2M: { cls: "bg-purple-50 text-purple-700 ring-purple-200", label: "Linked" },
+    LOGIN: { cls: "bg-cyan-50 text-cyan-700 ring-cyan-200", label: "Login" },
+    LOGOUT: { cls: "bg-slate-100 text-slate-700 ring-slate-200", label: "Logout" },
+    ACTION: { cls: "bg-amber-50 text-amber-700 ring-amber-200", label: "Action" },
   };
-  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
+  const { cls, label } = map[v] || { cls: "bg-slate-50 text-slate-700 ring-slate-200", label: v || "—" };
   return (
     <span
       className={`inline-flex items-center rounded-lg px-2 py-1 text-[11px] font-medium ring-1 ${cls}`}
     >
-      {v || "—"}
+      {label}
     </span>
   );
 }
 
-function StatusPill({ value }) {
-  const code = Number(value) || null;
-  let variant = "bg-slate-50 text-slate-700 ring-slate-200";
+function ChangesDisplay({ changes }) {
+  if (!changes || typeof changes !== "object") return null;
 
-  if (code && code >= 200 && code < 300) {
-    variant = "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  } else if (code && code >= 300 && code < 400) {
-    variant = "bg-blue-50 text-blue-700 ring-blue-200";
-  } else if (code && code >= 400 && code < 500) {
-    variant = "bg-amber-50 text-amber-700 ring-amber-200";
-  } else if (code && code >= 500) {
-    variant = "bg-rose-50 text-rose-700 ring-rose-200";
+  const { before, after, ...rest } = changes;
+
+  // For M2M changes, show related model and PKs
+  if (rest.related_model || rest.pks) {
+    return (
+      <div className="space-y-2">
+        <div className="text-[11px] font-medium text-slate-600 uppercase tracking-wide">
+          Relationship Changes
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
+          {rest.related_model && (
+            <div className="mb-1">
+              <span className="text-slate-500">Related model:</span>{" "}
+              <span className="font-medium text-slate-800">{rest.related_model}</span>
+            </div>
+          )}
+          {rest.pks && rest.pks.length > 0 && (
+            <div>
+              <span className="text-slate-500">IDs:</span>{" "}
+              <span className="font-mono text-slate-700">{rest.pks.join(", ")}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
+  // For create/update/delete, show before/after
+  const allKeys = new Set([
+    ...Object.keys(before || {}),
+    ...Object.keys(after || {}),
+  ]);
+
+  // Filter out internal/uninteresting fields
+  const skipFields = new Set(["id", "created_at", "updated_at", "password"]);
+  const displayKeys = [...allKeys].filter((k) => !skipFields.has(k));
+
+  if (displayKeys.length === 0) return null;
+
   return (
-    <span
-      className={`inline-flex items-center rounded-lg px-2 py-1 text-[11px] font-medium ring-1 ${variant}`}
-    >
-      {code || value || "—"}
-    </span>
+    <div className="space-y-2">
+      <div className="text-[11px] font-medium text-slate-600 uppercase tracking-wide">
+        Field Changes
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-200">
+              <th className="px-2 py-1.5 text-left font-medium text-slate-600">Field</th>
+              {before && <th className="px-2 py-1.5 text-left font-medium text-rose-600">Before</th>}
+              {after && <th className="px-2 py-1.5 text-left font-medium text-emerald-600">After</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {displayKeys.slice(0, 15).map((key) => {
+              const beforeVal = before?.[key];
+              const afterVal = after?.[key];
+              const changed = JSON.stringify(beforeVal) !== JSON.stringify(afterVal);
+
+              return (
+                <tr key={key} className={changed ? "bg-amber-50/30" : ""}>
+                  <td className="px-2 py-1.5 font-medium text-slate-700 capitalize">
+                    {key.replace(/_/g, " ")}
+                  </td>
+                  {before && (
+                    <td className="px-2 py-1.5 font-mono text-slate-600 max-w-[200px] truncate">
+                      {formatValue(beforeVal)}
+                    </td>
+                  )}
+                  {after && (
+                    <td className="px-2 py-1.5 font-mono text-slate-600 max-w-[200px] truncate">
+                      {formatValue(afterVal)}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {displayKeys.length > 15 && (
+          <div className="mt-2 text-[11px] text-slate-500 italic">
+            + {displayKeys.length - 15} more fields
+          </div>
+        )}
+      </div>
+    </div>
   );
+}
+
+function formatValue(val) {
+  if (val === null || val === undefined) return <span className="text-slate-400">—</span>;
+  if (typeof val === "boolean") return val ? "Yes" : "No";
+  if (typeof val === "object") {
+    try {
+      const str = JSON.stringify(val);
+      return str.length > 50 ? str.slice(0, 50) + "…" : str;
+    } catch {
+      return "[Object]";
+    }
+  }
+  const str = String(val);
+  return str.length > 50 ? str.slice(0, 50) + "…" : str;
 }
