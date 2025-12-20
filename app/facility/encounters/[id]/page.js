@@ -131,9 +131,14 @@ export default function FacilityEncounterDetailPage() {
     if (!id) return;
     const statusUpper = String(encounter?.status || "").toUpperCase();
     const base = `/facility/encounters/${id}/workflow`;
-    const target =
-      statusUpper === "WAITING_LABS" ? `${base}/waiting-labs` : `${base}/labs`;
-    router.push(target);
+    
+    // Route based on encounter status
+    if (statusUpper === "WAITING_LABS") {
+      router.push(`${base}/waiting-labs`);
+    } else {
+      // Start with nurse workflow (vitals/assessment)
+      router.push(`${base}/nurse`);
+    }
   }
 
   useEffect(() => {
@@ -305,11 +310,19 @@ export default function FacilityEncounterDetailPage() {
 
   const canOpenWorkflow = useMemo(() => {
     const role = String(me?.role || "").toUpperCase();
-    return ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role);
+    // Allow nurses and doctors to open workflow (nurses for vitals, doctors for full workflow)
+    return ["DOCTOR", "NURSE", "ADMIN", "SUPER_ADMIN"].includes(role);
   }, [me]);
 
+  const role = String(me?.role || "").toUpperCase();
+  const isNurse = role === "NURSE";
+
   const workflowBtnLabel =
-    statusUpper === "WAITING_LABS" ? "Go to Waiting Labs" : "Open Encounter Workflow";
+    statusUpper === "WAITING_LABS" 
+      ? "Go to Waiting Labs" 
+      : isNurse 
+        ? "Open Nurse Workflow"
+        : "Open Encounter Workflow";
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6 md:p-10">
@@ -346,7 +359,7 @@ export default function FacilityEncounterDetailPage() {
               type="button"
               onClick={openWorkflow}
               className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-              title="Open encounter workflow (Labs → SOAP → Prescription)"
+              title="Open encounter workflow"
             >
               {workflowBtnLabel}
             </button>

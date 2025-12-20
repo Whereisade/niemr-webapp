@@ -69,9 +69,10 @@ export default function StartEncounterButton({
         onSuccess(response);
       }
 
-      // Navigate to the encounter workflow
+      // Navigate to the nurse workflow page first (vitals/assessment)
+      // Nurses complete their assessment here, then doctors proceed to labs
       const basePath = scope === "provider" ? "/provider" : "/facility";
-      router.push(`${basePath}/encounters/${encounterId}/workflow/labs`);
+      router.push(`${basePath}/encounters/${encounterId}/workflow/nurse`);
     } catch (err) {
       console.error("Failed to start encounter:", err);
       setError(err?.message || "Failed to start encounter. Please try again.");
@@ -173,8 +174,9 @@ export function StartEncounterLink({
         onSuccess(response);
       }
 
+      // Navigate to the nurse workflow page first
       const basePath = scope === "provider" ? "/provider" : "/facility";
-      router.push(`${basePath}/encounters/${encounterId}/workflow/labs`);
+      router.push(`${basePath}/encounters/${encounterId}/workflow/nurse`);
     } catch (err) {
       console.error("Failed to start encounter:", err);
       alert(err?.message || "Failed to start encounter. Please try again.");
