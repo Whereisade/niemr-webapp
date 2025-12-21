@@ -23,6 +23,10 @@ import {
   UserRound,
   X,
   Plus,
+  FlaskConical,
+  Pill,
+  ShieldAlert,
+  UserCog,
 } from "lucide-react";
 
 function formatDateTime(value) {
@@ -138,6 +142,53 @@ export default function FacilityEncounterNursePage() {
   const [reminderSuccess, setReminderSuccess] = useState("");
   const [reminderError, setReminderError] = useState("");
 
+  // Doctor assignment
+  const [doctors, setDoctors] = useState([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [selectedDoctor, setSelectedDoctor] = useState("");
+  const [assigningDoctor, setAssigningDoctor] = useState(false);
+  const [assignSuccess, setAssignSuccess] = useState("");
+  const [assignError, setAssignError] = useState("");
+
+  // Lab order modal
+  const [showLabModal, setShowLabModal] = useState(false);
+  const [labCatalog, setLabCatalog] = useState([]);
+  const [loadingLabCatalog, setLoadingLabCatalog] = useState(false);
+  const [selectedTests, setSelectedTests] = useState([]);
+  const [labPriority, setLabPriority] = useState("ROUTINE");
+  const [labNotes, setLabNotes] = useState("");
+  const [labSubmitting, setLabSubmitting] = useState(false);
+  const [labSuccess, setLabSuccess] = useState("");
+  const [labError, setLabError] = useState("");
+
+  // Prescription modal
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [drugCatalog, setDrugCatalog] = useState([]);
+  const [loadingDrugCatalog, setLoadingDrugCatalog] = useState(false);
+  const [prescriptionItems, setPrescriptionItems] = useState([
+    { drug: "", dose: "", frequency: "", duration_days: "", instructions: "" }
+  ]);
+  const [prescriptionNotes, setPrescriptionNotes] = useState("");
+  const [prescriptionSubmitting, setPrescriptionSubmitting] = useState(false);
+  const [prescriptionSuccess, setPrescriptionSuccess] = useState("");
+  const [prescriptionError, setPrescriptionError] = useState("");
+
+  // Allergies modal
+  const [showAllergiesModal, setShowAllergiesModal] = useState(false);
+  const [allergies, setAllergies] = useState([]);
+  const [loadingAllergies, setLoadingAllergies] = useState(false);
+  const [allergyForm, setAllergyForm] = useState({
+    allergen: "",
+    allergy_type: "OTHER",
+    severity: "MODERATE",
+    reaction: "",
+    onset_date: "",
+    notes: "",
+  });
+  const [allergySubmitting, setAllergySubmitting] = useState(false);
+  const [allergySuccess, setAllergySuccess] = useState("");
+  const [allergyError, setAllergyError] = useState("");
+
   async function loadMe() {
     try {
       const data = await apiFetch("/accounts/me/", { method: "GET" });
@@ -154,27 +205,6 @@ export default function FacilityEncounterNursePage() {
     try {
       const data = await apiFetch(`/encounters/${encounterId}/`, { method: "GET" });
       setEncounter(data);
-
-      // Auto-assign doctor as provider if not set and user is a doctor
-      if (me && !data?.provider) {
-        const userRole = String(me?.role || "").toUpperCase();
-        if (["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(userRole)) {
-          try {
-            await apiFetch(`/encounters/${encounterId}/assign_provider/`, {
-              method: "POST",
-              body: JSON.stringify({}),
-            });
-            // Refresh encounter to get updated provider
-            const refreshed = await apiFetch(`/encounters/${encounterId}/`, {
-              method: "GET",
-            });
-            setEncounter(refreshed);
-          } catch (err) {
-            console.error("Failed to auto-assign provider:", err);
-            // Don't show error to user, this is a background operation
-          }
-        }
-      }
     } catch (err) {
       setError(err?.message || "Failed to load encounter.");
       setEncounter(null);
@@ -198,8 +228,59 @@ export default function FacilityEncounterNursePage() {
     }
   }
 
+  async function loadDoctors() {
+    setLoadingDoctors(true);
+    try {
+      const data = await apiFetch("/providers/?facility=current&type=DOCTOR&limit=100");
+      setDoctors(normalizeList(data));
+    } catch (err) {
+      console.error("Failed to load doctors:", err);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  }
+
+  async function loadLabCatalog() {
+    setLoadingLabCatalog(true);
+    try {
+      const data = await apiFetch("/labs/catalog/");
+      setLabCatalog(normalizeList(data));
+    } catch (err) {
+      console.error("Failed to load lab catalog:", err);
+    } finally {
+      setLoadingLabCatalog(false);
+    }
+  }
+
+  async function loadDrugCatalog() {
+    setLoadingDrugCatalog(true);
+    try {
+      const data = await apiFetch("/pharmacy/catalog/");
+      setDrugCatalog(normalizeList(data));
+    } catch (err) {
+      console.error("Failed to load drug catalog:", err);
+    } finally {
+      setLoadingDrugCatalog(false);
+    }
+  }
+
+  async function loadAllergies() {
+    if (!encounter?.patient) return;
+    setLoadingAllergies(true);
+    try {
+      const data = await apiFetch(`/patients/allergies/?patient=${encounter.patient}`);
+      setAllergies(normalizeList(data));
+    } catch (err) {
+      console.error("Failed to load allergies:", err);
+      setAllergies([]);
+    } finally {
+      setLoadingAllergies(false);
+    }
+  }
+
   useEffect(() => {
     loadMe();
+    loadDoctors();
   }, []);
 
   useEffect(() => {
@@ -211,6 +292,7 @@ export default function FacilityEncounterNursePage() {
   useEffect(() => {
     if (encounter?.patient) {
       loadVitals();
+      loadAllergies();
     }
   }, [encounter?.patient]);
 
@@ -316,8 +398,191 @@ export default function FacilityEncounterNursePage() {
     }
   }
 
+  async function handleAssignDoctor(e) {
+    e.preventDefault();
+    if (!selectedDoctor) return;
+
+    setAssigningDoctor(true);
+    setAssignError("");
+    setAssignSuccess("");
+
+    try {
+      await apiFetch(`/encounters/${encounterId}/assign_provider/`, {
+        method: "POST",
+        body: JSON.stringify({ provider: parseInt(selectedDoctor) }),
+      });
+
+      setAssignSuccess("Doctor assigned successfully.");
+      await loadEncounter();
+      setTimeout(() => {
+        setAssignSuccess("");
+      }, 3000);
+    } catch (err) {
+      setAssignError(err?.message || "Failed to assign doctor.");
+    } finally {
+      setAssigningDoctor(false);
+    }
+  }
+
+  async function handleSubmitLabOrder(e) {
+    e.preventDefault();
+    if (!patientId || selectedTests.length === 0) return;
+
+    setLabSubmitting(true);
+    setLabError("");
+    setLabSuccess("");
+
+    try {
+      const payload = {
+        patient: patientId,
+        encounter: encounterId,
+        priority: labPriority,
+        note: labNotes,
+        items: selectedTests.map(testId => ({
+          test_code: labCatalog.find(t => t.id === testId)?.code
+        })).filter(item => item.test_code),
+      };
+
+      if (encounter?.provider) {
+        payload.provider = encounter.provider;
+      }
+
+      await apiFetch("/labs/orders/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      setLabSuccess("Lab order created successfully.");
+      setSelectedTests([]);
+      setLabNotes("");
+      setLabPriority("ROUTINE");
+      
+      setTimeout(() => {
+        setShowLabModal(false);
+        setLabSuccess("");
+      }, 1500);
+    } catch (err) {
+      setLabError(err?.message || "Failed to create lab order.");
+    } finally {
+      setLabSubmitting(false);
+    }
+  }
+
+  async function handleSubmitPrescription(e) {
+    e.preventDefault();
+    if (!patientId || prescriptionItems.every(item => !item.drug)) return;
+
+    setPrescriptionSubmitting(true);
+    setPrescriptionError("");
+    setPrescriptionSuccess("");
+
+    try {
+      const validItems = prescriptionItems.filter(item => item.drug);
+      
+      const payload = {
+        patient: patientId,
+        encounter: encounterId,
+        note: prescriptionNotes,
+        items: validItems.map(item => ({
+          drug: parseInt(item.drug),
+          dose: item.dose,
+          frequency: item.frequency,
+          duration_days: item.duration_days ? parseInt(item.duration_days) : null,
+          instructions: item.instructions,
+        })),
+      };
+
+      if (encounter?.provider) {
+        payload.prescriber = encounter.provider;
+      }
+
+      await apiFetch("/pharmacy/prescriptions/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      setPrescriptionSuccess("Prescription created successfully.");
+      setPrescriptionItems([
+        { drug: "", dose: "", frequency: "", duration_days: "", instructions: "" }
+      ]);
+      setPrescriptionNotes("");
+      
+      setTimeout(() => {
+        setShowPrescriptionModal(false);
+        setPrescriptionSuccess("");
+      }, 1500);
+    } catch (err) {
+      setPrescriptionError(err?.message || "Failed to create prescription.");
+    } finally {
+      setPrescriptionSubmitting(false);
+    }
+  }
+
+  async function handleSubmitAllergy(e) {
+    e.preventDefault();
+    if (!patientId || !allergyForm.allergen.trim()) return;
+
+    setAllergySubmitting(true);
+    setAllergyError("");
+    setAllergySuccess("");
+
+    try {
+      const payload = {
+        patient: patientId,
+        allergen: allergyForm.allergen.trim(),
+        allergy_type: allergyForm.allergy_type,
+        severity: allergyForm.severity,
+        reaction: allergyForm.reaction,
+        onset_date: allergyForm.onset_date || null,
+        notes: allergyForm.notes,
+      };
+
+      await apiFetch("/patients/allergies/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      setAllergySuccess("Allergy recorded successfully.");
+      setAllergyForm({
+        allergen: "",
+        allergy_type: "OTHER",
+        severity: "MODERATE",
+        reaction: "",
+        onset_date: "",
+        notes: "",
+      });
+      
+      await loadAllergies();
+      
+      setTimeout(() => {
+        setAllergySuccess("");
+      }, 3000);
+    } catch (err) {
+      setAllergyError(err?.message || "Failed to record allergy.");
+    } finally {
+      setAllergySubmitting(false);
+    }
+  }
+
   function handleProceedToClinical() {
     router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
+  }
+
+  function handleAddPrescriptionItem() {
+    setPrescriptionItems([
+      ...prescriptionItems,
+      { drug: "", dose: "", frequency: "", duration_days: "", instructions: "" }
+    ]);
+  }
+
+  function handleRemovePrescriptionItem(index) {
+    setPrescriptionItems(prescriptionItems.filter((_, i) => i !== index));
+  }
+
+  function handlePrescriptionItemChange(index, field, value) {
+    const newItems = [...prescriptionItems];
+    newItems[index][field] = value;
+    setPrescriptionItems(newItems);
   }
 
   if (loading) {
@@ -374,7 +639,7 @@ export default function FacilityEncounterNursePage() {
             Nurse Assessment & Vitals
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Record patient vitals and set reminders before proceeding to clinical workflow.
+            Record patient vitals and manage encounter details before proceeding to clinical workflow.
           </p>
         </div>
 
@@ -463,6 +728,109 @@ export default function FacilityEncounterNursePage() {
           </div>
         )}
       </div>
+
+      {/* Action Buttons Row */}
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => {
+            loadLabCatalog();
+            setShowLabModal(true);
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+        >
+          <FlaskConical className="h-5 w-5" />
+          Order Lab Tests
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            loadDrugCatalog();
+            setShowPrescriptionModal(true);
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+        >
+          <Pill className="h-5 w-5" />
+          Create Prescription
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowAllergiesModal(true)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+        >
+          <ShieldAlert className="h-5 w-5" />
+          Manage Allergies
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {}}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+        >
+          <UserCog className="h-5 w-5" />
+          Assign Doctor
+        </button>
+      </div>
+
+      {/* Doctor Assignment */}
+      {!encounter?.provider && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <UserCog className="h-5 w-5 text-amber-700" />
+            <h3 className="text-sm font-semibold text-amber-900">Assign Doctor</h3>
+          </div>
+          
+          {assignSuccess && (
+            <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+              {assignSuccess}
+            </div>
+          )}
+          
+          {assignError && (
+            <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {assignError}
+            </div>
+          )}
+
+          <form onSubmit={handleAssignDoctor} className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-slate-700">
+                Select Doctor
+              </label>
+              <select
+                value={selectedDoctor}
+                onChange={(e) => setSelectedDoctor(e.target.value)}
+                disabled={loadingDoctors || assigningDoctor}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                required
+              >
+                <option value="">
+                  {loadingDoctors ? "Loading doctors..." : "Select a doctor"}
+                </option>
+                {doctors.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.first_name} {doc.last_name} {doc.specialty ? `- ${doc.specialty}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={!selectedDoctor || assigningDoctor}
+              className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+            >
+              {assigningDoctor ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              Assign
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Success/Error Messages */}
       {vitalsSuccess && (
@@ -763,6 +1131,487 @@ export default function FacilityEncounterNursePage() {
                 You've completed the nurse assessment. A doctor will continue the encounter 
                 with clinical documentation, labs, and prescription when ready.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lab Order Modal */}
+      {showLabModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+                  <FlaskConical className="h-4 w-4 text-blue-600" />
+                </div>
+                <h2 className="text-lg font-semibold text-slate-900">Order Lab Tests</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLabModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {labSuccess && (
+              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                {labSuccess}
+              </div>
+            )}
+
+            {labError && (
+              <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                {labError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitLabOrder} className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Select Tests
+                </label>
+                {loadingLabCatalog ? (
+                  <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading lab catalog...
+                  </div>
+                ) : (
+                  <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+                    {labCatalog.map((test) => (
+                      <label key={test.id} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedTests.includes(test.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTests([...selectedTests, test.id]);
+                            } else {
+                              setSelectedTests(selectedTests.filter(id => id !== test.id));
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-slate-700">
+                          {test.name} {test.code && <span className="text-xs text-slate-500">({test.code})</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Priority
+                </label>
+                <select
+                  value={labPriority}
+                  onChange={(e) => setLabPriority(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="ROUTINE">Routine</option>
+                  <option value="URGENT">Urgent</option>
+                  <option value="STAT">STAT</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Clinical Notes (Optional)
+                </label>
+                <textarea
+                  value={labNotes}
+                  onChange={(e) => setLabNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Additional clinical information..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLabModal(false)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={labSubmitting || selectedTests.length === 0}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {labSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FlaskConical className="h-4 w-4" />
+                  )}
+                  Create Lab Order
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Prescription Modal */}
+      {showPrescriptionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
+                  <Pill className="h-4 w-4 text-emerald-600" />
+                </div>
+                <h2 className="text-lg font-semibold text-slate-900">Create Prescription</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPrescriptionModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {prescriptionSuccess && (
+              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                {prescriptionSuccess}
+              </div>
+            )}
+
+            {prescriptionError && (
+              <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                {prescriptionError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitPrescription} className="space-y-4">
+              {loadingDrugCatalog ? (
+                <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading drug catalog...
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-slate-700">
+                      Medications
+                    </label>
+                    {prescriptionItems.map((item, index) => (
+                      <div key={index} className="rounded-lg border border-slate-200 p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-medium text-slate-600">
+                            Medication {index + 1}
+                          </span>
+                          {prescriptionItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePrescriptionItem(index)}
+                              className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-xs font-medium text-slate-600">
+                              Drug
+                            </label>
+                            <select
+                              value={item.drug}
+                              onChange={(e) => handlePrescriptionItemChange(index, 'drug', e.target.value)}
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              required
+                            >
+                              <option value="">Select medication...</option>
+                              {drugCatalog.map((drug) => (
+                                <option key={drug.id} value={drug.id}>
+                                  {drug.name} {drug.strength && `${drug.strength}`} {drug.form && `- ${drug.form}`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">
+                              Dose
+                            </label>
+                            <input
+                              type="text"
+                              value={item.dose}
+                              onChange={(e) => handlePrescriptionItemChange(index, 'dose', e.target.value)}
+                              placeholder="e.g., 500mg"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">
+                              Frequency
+                            </label>
+                            <input
+                              type="text"
+                              value={item.frequency}
+                              onChange={(e) => handlePrescriptionItemChange(index, 'frequency', e.target.value)}
+                              placeholder="e.g., 3 times daily"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">
+                              Duration (days)
+                            </label>
+                            <input
+                              type="number"
+                              value={item.duration_days}
+                              onChange={(e) => handlePrescriptionItemChange(index, 'duration_days', e.target.value)}
+                              placeholder="e.g., 7"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">
+                              Instructions
+                            </label>
+                            <input
+                              type="text"
+                              value={item.instructions}
+                              onChange={(e) => handlePrescriptionItemChange(index, 'instructions', e.target.value)}
+                              placeholder="e.g., Take with food"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleAddPrescriptionItem}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Another Medication
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Prescription Notes (Optional)
+                    </label>
+                    <textarea
+                      value={prescriptionNotes}
+                      onChange={(e) => setPrescriptionNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Additional instructions or notes..."
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPrescriptionModal(false)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={prescriptionSubmitting || prescriptionItems.every(item => !item.drug)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {prescriptionSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Pill className="h-4 w-4" />
+                  )}
+                  Create Prescription
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Allergies Modal */}
+      {showAllergiesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-50">
+                  <ShieldAlert className="h-4 w-4 text-rose-600" />
+                </div>
+                <h2 className="text-lg font-semibold text-slate-900">Patient Allergies</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAllergiesModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Existing Allergies List */}
+            <div className="mb-6">
+              <h3 className="mb-3 text-sm font-medium text-slate-700">Recorded Allergies</h3>
+              {loadingAllergies ? (
+                <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading allergies...
+                </div>
+              ) : allergies.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                  No allergies recorded for this patient
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {allergies.map((allergy) => (
+                    <div key={allergy.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-900">{allergy.allergen}</span>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              allergy.severity === 'LIFE_THREATENING' ? 'bg-red-100 text-red-700' :
+                              allergy.severity === 'SEVERE' ? 'bg-orange-100 text-orange-700' :
+                              allergy.severity === 'MODERATE' ? 'bg-amber-100 text-amber-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {allergy.severity}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs text-slate-600">
+                            {allergy.allergy_type} {allergy.reaction && `• Reaction: ${allergy.reaction}`}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add New Allergy Form */}
+            <div className="rounded-lg border-2 border-dashed border-slate-200 p-4">
+              <h3 className="mb-3 text-sm font-medium text-slate-700">Add New Allergy</h3>
+              
+              {allergySuccess && (
+                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
+                  {allergySuccess}
+                </div>
+              )}
+
+              {allergyError && (
+                <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                  {allergyError}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitAllergy} className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Allergen *
+                    </label>
+                    <input
+                      type="text"
+                      value={allergyForm.allergen}
+                      onChange={(e) => setAllergyForm({...allergyForm, allergen: e.target.value})}
+                      placeholder="e.g., Penicillin"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Type
+                    </label>
+                    <select
+                      value={allergyForm.allergy_type}
+                      onChange={(e) => setAllergyForm({...allergyForm, allergy_type: e.target.value})}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    >
+                      <option value="DRUG">Drug</option>
+                      <option value="FOOD">Food</option>
+                      <option value="ENVIRONMENTAL">Environmental</option>
+                      <option value="INSECT">Insect</option>
+                      <option value="LATEX">Latex</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Severity
+                    </label>
+                    <select
+                      value={allergyForm.severity}
+                      onChange={(e) => setAllergyForm({...allergyForm, severity: e.target.value})}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    >
+                      <option value="MILD">Mild</option>
+                      <option value="MODERATE">Moderate</option>
+                      <option value="SEVERE">Severe</option>
+                      <option value="LIFE_THREATENING">Life-threatening</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Reaction
+                    </label>
+                    <input
+                      type="text"
+                      value={allergyForm.reaction}
+                      onChange={(e) => setAllergyForm({...allergyForm, reaction: e.target.value})}
+                      placeholder="e.g., Rash, swelling"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Notes
+                    </label>
+                    <textarea
+                      value={allergyForm.notes}
+                      onChange={(e) => setAllergyForm({...allergyForm, notes: e.target.value})}
+                      rows={2}
+                      placeholder="Additional notes..."
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="submit"
+                    disabled={allergySubmitting}
+                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                  >
+                    {allergySubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShieldAlert className="h-4 w-4" />
+                    )}
+                    Add Allergy
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowAllergiesModal(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
