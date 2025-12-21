@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import BedAssignmentModal from "@/components/wards/BedAssignmentModal";
 import {
   ArrowLeft,
   Loader2,
@@ -14,6 +15,7 @@ import {
   Building2,
   ChevronRight,
   CheckCircle2,
+  Bed,
 } from "lucide-react";
 
 function normalizeList(body) {
@@ -68,6 +70,10 @@ export default function FacilityEncounterPrescriptionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState("");
 
+  // Bed assignment modal state
+  const [showBedModal, setShowBedModal] = useState(false);
+  const [bedAssignment, setBedAssignment] = useState(null);
+
   async function loadMe() {
     try {
       const data = await apiFetch("/accounts/me/", { method: "GET" });
@@ -81,6 +87,21 @@ export default function FacilityEncounterPrescriptionPage() {
     if (!encounterId) return;
     const data = await apiFetch(`/encounters/${encounterId}/`, { method: "GET" });
     setEncounter(data);
+
+    // Check if patient already has a bed assignment
+    if (data?.patient) {
+      try {
+        const assignments = await apiFetch(
+          `/facilities/bed-assignments/?patient=${data.patient}&active=true`
+        );
+        const activeAssignment = normalizeList(assignments)?.[0];
+        if (activeAssignment) {
+          setBedAssignment(activeAssignment);
+        }
+      } catch (err) {
+        console.error("Failed to check bed assignment:", err);
+      }
+    }
   }
 
   async function loadCatalog(search = "") {
@@ -274,6 +295,11 @@ export default function FacilityEncounterPrescriptionPage() {
     }
   }
 
+  function handleBedAssignmentSuccess(assignment) {
+    setBedAssignment(assignment);
+    setSuccess("Bed assigned successfully!");
+  }
+
   if (loading) {
     return (
       <div className="p-6">
@@ -305,6 +331,12 @@ export default function FacilityEncounterPrescriptionPage() {
     );
   }
 
+  const patientName = encounter?.patient_name || 
+    (encounter?.patient_first_name || encounter?.patient_last_name
+      ? `${encounter?.patient_first_name || ""} ${encounter?.patient_last_name || ""}`.trim()
+      : "") ||
+    `Patient #${encounter?.patient || "—"}`;
+
   return (
     <div className="p-6">
       <div className="mb-4 flex items-start justify-between gap-4">
@@ -325,18 +357,44 @@ export default function FacilityEncounterPrescriptionPage() {
             Prescription
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Encounter #{encounterId} • Patient #{encounter?.patient || "—"}
+            Encounter #{encounterId} • {patientName}
           </p>
         </div>
 
-        <button
-          onClick={handleSubmit}
-          disabled={submitting || readOnly}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-        >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pill className="h-4 w-4" />}
-          Create Prescription
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Bed Assignment Status/Button */}
+          {bedAssignment ? (
+            <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+              <Bed className="h-4 w-4 text-emerald-700" />
+              <span className="text-emerald-900">
+                Bed: {bedAssignment.bed_display || `#${bedAssignment.bed}`}
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowBedModal(true)}
+              disabled={!encounter?.patient}
+              className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+            >
+              <Bed className="h-4 w-4" />
+              Assign Bed
+            </button>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || readOnly}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Pill className="h-4 w-4" />
+            )}
+            Create Prescription
+          </button>
+        </div>
       </div>
 
       {success ? (
@@ -362,7 +420,8 @@ export default function FacilityEncounterPrescriptionPage() {
 
       {readOnly ? (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900">
-          This encounter is currently read-only (locked / waiting labs / crossed out / insufficient role).
+          This encounter is currently read-only (locked / waiting labs / crossed
+          out / insufficient role).
         </div>
       ) : null}
 
@@ -372,7 +431,9 @@ export default function FacilityEncounterPrescriptionPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Pill className="h-5 w-5 text-slate-700" />
-              <h2 className="text-sm font-semibold text-slate-900">Drug Catalog</h2>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Drug Catalog
+              </h2>
             </div>
 
             <div className="relative w-full max-w-md">
@@ -418,13 +479,16 @@ export default function FacilityEncounterPrescriptionPage() {
                       <tr key={String(d?.code)} className="hover:bg-slate-50">
                         <td className="px-3 py-2 text-slate-900">
                           {d?.name || "—"}{" "}
-                          <span className="text-xs text-slate-500">{d?.strength || ""}</span>
+                          <span className="text-xs text-slate-500">
+                            {d?.strength || ""}
+                          </span>
                         </td>
                         <td className="px-3 py-2 font-mono text-xs text-slate-700">
                           {d?.code || "—"}
                         </td>
                         <td className="px-3 py-2 text-slate-700">
-                          {[d?.form, d?.route].filter(Boolean).join(" • ") || "—"}
+                          {[d?.form, d?.route].filter(Boolean).join(" • ") ||
+                            "—"}
                         </td>
                         <td className="px-3 py-2">
                           <button
@@ -464,7 +528,7 @@ export default function FacilityEncounterPrescriptionPage() {
               <input
                 value={freeTextName}
                 onChange={(e) => setFreeTextName(e.target.value)}
-                placeholder="Type a medication name (e.g., “Coartem 20/120”)"
+                placeholder={'Type a medication name (e.g., "Coartem 20/120")'}
                 disabled={readOnly}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
               />
@@ -483,7 +547,9 @@ export default function FacilityEncounterPrescriptionPage() {
 
         {/* Builder */}
         <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">Prescription Builder</h2>
+          <h2 className="text-sm font-semibold text-slate-900">
+            Prescription Builder
+          </h2>
 
           <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -491,7 +557,8 @@ export default function FacilityEncounterPrescriptionPage() {
               Outsource to Independent Pharmacy
             </div>
             <p className="mt-1 text-xs text-slate-600">
-              Optional. If not selected, prescription stays in the facility pharmacy workflow.
+              Optional. If not selected, prescription stays in the facility
+              pharmacy workflow.
             </p>
 
             <div className="mt-2">
@@ -528,13 +595,18 @@ export default function FacilityEncounterPrescriptionPage() {
           <div className="mt-4 space-y-3">
             {items.length ? (
               items.map((it, idx) => (
-                <div key={idx} className="rounded-2xl border border-slate-100 bg-white p-3">
+                <div
+                  key={idx}
+                  className="rounded-2xl border border-slate-100 bg-white p-3"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="text-sm font-semibold text-slate-900">
                         {it?.drug_code ? (
                           <>
-                            <span className="font-mono text-xs">{it.drug_code}</span>
+                            <span className="font-mono text-xs">
+                              {it.drug_code}
+                            </span>
                           </>
                         ) : (
                           it?.drug_name || "Free-text"
@@ -559,7 +631,9 @@ export default function FacilityEncounterPrescriptionPage() {
                   <div className="mt-3 grid gap-2">
                     <input
                       value={it?.dose || ""}
-                      onChange={(e) => updateItem(idx, { dose: e.target.value })}
+                      onChange={(e) =>
+                        updateItem(idx, { dose: e.target.value })
+                      }
                       placeholder="Dose (e.g., 500mg, 10mL)"
                       disabled={readOnly}
                       className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
@@ -568,14 +642,18 @@ export default function FacilityEncounterPrescriptionPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         value={it?.frequency || ""}
-                        onChange={(e) => updateItem(idx, { frequency: e.target.value })}
+                        onChange={(e) =>
+                          updateItem(idx, { frequency: e.target.value })
+                        }
                         placeholder="Frequency (e.g., bd, tds)"
                         disabled={readOnly}
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
                       />
                       <input
                         value={String(it?.duration_days ?? 1)}
-                        onChange={(e) => updateItem(idx, { duration_days: e.target.value })}
+                        onChange={(e) =>
+                          updateItem(idx, { duration_days: e.target.value })
+                        }
                         placeholder="Duration (days)"
                         disabled={readOnly}
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
@@ -585,14 +663,18 @@ export default function FacilityEncounterPrescriptionPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         value={String(it?.qty_prescribed ?? 0)}
-                        onChange={(e) => updateItem(idx, { qty_prescribed: e.target.value })}
+                        onChange={(e) =>
+                          updateItem(idx, { qty_prescribed: e.target.value })
+                        }
                         placeholder="Qty prescribed"
                         disabled={readOnly}
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
                       />
                       <input
                         value={it?.instruction || ""}
-                        onChange={(e) => updateItem(idx, { instruction: e.target.value })}
+                        onChange={(e) =>
+                          updateItem(idx, { instruction: e.target.value })
+                        }
                         placeholder="Instruction (optional)"
                         disabled={readOnly}
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
@@ -613,7 +695,11 @@ export default function FacilityEncounterPrescriptionPage() {
             disabled={submitting || readOnly}
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
           >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pill className="h-4 w-4" />}
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Pill className="h-4 w-4" />
+            )}
             Create Prescription
           </button>
 
@@ -625,6 +711,16 @@ export default function FacilityEncounterPrescriptionPage() {
           </Link>
         </div>
       </div>
+
+      {/* Bed Assignment Modal */}
+      <BedAssignmentModal
+        isOpen={showBedModal}
+        onClose={() => setShowBedModal(false)}
+        patientId={encounter?.patient}
+        patientName={patientName}
+        encounterId={encounterId}
+        onSuccess={handleBedAssignmentSuccess}
+      />
     </div>
   );
 }

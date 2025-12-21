@@ -385,6 +385,11 @@ export default async function PatientDashboard() {
                   label="My Vitals"
                 />
                 <QuickAction
+                  href="/patient/documents"
+                  icon={Heart}
+                  label="My Medical Documents"
+                />
+                <QuickAction
                   href="/patient/labs"
                   icon={FlaskConical}
                   label="Lab Results"
