@@ -20,6 +20,7 @@ import {
   CalendarClock,
   ArrowLeft,
   ArrowRight,
+  Activity,
 } from "lucide-react";
 
 function formatDateTime(value) {
@@ -54,8 +55,6 @@ export default function FacilityEncountersPage() {
   const [rows, setRows] = useState([]);
   const [attachmentsFor, setAttachmentsFor] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
-
-  // NEW: local state for update actions
   const [updatingId, setUpdatingId] = useState(null);
   const [updateError, setUpdateError] = useState("");
 
@@ -132,7 +131,7 @@ export default function FacilityEncountersPage() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6">
+    <main className="mx-auto max-w-7xl px-4 py-6">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
@@ -180,7 +179,6 @@ export default function FacilityEncountersPage() {
             {closedCount}
           </p>
         </div>
-
       </section>
 
       {/* Filters + search */}
@@ -231,7 +229,6 @@ export default function FacilityEncountersPage() {
         </form>
       </section>
 
-      {/* NEW: update error (distinct from fetch error above) */}
       {updateError && (
         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {updateError}
@@ -248,7 +245,16 @@ export default function FacilityEncountersPage() {
                   Patient
                 </th>
                 <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
-                  Provider
+                  <div className="flex items-center gap-1">
+                    <Activity className="h-3 w-3" />
+                    Nurse
+                  </div>
+                </th>
+                <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
+                  <div className="flex items-center gap-1">
+                    <Stethoscope className="h-3 w-3" />
+                    Provider
+                  </div>
                 </th>
                 <th className="px-3 py-2 font-semibold uppercase tracking-wide text-slate-500">
                   When
@@ -274,7 +280,7 @@ export default function FacilityEncountersPage() {
               {loading && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="p-4 text-center text-sm text-slate-500"
                   >
                     Loading encounters…
@@ -303,28 +309,44 @@ export default function FacilityEncountersPage() {
                       </div>
                     </td>
 
+                    {/* NEW: Nurse column */}
                     <td className="p-3 text-sm text-slate-800">
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-50">
-                          <Stethoscope className="h-4 w-4 text-blue-600" />
-                        </span>
-                        <div>
-                          <div className="font-medium">
-                            {enc.provider_name || enc.provider || "—"}
+                      {enc.nurse_name ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-purple-50">
+                            <Activity className="h-4 w-4 text-purple-600" />
+                          </span>
+                          <div>
+                            <div className="font-medium">{enc.nurse_name}</div>
+                            <div className="text-[11px] text-slate-500">Nurse</div>
                           </div>
-                          {enc.provider_role && (
-                            <div className="text-[11px] text-slate-500">
-                              {enc.provider_role}
-                            </div>
-                          )}
                         </div>
-                      </div>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+
+                    {/* UPDATED: Provider column (doctor) */}
+                    <td className="p-3 text-sm text-slate-800">
+                      {enc.provider_name ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-50">
+                            <Stethoscope className="h-4 w-4 text-blue-600" />
+                          </span>
+                          <div>
+                            <div className="font-medium">{enc.provider_name}</div>
+                            <div className="text-[11px] text-slate-500">Doctor</div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
 
                     <td className="p-3 text-xs text-slate-700">
                       <div className="flex items-center gap-1">
                         <CalendarClock className="h-4 w-4 text-slate-400" />
-                        <span>{formatDateTime(enc.started_at)}</span>
+                        <span>{formatDateTime(enc.occurred_at)}</span>
                       </div>
                     </td>
 
@@ -377,10 +399,8 @@ export default function FacilityEncountersPage() {
                       </button>
                     </td>
 
-                    {/* NEW: Close / Cross-out + View in one Actions cell */}
                     <td className="p-3 text-xs text-slate-800">
                       <div className="flex flex-wrap justify-end gap-2">
-                        {/* Close encounter */}
                         <button
                           type="button"
                           onClick={async () => {
@@ -388,14 +408,12 @@ export default function FacilityEncountersPage() {
                             setUpdatingId(enc.id);
                             try {
                               const res = await closeEncounter(enc.id);
-
                               const newStatus =
                                 res &&
                                 typeof res === "object" &&
                                 res.status
                                   ? res.status
                                   : "CLOSED";
-
                               setRows((prev) =>
                                 prev.map((e) =>
                                   e.id === enc.id
@@ -422,7 +440,6 @@ export default function FacilityEncountersPage() {
                           {updatingId === enc.id ? "Closing…" : "Close"}
                         </button>
 
-                        {/* View details (existing behavior) */}
                         <Link
                           href={`/facility/encounters/${enc.id}`}
                           className="inline-flex items-center rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
@@ -437,7 +454,7 @@ export default function FacilityEncountersPage() {
               {!loading && !rows.length && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="p-4 text-center text-sm text-slate-500"
                   >
                     No encounters found for this facility.
