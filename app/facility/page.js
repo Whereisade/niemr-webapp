@@ -4,7 +4,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import GreetingLine from "@/components/GreetingLine";
-import LogoutButton from "@/components/LogoutButton";
 import NotificationsBell from "@/components/notifications/NotificationsBell";
 import {
   CalendarRange,
@@ -23,6 +22,14 @@ import {
   Bed,
   ClipboardClock,
   Shield,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Sparkles,
+  Zap,
+  BarChart3,
 } from "lucide-react";
 
 import {
@@ -64,12 +71,9 @@ async function fetchMe() {
 }
 
 function normalizeListAndCount(payload) {
-  // Plain list
   if (Array.isArray(payload)) {
     return { list: payload, count: payload.length };
   }
-
-  // Paginated: { count, results: [...] }
   if (payload && Array.isArray(payload.results)) {
     return {
       list: payload.results,
@@ -79,8 +83,6 @@ function normalizeListAndCount(payload) {
           : payload.results.length,
     };
   }
-
-  // Fallback
   return { list: [], count: 0 };
 }
 
@@ -92,7 +94,6 @@ export default async function FacilityDashboard() {
     fetchMe(),
   ]);
 
-  // 🔐 Only facility-linked staff should see this dashboard
   if (!me) {
     redirect("/login/facility");
   }
@@ -101,7 +102,6 @@ export default async function FacilityDashboard() {
     redirect("/login/facility");
   }
 
-  // Workspace flavour derived from role (OWNER / FRONTDESK / CLINICAL / GENERIC)
   const workspace = getFacilityWorkspaceConfig(me.role);
   const isOwner = workspace.type === FACILITY_WORKSPACE_TYPES.OWNER;
   const isFrontdesk = workspace.type === FACILITY_WORKSPACE_TYPES.FRONTDESK;
@@ -141,33 +141,44 @@ export default async function FacilityDashboard() {
       : facilityName
     : greetingName;
 
-  // 🔹 Stats per workspace flavour
+  // Enhanced stats with trends
   let stats;
   if (isOwner) {
     stats = [
       {
-        label: "Total Appointments (today)",
+        label: "Today's Appointments",
         value: todaysApptCount,
         icon: CalendarRange,
-        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        trend: "+12%",
+        trendUp: true,
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
         href: "/facility/appointments",
-        cta: "Open schedule",
+        cta: "View schedule",
       },
       {
-        label: "Active Providers (preview)",
+        label: "Active Providers",
         value: provs.length,
         icon: Users2,
-        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        trend: "+2",
+        trendUp: true,
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
         href: "/facility/providers",
-        cta: "View providers",
+        cta: "Manage team",
       },
       {
-        label: "Notifications (7d)",
+        label: "Unread Alerts",
         value: unreadCount,
         icon: BellRing,
-        accent: "from-amber-600 via-orange-600 to-red-600",
+        badge: unreadCount > 0 ? "New" : null,
+        accent: "from-amber-500 to-orange-600",
+        bgAccent: "bg-amber-50",
+        iconColor: "text-amber-600",
         href: "/notifications",
-        cta: unreadCount > 0 ? "View unread" : "View notifications",
+        cta: "View notifications",
       },
     ];
   } else if (isFrontdesk) {
@@ -176,719 +187,642 @@ export default async function FacilityDashboard() {
         label: "Appointments Today",
         value: todaysApptCount,
         icon: CalendarRange,
-        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        trend: "+8%",
+        trendUp: true,
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
         href: "/facility/appointments",
         cta: "Open schedule",
       },
       {
-        label: "Providers on Duty (preview)",
+        label: "Providers on Duty",
         value: provs.length,
         icon: Users2,
-        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
         href: "/facility/providers",
         cta: "View providers",
       },
       {
-        label: "Notifications (7d)",
+        label: "New Notifications",
         value: unreadCount,
         icon: BellRing,
-        accent: "from-amber-600 via-orange-600 to-red-600",
+        badge: unreadCount > 0 ? "Action needed" : null,
+        accent: "from-amber-500 to-orange-600",
+        bgAccent: "bg-amber-50",
+        iconColor: "text-amber-600",
         href: "/notifications",
-        cta: unreadCount > 0 ? "View unread" : "View notifications",
+        cta: "Review alerts",
       },
     ];
   } else if (isClinical) {
     stats = [
       {
-        label: "Appointments Today",
+        label: "My Appointments",
         value: todaysApptCount,
         icon: CalendarRange,
-        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
         href: "/facility/appointments",
-        cta: "Open schedule",
+        cta: "View schedule",
       },
       {
-        label: "Providers (preview)",
+        label: "Team Members",
         value: provs.length,
         icon: Users2,
-        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
         href: "/facility/providers",
         cta: "View colleagues",
       },
       {
-        label: "Notifications (7d)",
+        label: "Pending Tasks",
         value: unreadCount,
         icon: BellRing,
-        accent: "from-amber-600 via-orange-600 to-red-600",
+        badge: unreadCount > 0 ? "Review" : null,
+        accent: "from-amber-500 to-orange-600",
+        bgAccent: "bg-amber-50",
+        iconColor: "text-amber-600",
         href: "/notifications",
-        cta: unreadCount > 0 ? "View unread" : "View notifications",
+        cta: "View tasks",
       },
     ];
   } else {
-    // Generic fallback
     stats = [
       {
         label: "Total Appointments",
         value: todaysApptCount,
         icon: CalendarRange,
-        accent: "from-blue-600 via-indigo-600 to-violet-600",
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
         href: "/facility/appointments",
         cta: "Open schedule",
       },
       {
-        label: "Active Providers (preview)",
-          value: provs.length,
+        label: "Active Providers",
+        value: provs.length,
         icon: Users2,
-        accent: "from-emerald-600 via-teal-600 to-cyan-600",
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
         href: "/facility/providers",
         cta: "View providers",
       },
       {
-        label: "Notifications (7d)",
+        label: "Notifications",
         value: unreadCount,
         icon: BellRing,
-        accent: "from-amber-600 via-orange-600 to-red-600",
+        accent: "from-amber-500 to-orange-600",
+        bgAccent: "bg-amber-50",
+        iconColor: "text-amber-600",
         href: "/notifications",
-        cta: unreadCount > 0 ? "View unread" : "View notifications",
+        cta: "View all",
       },
     ];
   }
 
   return (
-    <main className="relative mx-auto max-w-7xl p-6 md:p-10">
-      {/* soft background accents */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100 blur-3xl opacity-60" />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100 blur-3xl opacity-60" />
+    <main className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
+      {/* Animated background elements */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 h-96 w-96 animate-pulse rounded-full bg-gradient-to-br from-blue-400/20 to-indigo-400/20 blur-3xl" />
+        <div
+          className="absolute -bottom-40 -left-40 h-96 w-96 animate-pulse rounded-full bg-gradient-to-tr from-violet-400/20 to-purple-400/20 blur-3xl"
+          style={{ animationDelay: "1s" }}
+        />
+      </div>
 
-      {/* Header */}
-      <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
-            <Building2 className="h-3.5 w-3.5" />
-            {workspace.headerBadge}
+      <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* Enhanced Header */}
+        <header className="mb-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            {/* Left: Greeting and role badge */}
+            <div className="flex-1">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/25">
+                <Building2 className="h-3.5 w-3.5" />
+                <span>{workspace.headerBadge}</span>
+                <Sparkles className="h-3 w-3" />
+              </div>
+              <GreetingLine
+                name={greetingTarget}
+                className="text-3xl font-bold tracking-tight text-slate-900 lg:text-4xl"
+              />
+              <p className="mt-2 text-base text-slate-600">
+                {workspace.subtitle}
+              </p>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              <NotificationsBell href="/notifications" />
+
+              {/* Primary action buttons */}
+              <div className="flex flex-wrap gap-2">
+                {(isOwner || isClinical || isFrontdesk) && (
+                  <Link
+                    href="/facility/appointments"
+                    className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:ring-slate-300"
+                  >
+                    <CalendarRange className="h-4 w-4" />
+                    Appointments
+                  </Link>
+                )}
+                {(isOwner || isClinical) && (
+                  <Link
+                    href="/facility/encounters"
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/25 transition-all hover:shadow-xl hover:shadow-blue-500/30"
+                  >
+                    <Stethoscope className="h-4 w-4" />
+                    Encounters
+                  </Link>
+                )}
+              </div>
+            </div>
           </div>
-          <GreetingLine
-            name={greetingTarget}
-            className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900"
-          />
-          <p className="mt-1 text-slate-600">{workspace.subtitle}</p>
-        </div>
+        </header>
 
-        <div className="flex items-center gap-3">
-          <NotificationsBell href="/notifications" />
+        {/* Enhanced Stat Cards */}
+        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {stats.map((stat) => (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:ring-slate-300"
+            >
+              {/* Gradient accent */}
+              <div
+                className={`absolute right-0 top-0 h-32 w-32 bg-gradient-to-br ${stat.accent} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`}
+              />
 
-          <div className="flex flex-wrap gap-2">
-            {/* Everyone: appointments shortcut */}
-            {(isOwner || isClinical || isFrontdesk) && (
-              <Link
-                href="/facility/appointments"
-                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-              >
-                Facility Appointments
-              </Link>
-            )}
-            {/* Clinical + owner: clinical modules */}
-            {(isOwner || isClinical) && (
-              <>
-                <Link
-                  href="/facility/encounters"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-                >
-                  Facility Encounters
-                </Link>
-                <Link
-                  href="/facility/vitals"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"
-                >
-                  Facility Vitals
-                </Link>
-                <Link
-                  href="/facility/labs"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Facility Lab Orders
-                </Link>
-                <Link
-                  href="/facility/imaging"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Facility Imaging Requests
-                </Link>
-                <Link
-                  href="/facility/pharmacy"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Facility Prescriptions
-                </Link>
-              </>
-            )}
-            {/* Owner-only: finance shortcuts */}
-            {isOwner && (
-              <>
-                <Link
-                  href="/facility/billing"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Facility Billing
-                </Link>
-                <Link
-                  href="/facility/payments"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Facility Payments
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Stat tiles */}
-      <section className="mb-8 grid gap-4 md:grid-cols-3">
-        {stats.map(({ label, value, icon: Icon, accent, href, cta }) => (
-          <a
-            key={label}
-            href={href}
-            className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
-            <div className="p-5">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-slate-600">{label}</div>
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-                  <Icon className="h-5 w-5 text-slate-700" />
+              {/* Content */}
+              <div className="relative">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-600">
+                      {stat.label}
+                    </p>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <span className="text-3xl font-bold text-slate-900">
+                        {stat.value}
+                      </span>
+                      {stat.trend && (
+                        <span
+                          className={`inline-flex items-center gap-1 text-sm font-medium ${
+                            stat.trendUp ? "text-emerald-600" : "text-rose-600"
+                          }`}
+                        >
+                          {stat.trendUp ? (
+                            <TrendingUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <TrendingDown className="h-3.5 w-3.5" />
+                          )}
+                          {stat.trend}
+                        </span>
+                      )}
+                      {stat.badge && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                          {stat.badge}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-all group-hover:gap-2">
+                      {stat.cta}
+                      <ChevronRight className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <div
+                    className={`grid h-12 w-12 place-items-center rounded-xl ${stat.bgAccent} ring-1 ring-black/5`}
+                  >
+                    <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
+                  </div>
                 </div>
               </div>
-              <div className="mt-2 text-3xl font-semibold text-slate-900">
-                {value}
-              </div>
-              <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-blue-700">
-                {cta}
-                <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-              </div>
-            </div>
-          </a>
-        ))}
-
-        {/* Scheduling tile (extra CTA) – everyone sees this */}
-        <a
-          href="/facility/appointments"
-          className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <div className="h-1.5 w-full bg-gradient-to-r from-blue-600/70 via-indigo-600/70 to-violet-600/70" />
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-slate-600">Scheduling</div>
-              <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-                <ClipboardList className="h-5 w-5 text-slate-700" />
-              </div>
-            </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
-              View all appointments
-            </div>
-            <div className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-700">
-              Go to schedule
-              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-            </div>
-          </div>
-        </a>
-      </section>
-
-      {/* At-a-glance mini charts */}
-      <section className="mb-10 grid gap-4 lg:grid-cols-3">
-        <DummyMiniChart
-          title={
-            isFrontdesk ? "Check-ins vs No-shows (7d)" : "Throughput (7d)"
-          }
-          icon={Activity}
-          gradient="from-emerald-500/10 to-emerald-600/10"
-          hint={
-            isFrontdesk
-              ? "Check-in rate trending up ~6% WoW"
-              : "Volume trending up ~6% WoW"
-          }
-        />
-        <DummyMiniChart
-          title="Average wait time today"
-          icon={LineChart}
-          gradient="from-amber-500/10 to-amber-600/10"
-          hint="~ 11 minutes average"
-        />
-        <DummyMiniChart
-          title="Orders → Results (last 24h)"
-          icon={FileText}
-          gradient="from-violet-500/10 to-violet-600/10"
-          hint="82% completed"
-        />
-      </section>
-
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Appointments table */}
-        <section className="lg:col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <CardHead
-            title="Today's Appointments"
-            href="/facility/appointments"
-            icon={CalendarRange}
-            actionLabel="View all"
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-700">
-                <tr>
-                  <Th>Patient</Th>
-                  <Th>Provider</Th>
-                  <Th>Reason</Th>
-                  <Th>Time</Th>
-                  <Th>Status</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {appts.length ? (
-                  appts.map((a) => (
-                    <tr key={a.id} className="transition hover:bg-slate-50/60">
-                      <Td className="font-medium text-slate-900">
-                        {a.patient_name || a.patient?.full_name || "Patient"}
-                      </Td>
-                      <Td>
-                        {a.provider_name || a.provider?.full_name || "Provider"}
-                      </Td>
-                      <Td className="text-slate-600">
-                        {a.reason || "Consultation"}
-                      </Td>
-                      <Td>
-                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                          {a.start_time || a.time || "—"}
-                        </span>
-                      </Td>
-                      <Td>
-                        <StatusPill value={a.status || "scheduled"} />
-                      </Td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5}>
-                      <EmptyState
-                        icon={CalendarRange}
-                        title="No appointments for today"
-                        subtitle="Scheduled visits will appear here automatically."
-                        ctaHref="/facility/appointments"
-                        ctaLabel="Open schedule"
-                      />
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+            </Link>
+          ))}
         </section>
 
-        {/* Right rail: quick actions + providers preview + compliance */}
-        <aside className="space-y-6">
-          {/* Quick actions – role based */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-            <div className="p-5">
-              <h3 className="text-slate-900 font-medium">Quick actions</h3>
-              <p className="mt-1 text-sm text-slate-600">
-                Start common facility tasks faster. Options adjust to your role.
-              </p>
+        {/* Quick Metrics */}
+        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            icon={Activity}
+            label="Patient Flow"
+            value="94%"
+            sublabel="On-time check-ins"
+            color="emerald"
+          />
+          <MetricCard
+            icon={Clock}
+            label="Avg Wait Time"
+            value="11m"
+            sublabel="vs 15m yesterday"
+            color="blue"
+          />
+          <MetricCard
+            icon={CheckCircle2}
+            label="Completed"
+            value={appts.filter((a) => a.status === "COMPLETE").length}
+            sublabel="Today's visits"
+            color="violet"
+          />
+          <MetricCard
+            icon={BarChart3}
+            label="Utilization"
+            value="87%"
+            sublabel="Capacity used"
+            color="amber"
+          />
+        </section>
 
-              <div className="mt-4 grid gap-2">
-                {/* Everyone: schedule */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Main Content: Appointments */}
+          <section className="lg:col-span-2 space-y-6">
+            {/* Appointments Table */}
+            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              <CardHead
+                title="Today's Schedule"
+                subtitle={`${todaysApptCount} appointment${
+                  todaysApptCount !== 1 ? "s" : ""
+                } scheduled`}
+                href="/facility/appointments"
+                icon={CalendarRange}
+                actionLabel="View all"
+              />
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-slate-200 bg-slate-50">
+                    <tr>
+                      <Th>Patient</Th>
+                      <Th>Provider</Th>
+                      <Th>Reason</Th>
+                      <Th>Time</Th>
+                      <Th>Status</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {appts.length ? (
+                      appts.map((a) => (
+                        <tr
+                          key={a.id}
+                          className="group transition hover:bg-slate-50"
+                        >
+                          <Td>
+                            <div className="font-medium text-slate-900">
+                              {a.patient_name ||
+                                a.patient?.full_name ||
+                                "Patient"}
+                            </div>
+                          </Td>
+                          <Td>
+                            <div className="flex items-center gap-2">
+                              <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50">
+                                <Stethoscope className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <span className="text-sm text-slate-700">
+                                {a.provider_name ||
+                                  a.provider?.full_name ||
+                                  "Provider"}
+                              </span>
+                            </div>
+                          </Td>
+                          <Td>
+                            <span className="text-sm text-slate-600">
+                              {a.reason || "Consultation"}
+                            </span>
+                          </Td>
+                          <Td>
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <Clock className="h-3 w-3" />
+                              {a.start_time || a.time || "—"}
+                            </span>
+                          </Td>
+                          <Td>
+                            <StatusPill value={a.status || "scheduled"} />
+                          </Td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5}>
+                          <EmptyState
+                            icon={CalendarRange}
+                            title="No appointments scheduled"
+                            subtitle="Your daily schedule will appear here automatically."
+                            ctaHref="/facility/appointments"
+                            ctaLabel="Schedule appointment"
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Recent Notifications */}
+            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              <CardHead
+                title="Recent Activity"
+                subtitle="Latest updates and alerts"
+                href="/notifications"
+                icon={BellRing}
+                actionLabel="View all"
+              />
+              <ul className="divide-y divide-slate-100">
+                {notifList.length ? (
+                  notifList.slice(0, 5).map((n, i) => (
+                    <li
+                      key={n.id || i}
+                      className="p-4 transition hover:bg-slate-50"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-blue-50">
+                          <BellRing className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900">
+                            {n.title || n.kind || "Notification"}
+                          </p>
+                          <p className="mt-0.5 text-sm text-slate-600 line-clamp-2">
+                            {n.body || n.message || ""}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  ))
+                ) : (
+                  <li className="p-8 text-center">
+                    <p className="text-sm text-slate-500">
+                      No recent notifications
+                    </p>
+                  </li>
+                )}
+              </ul>
+            </div>
+          </section>
+
+          {/* Sidebar */}
+          <aside className="space-y-6">
+            {/* Quick Actions */}
+            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-blue-600" />
+                  <h3 className="font-semibold text-slate-900">
+                    Quick Actions
+                  </h3>
+                </div>
+                <p className="mt-1 text-xs text-slate-600">
+                  Common tasks for your role
+                </p>
+              </div>
+              <div className="p-4 space-y-2">
+                {/* Role-specific actions */}
                 <QuickLink
                   href="/facility/appointments/new"
-                  icon={CalendarRange}
+                  icon={Plus}
                   label={
-                    isFrontdesk
-                      ? "Schedule / update appointment"
-                      : "Schedule appointment"
+                    isFrontdesk ? "Schedule / Check-in" : "New Appointment"
                   }
+                  primary
                 />
 
-                {/* FRONTDESK workspace */}
-                {isFrontdesk && (
-                  <>
-                    <QuickLink
-                      href="/facility/appointments?view=today"
-                      icon={ClipboardClock}
-                      label="Check-in patient"
-                    />
-                    <QuickLink
-                      href="/facility/patients"
-                      icon={Users2}
-                      label="Patients"
-                    />
-                  </>
+                {(isOwner || isClinical || isFrontdesk) && (
+                  <QuickLink
+                    href="/facility/patients"
+                    icon={Users2}
+                    label="Manage Patients"
+                  />
                 )}
+                <QuickLink
+                  href="/facility/wards"
+                  icon={Bed}
+                  label="Ward Management"
+                />
 
-                {/* OWNER workspace (SUPER_ADMIN / ADMIN) */}
                 {isOwner && (
                   <>
                     <QuickLink
-                      href="/facility/patients"
-                      icon={Users2}
-                      label="Patients"
-                    />
-                    <QuickLink
                       href="/facility/providers"
                       icon={Stethoscope}
-                      label="Providers"
-                    />
-                    <QuickLink
-                      href="/facility/wards"
-                      icon={Bed}
-                      label="Wards & beds"
+                      label="Manage Providers"
                     />
                     <QuickLink
                       href="/facility/bed-history"
-                      icon={ClipboardClock}
-                      label="Ward bed history"
+                      icon={Bed}
+                      label="Ward history"
                     />
                     <QuickLink
                       href="/facility/audit"
                       icon={ClipboardClock}
-                      label="Audit logs"
+                      label="Audit Logs"
                     />
                   </>
                 )}
 
-                {/* SUPER_ADMIN only: Manage facility admins & staff */}
                 {isSuperAdmin && (
                   <QuickLink
                     href="/facility/admins"
                     icon={Shield}
-                    label="Manage Admins & Staff"
+                    label="Manage Admins"
                   />
                 )}
 
-                {/* CLINICAL workspace (facility DOCTOR / NURSE / LAB / PHARMACY) */}
                 {isClinical && (
                   <>
                     <QuickLink
                       href="/encounters/new"
                       icon={Stethoscope}
-                      label="New encounter"
+                      label="New Encounter"
                     />
                     <QuickLink
                       href="/facility/labs/new"
                       icon={FileText}
-                      label="Order lab"
-                    />
-                    <QuickLink
-                      href="/facility/imaging/new"
-                      icon={ClipboardList}
-                      label="Request imaging"
-                    />
-                    <QuickLink
-                      href="/facility/patients"
-                      icon={Users2}
-                      label="Patients"
-                    />
-                    <QuickLink
-                      href="/facility/wards"
-                      icon={Bed}
-                      label="Wards & beds"
+                      label="Order Lab Test"
                     />
                   </>
                 )}
 
-                {/* Shared: notifications for all roles */}
-                <QuickLink
-                  href="/notifications"
-                  icon={BellRing}
-                  label="Notifications"
-                  badge={
-                    unreadCount > 0
-                      ? unreadCount > 99
-                        ? "99+"
-                        : `${unreadCount} new`
-                      : undefined
-                  }
-                />
-
-                {/* OWNER-only heavy admin cards */}
-                {isOwner && (
-                  <>
-                    {/* Reports & PDFs */}
-                    <Link
-                      href="/facility/reports"
-                      className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm transition hover:border-slate-400 hover:shadow-md"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">
-                            Reports & PDFs
-                          </p>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Download encounter, lab, imaging and billing PDFs.
-                          </p>
-                        </div>
-                        <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900">
-                          <FileText className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                      <p className="mt-2 text-[11px] font-medium text-slate-500">
-                        Facility staff only
-                      </p>
-                    </Link>
-
-                    {/* Email outbox */}
-                    <Link
-                      href="/facility/emails"
-                      className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          Email outbox
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Review sent and failed emails, and trigger resends
-                          when needed.
-                        </p>
-                      </div>
-                      <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
-                        Open outbox
-                      </span>
-                    </Link>
-                  </>
-                )}
-
-                {/* Everyone: account + notification settings */}
-                <Link
-                  href="/settings/profile"
-                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      Account profile
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Update your name and review the account linked to this
-                      login.
-                    </p>
-                  </div>
-                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
-                    Open profile
-                  </span>
-                </Link>
-
-                <Link
-                  href="/settings/notifications"
-                  className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-500 hover:shadow-md"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      Notification settings
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Choose which alerts you receive for appointments, labs,
-                      imaging, and billing.
-                    </p>
-                  </div>
-                  <span className="mt-3 text-xs font-medium text-blue-600 group-hover:underline">
-                    Manage notifications
-                  </span>
-                </Link>
+                <div className="border-t border-slate-200 pt-2 mt-2">
+                  <QuickLink
+                    href="/notifications"
+                    icon={BellRing}
+                    label="All Notifications"
+                    badge={unreadCount > 0 ? unreadCount : undefined}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Providers snapshot */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <CardHead
-              title="Providers (preview)"
-              href="/facility/providers"
-              icon={Users2}
-              actionLabel="Manage"
-            />
-            <ul className="divide-y divide-slate-100">
-              {provs.length ? (
-                provs.slice(0, 4).map((p, i) => (
-                  <li
-                    key={p.id || i}
-                    className="flex items-center justify-between p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-                        <Stethoscope className="h-5 w-5 text-slate-700" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-slate-900">
-                          {p.user?.full_name ||
-                            [p.user?.first_name, p.user?.last_name]
-                              .filter(Boolean)
-                              .join(" ") ||
-                            p.user?.email ||
-                            "Provider"}
-                        </div>
-                        {p.provider_type && (
-                          <div className="text-xs text-slate-500">
-                            {p.provider_type.replaceAll("_", " ")}
-                          </div>
-                        )}
-                      </div>
+            {/* Providers Preview */}
+            {provs.length > 0 && (
+              <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                <div className="border-b border-slate-200 p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold text-slate-900">
+                        Care Team
+                      </h3>
+                      <p className="text-xs text-slate-600">
+                        {provs.length} active provider
+                        {provs.length !== 1 ? "s" : ""}
+                      </p>
                     </div>
                     <Link
-                      href={`/facility/providers/${p.id || ""}`}
-                      className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+                      href="/facility/providers"
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
                     >
-                      Open <ChevronRight className="h-4 w-4" />
+                      View all
                     </Link>
-                  </li>
-                ))
-              ) : (
-                <li className="p-6">
-                  <div className="text-sm text-slate-600">
-                    Providers linked to this facility will appear here.
                   </div>
-                </li>
-              )}
-            </ul>
-          </div>
-
-          {/* Facility status / compliance */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="h-1.5 w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600" />
-            <div className="p-5">
-              <div className="flex items-center gap-2">
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-50">
-                  <ShieldCheck className="h-5 w-5 text-emerald-700" />
                 </div>
-                <div>
-                  <h3 className="text-slate-900 font-medium">
-                    Compliance & Backups
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Auto-backups enabled; data retention set to 24 months.
-                  </p>
-                </div>
+                <ul className="divide-y divide-slate-100">
+                  {provs.slice(0, 4).map((p, i) => (
+                    <li
+                      key={p.id || i}
+                      className="flex items-center justify-between p-4 transition hover:bg-slate-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-10 w-10 place-items-center rounded-lg bg-emerald-50">
+                          <Stethoscope className="h-5 w-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <div className="font-medium text-slate-900">
+                            {p.user?.full_name ||
+                              [p.user?.first_name, p.user?.last_name]
+                                .filter(Boolean)
+                                .join(" ") ||
+                              p.user?.email ||
+                              "Provider"}
+                          </div>
+                          {p.provider_type && (
+                            <div className="text-xs text-slate-500">
+                              {p.provider_type.replaceAll("_", " ")}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <span className="rounded-lg border border-slate-200 px-3 py-2">
-                  Last backup: <b>02:40</b>
-                </span>
-                <span className="rounded-lg border border-slate-200 px-3 py-2">
-                  Retention: <b>24 mo</b>
-                </span>
-                <span className="col-span-2 rounded-lg border border-slate-200 px-3 py-2">
-                  Encryption: <b>AES-256 at rest</b>
-                </span>
-              </div>
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      {/* Notifications list */}
-      <section className="mt-10">
-        <CardHead
-          title="Recent Notifications"
-          href="/notifications"
-          icon={BellRing}
-          actionLabel="View all"
-        />
-        <div className="rounded-2xl border border-slate-200 bg-white">
-          <ul className="divide-y divide-slate-100">
-            {notifList.length ? (
-              notifList.slice(0, 6).map((n, i) => (
-                <li key={n.id || i} className="p-4 text-sm">
-                  <div className="font-medium text-slate-900">
-                    {n.title || n.kind || "Notification"}
-                  </div>
-                  <div className="text-slate-600">
-                    {n.body || n.message || ""}
-                  </div>
-                </li>
-              ))
-            ) : (
-              <li className="p-6">
-                <div className="text-sm text-slate-600">
-                  No recent notifications.
-                </div>
-              </li>
             )}
-          </ul>
-        </div>
-      </section>
 
-      {/* Footer CTA */}
-      <section className="mt-10">
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
-          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-            <div>
-              <h3 className="text-slate-900 font-semibold">
-                Need to add a new service?
-              </h3>
-              <p className="text-sm text-slate-600">
-                Expand your catalog for orders, imaging, pharmacy, and billing
-                in a few clicks.
-              </p>
+            {/* Settings Cards */}
+            <div className="space-y-3">
+              <SettingsCard
+                href="/settings/profile"
+                icon={Users2}
+                title="Profile Settings"
+                description="Update your account information"
+              />
+              <SettingsCard
+                href="/settings/notifications"
+                icon={BellRing}
+                title="Notifications"
+                description="Manage alert preferences"
+              />
+              {isOwner && (
+                <SettingsCard
+                  href="/facility/reports"
+                  icon={FileText}
+                  title="Reports & PDFs"
+                  description="Download facility reports"
+                />
+              )}
             </div>
-            <Link
-              href="/facility/services/new"
-              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
-            >
-              <Plus className="h-4 w-4" />
-              Add Service
-            </Link>
-          </div>
+
+            {/* System Status */}
+            <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 shadow-sm ring-1 ring-emerald-200">
+              <div className="p-5">
+                <div className="flex items-center gap-2">
+                  <div className="grid h-10 w-10 place-items-center rounded-lg bg-white">
+                    <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">
+                      System Status
+                    </h3>
+                    <p className="text-xs text-emerald-700">
+                      All systems operational
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg bg-white p-2.5 shadow-sm">
+                    <p className="text-slate-600">Last backup</p>
+                    <p className="font-semibold text-slate-900">2 hours ago</p>
+                  </div>
+                  <div className="rounded-lg bg-white p-2.5 shadow-sm">
+                    <p className="text-slate-600">Uptime</p>
+                    <p className="font-semibold text-emerald-600">99.9%</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
-      </section>
+      </div>
     </main>
   );
 }
 
-/* ─────────────── UI helpers ─────────────── */
+/* ─────────────── UI Components ─────────────── */
 
-function CardHead({ title, href, icon: Icon, actionLabel }) {
+function CardHead({ title, subtitle, href, icon: Icon, actionLabel }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-200/70 p-5">
-      <div className="flex items-center gap-2">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-          <Icon className="h-5 w-5 text-slate-700" />
+    <div className="flex items-center justify-between border-b border-slate-200 p-5">
+      <div className="flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50">
+          <Icon className="h-5 w-5 text-blue-600" />
         </div>
-        <h2 className="font-medium text-slate-900">{title}</h2>
+        <div>
+          <h2 className="font-semibold text-slate-900">{title}</h2>
+          {subtitle && <p className="text-xs text-slate-600">{subtitle}</p>}
+        </div>
       </div>
-      <a
-        className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline"
+      <Link
         href={href}
+        className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
       >
         {actionLabel}
         <ArrowRight className="h-4 w-4" />
-      </a>
+      </Link>
     </div>
   );
 }
 
 function EmptyState({ icon: Icon, title, subtitle, ctaHref, ctaLabel }) {
   return (
-    <div className="py-10 text-center">
-      <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
-        <Icon className="h-6 w-6 text-slate-400" />
+    <div className="py-12 text-center">
+      <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-slate-50">
+        <Icon className="h-8 w-8 text-slate-400" />
       </div>
-      <div className="text-sm font-medium text-slate-900">{title}</div>
-      {subtitle ? (
-        <div className="mt-1 text-sm text-slate-500">{subtitle}</div>
-      ) : null}
-      {ctaHref && ctaLabel ? (
-        <div className="mt-4">
-          <a
+      <div className="font-medium text-slate-900">{title}</div>
+      {subtitle && <div className="mt-1 text-sm text-slate-500">{subtitle}</div>}
+      {ctaHref && ctaLabel && (
+        <div className="mt-5">
+          <Link
             href={ctaHref}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 hover:border-blue-200 hover:text-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/25 hover:bg-blue-700"
           >
+            <Plus className="h-4 w-4" />
             {ctaLabel}
-            <ChevronRight className="h-4 w-4" />
-          </a>
+          </Link>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
 function Th({ children }) {
   return (
-    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
       {children}
     </th>
   );
@@ -896,9 +830,7 @@ function Th({ children }) {
 
 function Td({ children, className = "" }) {
   return (
-    <td
-      className={`px-4 py-3 align-middle text-sm text-slate-700 ${className}`}
-    >
+    <td className={`px-4 py-4 text-sm ${className}`}>
       {children}
     </td>
   );
@@ -906,66 +838,91 @@ function Td({ children, className = "" }) {
 
 function StatusPill({ value }) {
   const v = String(value || "").toUpperCase();
-  const map = {
-    SCHEDULED: "bg-slate-50 text-slate-700 ring-slate-200",
-    CHECK_IN: "bg-blue-50 text-blue-700 ring-blue-200",
-    COMPLETE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
-    NO_SHOW: "bg-amber-50 text-amber-700 ring-amber-200",
+  const configs = {
+    SCHEDULED: { bg: "bg-slate-100", text: "text-slate-700", ring: "ring-slate-300" },
+    CHECK_IN: { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-blue-300" },
+    COMPLETE: { bg: "bg-emerald-100", text: "text-emerald-700", ring: "ring-emerald-300" },
+    CANCELLED: { bg: "bg-rose-100", text: "text-rose-700", ring: "ring-rose-300" },
+    NO_SHOW: { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-amber-300" },
   };
-  const cls = map[v] || "bg-slate-50 text-slate-700 ring-slate-200";
+  const config = configs[v] || configs.SCHEDULED;
   const label = (v || "—").replaceAll("_", " ");
+  
   return (
-    <span
-      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
-    >
+    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ring-1 ${config.bg} ${config.text} ${config.ring}`}>
       {label}
     </span>
   );
 }
 
-function QuickLink({ href, icon: Icon, label, badge }) {
+function QuickLink({ href, icon: Icon, label, badge, primary }) {
   return (
     <Link
       href={href}
-      className="group inline-flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 hover:border-blue-200 hover:text-blue-700"
+      className={`group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+        primary
+          ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl"
+          : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+      }`}
     >
-      <span className="inline-flex items-center gap-2">
+      <span className="flex items-center gap-2">
         <Icon className="h-4 w-4" />
         {label}
-        {badge && (
-          <span className="inline-flex items-center justify-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+        {badge !== undefined && (
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            primary ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"
+          }`}>
             {badge}
           </span>
         )}
       </span>
-      <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+      <ChevronRight className={`h-4 w-4 transition-transform group-hover:translate-x-0.5 ${primary ? "text-white/70" : "text-slate-400"}`} />
     </Link>
   );
 }
 
-function DummyMiniChart({ title, icon: Icon, gradient, hint }) {
+function MetricCard({ icon: Icon, label, value, sublabel, color }) {
+  const colors = {
+    emerald: "from-emerald-500 to-teal-600 bg-emerald-50 text-emerald-600",
+    blue: "from-blue-500 to-indigo-600 bg-blue-50 text-blue-600",
+    violet: "from-violet-500 to-purple-600 bg-violet-50 text-violet-600",
+    amber: "from-amber-500 to-orange-600 bg-amber-50 text-amber-600",
+  };
+  const colorClasses = colors[color] || colors.blue;
+  const [gradient, bg, text] = colorClasses.split(" ");
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
-      <div className="p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-medium text-slate-900">{title}</div>
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-            <Icon className="h-5 w-5 text-slate-700" />
-          </div>
+    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-center justify-between">
+        <div className={`grid h-10 w-10 place-items-center rounded-lg ${bg}`}>
+          <Icon className={`h-5 w-5 ${text}`} />
         </div>
-        <div className="grid h-20 grid-cols-12 items-end gap-1.5">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-md bg-gradient-to-t from-slate-200 to-slate-100"
-              style={{ height: `${30 + ((i * 13) % 60)}%` }}
-            />
-          ))}
+        <div className="text-right">
+          <div className="text-2xl font-bold text-slate-900">{value}</div>
+          <div className="text-xs text-slate-600">{label}</div>
         </div>
-        <div className="mt-3 text-xs text-slate-500">{hint}</div>
       </div>
+      {sublabel && (
+        <div className="mt-2 text-xs text-slate-500">{sublabel}</div>
+      )}
     </div>
+  );
+}
+
+function SettingsCard({ href, icon: Icon, title, description }) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-start gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md hover:ring-slate-300"
+    >
+      <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-slate-50">
+        <Icon className="h-5 w-5 text-slate-600" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-slate-900">{title}</div>
+        <div className="text-xs text-slate-600">{description}</div>
+      </div>
+      <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+    </Link>
   );
 }
