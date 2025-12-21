@@ -194,7 +194,7 @@ export default function FacilityEncounterLabsPage() {
         method: "POST",
         body: JSON.stringify({}),
       });
-      router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
+      router.push(`/facility/encounters/${encounterId}/workflow/prescription`); // CHANGED
     } catch (err) {
       setError(err?.message || "Failed to skip labs.");
     } finally {
@@ -595,7 +595,7 @@ export default function FacilityEncounterLabsPage() {
               disabled={submitting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
             >
-              Skip Labs → SOAP Note
+              Skip Labs → Prescription
             </button>
           </div>
         </div>

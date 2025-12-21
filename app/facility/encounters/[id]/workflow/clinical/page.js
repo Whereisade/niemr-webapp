@@ -29,6 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Beaker,
 } from "lucide-react";
 
 function fmtDateTime(v) {
@@ -511,6 +512,11 @@ export default function FacilityEncounterClinicalPage() {
     }
   }
 
+  async function handleGoToLabs() {
+    if (!encounterId) return;
+    router.push(`/facility/encounters/${encounterId}/workflow/labs`);
+  }
+
   async function handleCreateCorrection({ section, reason, content, files }) {
     if (!encounterId) throw new Error("encounterId is required");
 
@@ -628,6 +634,16 @@ export default function FacilityEncounterClinicalPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleGoToLabs}
+            disabled={finalizing}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            title="Order lab tests"
+          >
+            <Beaker className="h-4 w-4" />
+            Labs
+          </button>
+
           <button
             onClick={handleSave}
             disabled={saving || readOnly}

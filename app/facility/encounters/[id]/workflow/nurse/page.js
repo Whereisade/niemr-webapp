@@ -290,8 +290,8 @@ export default function FacilityEncounterNursePage() {
     }
   }
 
-  function handleProceedToLabs() {
-    router.push(`/facility/encounters/${encounterId}/workflow/labs`);
+  function handleProceedToClinical() {
+    router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
   }
 
   if (loading) {
@@ -367,10 +367,10 @@ export default function FacilityEncounterNursePage() {
           {canProceed ? (
             <button
               type="button"
-              onClick={handleProceedToLabs}
+              onClick={handleProceedToClinical}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              Continue to Labs
+              Continue to Clinical
               <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
@@ -735,7 +735,7 @@ export default function FacilityEncounterNursePage() {
               <h3 className="text-sm font-semibold text-blue-900">Awaiting Doctor Review</h3>
               <p className="mt-1 text-sm text-blue-800">
                 You've completed the nurse assessment. A doctor will continue the encounter 
-                with labs, diagnosis, and prescription when ready.
+                with clinical documentation, labs, and prescription when ready.
               </p>
             </div>
           </div>

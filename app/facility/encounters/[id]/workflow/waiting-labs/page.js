@@ -95,7 +95,7 @@ export default function FacilityEncounterWaitingLabsPage() {
     setStatusUpdating(true);
     try {
       await resumeEncounter(encounterId);
-      router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
+      router.push(`/facility/encounters/${encounterId}/workflow/prescription`); // CHANGED
     } catch (err) {
       setStatusUpdateError(err?.message || "Failed to resume encounter.");
     } finally {
@@ -112,7 +112,7 @@ export default function FacilityEncounterWaitingLabsPage() {
         method: "POST",
         body: JSON.stringify({}),
       });
-      router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
+      router.push(`/facility/encounters/${encounterId}/workflow/prescription`); // CHANGED
     } catch (err) {
       setStatusUpdateError(err?.message || "Failed to skip labs.");
     } finally {
