@@ -154,6 +154,27 @@ export default function FacilityEncounterNursePage() {
     try {
       const data = await apiFetch(`/encounters/${encounterId}/`, { method: "GET" });
       setEncounter(data);
+
+      // Auto-assign doctor as provider if not set and user is a doctor
+      if (me && !data?.provider) {
+        const userRole = String(me?.role || "").toUpperCase();
+        if (["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(userRole)) {
+          try {
+            await apiFetch(`/encounters/${encounterId}/assign_provider/`, {
+              method: "POST",
+              body: JSON.stringify({}),
+            });
+            // Refresh encounter to get updated provider
+            const refreshed = await apiFetch(`/encounters/${encounterId}/`, {
+              method: "GET",
+            });
+            setEncounter(refreshed);
+          } catch (err) {
+            console.error("Failed to auto-assign provider:", err);
+            // Don't show error to user, this is a background operation
+          }
+        }
+      }
     } catch (err) {
       setError(err?.message || "Failed to load encounter.");
       setEncounter(null);
@@ -179,8 +200,13 @@ export default function FacilityEncounterNursePage() {
 
   useEffect(() => {
     loadMe();
-    loadEncounter();
-  }, [encounterId]);
+  }, []);
+
+  useEffect(() => {
+    if (me) {
+      loadEncounter();
+    }
+  }, [encounterId, me]);
 
   useEffect(() => {
     if (encounter?.patient) {

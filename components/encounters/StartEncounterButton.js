@@ -3,18 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { canStartEncounter, TERMINAL_STATUSES } from "@/lib/appointmentsActions";
-import { Stethoscope, Loader2 } from "lucide-react";
+import { Stethoscope, Loader2, ArrowRight } from "lucide-react";
 
 /**
- * Button to start an encounter from an appointment.
+ * Enhanced button to start or continue an encounter from an appointment.
+ *
+ * Handles both scenarios:
+ * 1. Starting a new encounter (if none exists)
+ * 2. Continuing an existing encounter (if one was already started by a nurse)
  *
  * Props:
  * - scope: "facility" | "provider" - determines redirect path
  * - appointment: appointment object with id, status, encounter_id, etc.
  * - size: "sm" | "md" (default "sm")
  * - className: additional CSS classes
- * - onSuccess: callback after successful encounter creation
+ * - onSuccess: callback after successful encounter creation/continuation
  */
 export default function StartEncounterButton({
   scope = "facility",
@@ -25,60 +28,83 @@ export default function StartEncounterButton({
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   // Don't render if no appointment
   if (!appointment?.id) {
     return null;
   }
 
-  // Check if we can start an encounter
-  // Use backend-computed value if available, otherwise calculate locally
-  const canStart =
-    typeof appointment.can_start_encounter === "boolean"
-      ? appointment.can_start_encounter
-      : canStartEncounter(appointment);
+  const apptStatus = String(appointment.status || "").toUpperCase();
+  const hasEncounter = !!(appointment.encounter_id || appointment.has_encounter);
+  const encounterStatus = String(appointment.encounter_status || "").toUpperCase();
 
-  // Don't render if can't start
-  if (!canStart) {
+  // Terminal appointment statuses where we shouldn't show any button
+  const TERMINAL_STATUSES = ["CANCELLED", "COMPLETED", "NO_SHOW"];
+  if (TERMINAL_STATUSES.includes(apptStatus)) {
     return null;
   }
 
-  const handleStartEncounter = async () => {
+  // Don't show button if encounter is already closed
+  if (hasEncounter && encounterStatus === "CLOSED") {
+    return null;
+  }
+
+  // Determine button behavior
+  const isNewEncounter = !hasEncounter;
+  const isContinuing = hasEncounter;
+
+  const handleClick = async () => {
     if (isLoading) return;
 
     setIsLoading(true);
-    setError(null);
 
     try {
-      const response = await apiFetch("/encounters/start-from-appointment/", {
-        method: "POST",
-        body: JSON.stringify({
-          appointment_id: appointment.id,
-        }),
-      });
+      let encounterId;
 
-      const encounterId = response?.id;
+      if (isNewEncounter) {
+        // Start a new encounter
+        const response = await apiFetch("/encounters/start-from-appointment/", {
+          method: "POST",
+          body: JSON.stringify({
+            appointment_id: appointment.id,
+          }),
+        });
 
-      if (!encounterId) {
-        throw new Error("No encounter ID returned from server");
+        encounterId = response?.id;
+
+        if (!encounterId) {
+          throw new Error("No encounter ID returned from server");
+        }
+
+        // Call success callback if provided
+        if (onSuccess) {
+          onSuccess(response);
+        }
+      } else {
+        // Use existing encounter
+        encounterId = appointment.encounter_id;
+
+        if (onSuccess) {
+          onSuccess({ id: encounterId });
+        }
       }
 
-      // Call success callback if provided
-      if (onSuccess) {
-        onSuccess(response);
-      }
-
-      // Navigate to the nurse workflow page first (vitals/assessment)
-      // Nurses complete their assessment here, then doctors proceed to labs
+      // Determine which workflow page to navigate to based on encounter status
       const basePath = scope === "provider" ? "/provider" : "/facility";
-      router.push(`${basePath}/encounters/${encounterId}/workflow/nurse`);
+      
+      if (encounterStatus === "WAITING_LABS") {
+        // If waiting on labs, go to waiting-labs page
+        router.push(`${basePath}/encounters/${encounterId}/workflow/waiting-labs`);
+      } else if (encounterStatus === "IN_PROGRESS" || encounterStatus === "OPEN") {
+        // For in-progress encounters, go to nurse workflow (doctors can proceed from there)
+        router.push(`${basePath}/encounters/${encounterId}/workflow/nurse`);
+      } else {
+        // Default: start at nurse workflow
+        router.push(`${basePath}/encounters/${encounterId}/workflow/nurse`);
+      }
     } catch (err) {
-      console.error("Failed to start encounter:", err);
-      setError(err?.message || "Failed to start encounter. Please try again.");
-
-      // Show error via alert if no other error handling
-      alert(err?.message || "Failed to start encounter. Please try again.");
+      console.error("Failed to start/continue encounter:", err);
+      alert(err?.message || "Failed to proceed. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -90,38 +116,44 @@ export default function StartEncounterButton({
     md: "px-3 py-1.5 text-sm",
   };
 
+  const buttonText = isLoading
+    ? isContinuing
+      ? "Opening…"
+      : "Starting…"
+    : isContinuing
+    ? "Continue Encounter"
+    : "Start Encounter";
+
+  const icon = isLoading ? (
+    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+  ) : isContinuing ? (
+    <ArrowRight className="h-3.5 w-3.5" />
+  ) : (
+    <Stethoscope className="h-3.5 w-3.5" />
+  );
+
   return (
     <button
       type="button"
-      onClick={handleStartEncounter}
+      onClick={handleClick}
       disabled={isLoading}
       className={`
         inline-flex items-center gap-1.5 rounded-full font-medium
-        bg-emerald-600 text-white shadow-sm
-        hover:bg-emerald-700 
+        ${isContinuing ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700"}
+        text-white shadow-sm
         disabled:opacity-60 disabled:cursor-not-allowed
         transition-colors
         ${sizeClasses[size] || sizeClasses.sm}
         ${className}
       `}
       title={
-        appointment.encounter_id
-          ? "Continue to existing encounter"
+        isContinuing
+          ? `Continue to encounter #${appointment.encounter_id}`
           : "Start a new encounter for this appointment"
       }
     >
-      {isLoading ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-      ) : (
-        <Stethoscope className="h-3.5 w-3.5" />
-      )}
-      <span>
-        {isLoading
-          ? "Starting…"
-          : appointment.encounter_id
-          ? "Continue Encounter"
-          : "Start Encounter"}
-      </span>
+      {icon}
+      <span>{buttonText}</span>
     </button>
   );
 }
@@ -142,72 +174,101 @@ export function StartEncounterLink({
     return null;
   }
 
-  const canStart =
-    typeof appointment.can_start_encounter === "boolean"
-      ? appointment.can_start_encounter
-      : canStartEncounter(appointment);
+  const apptStatus = String(appointment.status || "").toUpperCase();
+  const hasEncounter = !!(appointment.encounter_id || appointment.has_encounter);
+  const encounterStatus = String(appointment.encounter_status || "").toUpperCase();
 
-  if (!canStart) {
+  const TERMINAL_STATUSES = ["CANCELLED", "COMPLETED", "NO_SHOW"];
+  if (TERMINAL_STATUSES.includes(apptStatus)) {
     return null;
   }
 
-  const handleStartEncounter = async () => {
+  if (hasEncounter && encounterStatus === "CLOSED") {
+    return null;
+  }
+
+  const isNewEncounter = !hasEncounter;
+  const isContinuing = hasEncounter;
+
+  const handleClick = async () => {
     if (isLoading) return;
 
     setIsLoading(true);
 
     try {
-      const response = await apiFetch("/encounters/start-from-appointment/", {
-        method: "POST",
-        body: JSON.stringify({
-          appointment_id: appointment.id,
-        }),
-      });
+      let encounterId;
 
-      const encounterId = response?.id;
+      if (isNewEncounter) {
+        const response = await apiFetch("/encounters/start-from-appointment/", {
+          method: "POST",
+          body: JSON.stringify({
+            appointment_id: appointment.id,
+          }),
+        });
 
-      if (!encounterId) {
-        throw new Error("No encounter ID returned from server");
+        encounterId = response?.id;
+
+        if (!encounterId) {
+          throw new Error("No encounter ID returned from server");
+        }
+
+        if (onSuccess) {
+          onSuccess(response);
+        }
+      } else {
+        encounterId = appointment.encounter_id;
+
+        if (onSuccess) {
+          onSuccess({ id: encounterId });
+        }
       }
 
-      if (onSuccess) {
-        onSuccess(response);
-      }
-
-      // Navigate to the nurse workflow page first
       const basePath = scope === "provider" ? "/provider" : "/facility";
-      router.push(`${basePath}/encounters/${encounterId}/workflow/nurse`);
+      
+      if (encounterStatus === "WAITING_LABS") {
+        router.push(`${basePath}/encounters/${encounterId}/workflow/waiting-labs`);
+      } else {
+        router.push(`${basePath}/encounters/${encounterId}/workflow/nurse`);
+      }
     } catch (err) {
-      console.error("Failed to start encounter:", err);
-      alert(err?.message || "Failed to start encounter. Please try again.");
+      console.error("Failed to start/continue encounter:", err);
+      alert(err?.message || "Failed to proceed. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const buttonText = isLoading
+    ? isContinuing
+      ? "Opening…"
+      : "Starting…"
+    : isContinuing
+    ? "Continue Encounter"
+    : "Start Encounter";
+
+  const icon = isLoading ? (
+    <Loader2 className="h-4 w-4 animate-spin" />
+  ) : isContinuing ? (
+    <ArrowRight className="h-4 w-4" />
+  ) : (
+    <Stethoscope className="h-4 w-4" />
+  );
+
+  const colorClass = isContinuing ? "text-blue-700 hover:text-blue-800" : "text-emerald-700 hover:text-emerald-800";
+
   return (
     <button
       type="button"
-      onClick={handleStartEncounter}
+      onClick={handleClick}
       disabled={isLoading}
       className={`
-        inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800
+        inline-flex items-center gap-2 ${colorClass}
         font-medium disabled:opacity-60 disabled:cursor-not-allowed
         ${className}
       `}
     >
-      {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <Stethoscope className="h-4 w-4" />
-      )}
-      <span>
-        {isLoading
-          ? "Starting…"
-          : appointment.encounter_id
-          ? "Continue Encounter"
-          : "Start Encounter"}
-      </span>
+      {icon}
+      <span>{buttonText}</span>
     </button>
   );
 }
