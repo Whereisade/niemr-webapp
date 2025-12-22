@@ -38,6 +38,9 @@ import {
   getFacilityWorkspaceConfig,
 } from "@/lib/roleUiConfig";
 
+import LiveAppointmentsCount from "@/components/facility/LiveAppointmentsCount";
+import LiveUpcomingAppointmentsRows from "@/components/facility/LiveUpcomingAppointmentsRows";
+
 const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
 
@@ -87,9 +90,19 @@ function normalizeListAndCount(payload) {
 }
 
 export default async function FacilityDashboard() {
-  const [notifications, todaysAppointments, providers, me] = await Promise.all([
+  const now = new Date();
+  const end = new Date(now);
+  end.setDate(end.getDate() + 30);
+
+  const upcomingQs = new URLSearchParams();
+  upcomingQs.set("start", now.toISOString());
+  upcomingQs.set("end", end.toISOString());
+  upcomingQs.set("limit", "20");
+
+  const [notifications, todaysAppointments, upcomingAppointments, providers, me] = await Promise.all([
     safeFetchJSON("/notifications/items/?since=7d", []),
-    safeFetchJSON("/appointments/?date=today&limit=10", []),
+    safeFetchJSON("/appointments/?date=today&limit=20", []),
+    safeFetchJSON(`/appointments/?${upcomingQs.toString()}`, []),
     safeFetchJSON("/providers/?limit=5", []),
     fetchMe(),
   ]);
@@ -115,6 +128,8 @@ export default async function FacilityDashboard() {
   const { list: appts, count: todaysApptCount } = normalizeListAndCount(
     todaysAppointments
   );
+
+  const { list: upcomingAppts } = normalizeListAndCount(upcomingAppointments);
 
   const provs = Array.isArray(providers)
     ? providers
@@ -368,7 +383,11 @@ export default async function FacilityDashboard() {
                     </p>
                     <div className="mt-2 flex items-baseline gap-2">
                       <span className="text-3xl font-bold text-slate-900">
-                        {stat.value}
+                        {stat.href === "/facility/appointments" ? (
+                          <LiveAppointmentsCount initialCount={stat.value} />
+                        ) : (
+                          stat.value
+                        )}
                       </span>
                       {stat.trend && (
                         <span
@@ -425,7 +444,7 @@ export default async function FacilityDashboard() {
           <MetricCard
             icon={CheckCircle2}
             label="Completed"
-            value={appts.filter((a) => a.status === "COMPLETE").length}
+            value={appts.filter((a) => a.status === "COMPLETED").length}
             sublabel="Today's visits"
             color="violet"
           />
@@ -444,10 +463,8 @@ export default async function FacilityDashboard() {
             {/* Appointments Table */}
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
               <CardHead
-                title="Today's Schedule"
-                subtitle={`${todaysApptCount} appointment${
-                  todaysApptCount !== 1 ? "s" : ""
-                } scheduled`}
+                title="Upcoming Schedule"
+                subtitle="Live · next 3 upcoming appointments"
                 href="/facility/appointments"
                 icon={CalendarRange}
                 actionLabel="View all"
@@ -464,60 +481,7 @@ export default async function FacilityDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {appts.length ? (
-                      appts.map((a) => (
-                        <tr
-                          key={a.id}
-                          className="group transition hover:bg-slate-50"
-                        >
-                          <Td>
-                            <div className="font-medium text-slate-900">
-                              {a.patient_name ||
-                                a.patient?.full_name ||
-                                "Patient"}
-                            </div>
-                          </Td>
-                          <Td>
-                            <div className="flex items-center gap-2">
-                              <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50">
-                                <Stethoscope className="h-4 w-4 text-blue-600" />
-                              </div>
-                              <span className="text-sm text-slate-700">
-                                {a.provider_name ||
-                                  a.provider?.full_name ||
-                                  "Provider"}
-                              </span>
-                            </div>
-                          </Td>
-                          <Td>
-                            <span className="text-sm text-slate-600">
-                              {a.reason || "Consultation"}
-                            </span>
-                          </Td>
-                          <Td>
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
-                              <Clock className="h-3 w-3" />
-                              {a.start_time || a.time || "—"}
-                            </span>
-                          </Td>
-                          <Td>
-                            <StatusPill value={a.status || "scheduled"} />
-                          </Td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={5}>
-                          <EmptyState
-                            icon={CalendarRange}
-                            title="No appointments scheduled"
-                            subtitle="Your daily schedule will appear here automatically."
-                            ctaHref="/facility/appointments"
-                            ctaLabel="Schedule appointment"
-                          />
-                        </td>
-                      </tr>
-                    )}
+                    <LiveUpcomingAppointmentsRows initialAppointments={upcomingAppts} />
                   </tbody>
                 </table>
               </div>
@@ -634,11 +598,6 @@ export default async function FacilityDashboard() {
 
                 {isClinical && (
                   <>
-                    <QuickLink
-                      href="/encounters/new"
-                      icon={Stethoscope}
-                      label="New Encounter"
-                    />
                     <QuickLink
                       href="/facility/labs/new"
                       icon={FileText}

@@ -130,7 +130,7 @@ export default function FacilityAppointmentsPage() {
             Facility Appointments
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            All appointments scheduled for this facility.
+            All appointments scheduled for you in this facility.
           </p>
         </div>
 
