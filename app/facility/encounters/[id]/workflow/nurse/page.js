@@ -231,10 +231,40 @@ export default function FacilityEncounterNursePage() {
   async function loadDoctors() {
     setLoadingDoctors(true);
     try {
-      const data = await apiFetch("/providers/?facility=current&type=DOCTOR&limit=100");
-      setDoctors(normalizeList(data));
+      const data = await apiFetch(
+        "/providers/?facility=current&type=DOCTOR&limit=100"
+      );
+      const allProviders = normalizeList(data);
+
+      // ✅ Filter to only include users with actual DOCTOR/ADMIN/SUPER_ADMIN role
+      // This prevents users with provider_type=DOCTOR but user.role=PHARMACY from appearing
+      const allowedRoles = ["DOCTOR", "ADMIN", "SUPER_ADMIN"];
+      const actualDoctors = allProviders.filter((p) => {
+        const roleUpper = String(p.user_role || "").toUpperCase();
+        return allowedRoles.includes(roleUpper);
+      });
+
+      setDoctors(actualDoctors);
+
+      // Optional: Log for debugging (remove after confirming it works)
+      if (actualDoctors.length !== allProviders.length) {
+        console.log(
+          `Filtered ${allProviders.length} providers to ${actualDoctors.length} actual doctors`
+        );
+        console.log(
+          "Filtered out:",
+          allProviders
+            .filter((p) => !actualDoctors.includes(p))
+            .map((p) => ({
+              name: `${p.first_name} ${p.last_name}`,
+              provider_type: p.provider_type,
+              user_role: p.user_role,
+            }))
+        );
+      }
     } catch (err) {
       console.error("Failed to load doctors:", err);
+      setDoctors([]);
     } finally {
       setLoadingDoctors(false);
     }
@@ -639,13 +669,14 @@ export default function FacilityEncounterNursePage() {
             Nurse Assessment & Vitals
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Record patient vitals and manage encounter details before proceeding to clinical workflow.
+            Record patient vitals and manage encounter details before proceeding
+            to clinical workflow.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill status={encounter?.status} />
-          
+
           <button
             type="button"
             onClick={() => setShowReminderModal(true)}
@@ -682,7 +713,9 @@ export default function FacilityEncounterNursePage() {
             </div>
             <div>
               <p className="text-xs font-medium text-slate-500">Patient</p>
-              <p className="text-sm font-semibold text-slate-900">{patientName}</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {patientName}
+              </p>
             </div>
           </div>
 
@@ -705,7 +738,9 @@ export default function FacilityEncounterNursePage() {
             <div>
               <p className="text-xs font-medium text-slate-500">Started</p>
               <p className="text-sm font-semibold text-slate-900">
-                {formatDateTime(encounter?.occurred_at || encounter?.created_at)}
+                {formatDateTime(
+                  encounter?.occurred_at || encounter?.created_at
+                )}
               </p>
             </div>
           </div>
@@ -723,7 +758,9 @@ export default function FacilityEncounterNursePage() {
 
         {encounter?.reason && (
           <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <p className="text-xs font-medium text-slate-500">Chief Complaint / Reason</p>
+            <p className="text-xs font-medium text-slate-500">
+              Chief Complaint / Reason
+            </p>
             <p className="mt-1 text-sm text-slate-800">{encounter.reason}</p>
           </div>
         )}
@@ -779,15 +816,17 @@ export default function FacilityEncounterNursePage() {
         <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <UserCog className="h-5 w-5 text-amber-700" />
-            <h3 className="text-sm font-semibold text-amber-900">Assign Doctor</h3>
+            <h3 className="text-sm font-semibold text-amber-900">
+              Assign Doctor
+            </h3>
           </div>
-          
+
           {assignSuccess && (
             <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
               {assignSuccess}
             </div>
           )}
-          
+
           {assignError && (
             <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
               {assignError}
@@ -810,8 +849,12 @@ export default function FacilityEncounterNursePage() {
                   {loadingDoctors ? "Loading doctors..." : "Select a doctor"}
                 </option>
                 {doctors.map((doc) => (
-                  <option key={doc.id} value={doc.id}>
-                    {doc.first_name} {doc.last_name} {doc.specialty ? `- ${doc.specialty}` : ""}
+                  <option key={doc.id} value={doc.user}>
+                    {doc.first_name} {doc.last_name} (
+                    {doc.user_role || "Unknown"})
+                    {doc.specialties_read &&
+                      doc.specialties_read.length > 0 &&
+                      ` - ${doc.specialties_read.join(", ")}`}
                   </option>
                 ))}
               </select>
@@ -857,7 +900,9 @@ export default function FacilityEncounterNursePage() {
                 <Activity className="h-4 w-4 text-emerald-600" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Latest Vitals</h2>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Latest Vitals
+                </h2>
                 {latestVital && (
                   <p className="text-xs text-slate-500">
                     {formatDateTime(latestVital.measured_at)}
@@ -930,7 +975,9 @@ export default function FacilityEncounterNursePage() {
                 <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
                   <Activity className="h-6 w-6 text-slate-400" />
                 </div>
-                <p className="text-sm font-medium text-slate-700">No vitals recorded</p>
+                <p className="text-sm font-medium text-slate-700">
+                  No vitals recorded
+                </p>
                 <p className="mt-1 text-xs text-slate-500">
                   Record vitals to begin the clinical assessment
                 </p>
@@ -957,7 +1004,9 @@ export default function FacilityEncounterNursePage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
                 <Thermometer className="h-4 w-4 text-blue-600" />
               </div>
-              <h2 className="text-sm font-semibold text-slate-900">Record Vitals</h2>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Record Vitals
+              </h2>
             </div>
 
             <form onSubmit={handleSubmitVitals} className="space-y-4">
@@ -1072,7 +1121,9 @@ export default function FacilityEncounterNursePage() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <p className="text-xs text-slate-500">Only fields with values will be saved.</p>
+                <p className="text-xs text-slate-500">
+                  Only fields with values will be saved.
+                </p>
                 <button
                   type="submit"
                   disabled={vitalsSubmitting}
@@ -1094,19 +1145,32 @@ export default function FacilityEncounterNursePage() {
         {vitals.length > 1 && !showVitalsForm && (
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-4">
-              <h2 className="text-sm font-semibold text-slate-900">Recent Vitals History</h2>
-              <p className="text-xs text-slate-500">Last {Math.min(vitals.length, 5)} recordings</p>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Recent Vitals History
+              </h2>
+              <p className="text-xs text-slate-500">
+                Last {Math.min(vitals.length, 5)} recordings
+              </p>
             </div>
             <div className="divide-y divide-slate-100">
               {vitals.slice(0, 5).map((v, idx) => (
-                <div key={v.id || idx} className="flex items-center justify-between p-3">
+                <div
+                  key={v.id || idx}
+                  className="flex items-center justify-between p-3"
+                >
                   <div className="flex items-center gap-3">
-                    <div className="text-xs text-slate-500">{formatDateTime(v.measured_at)}</div>
+                    <div className="text-xs text-slate-500">
+                      {formatDateTime(v.measured_at)}
+                    </div>
                     <div className="text-sm text-slate-800">
                       {v.systolic && v.diastolic && (
-                        <span className="mr-3">BP: {v.systolic}/{v.diastolic}</span>
+                        <span className="mr-3">
+                          BP: {v.systolic}/{v.diastolic}
+                        </span>
                       )}
-                      {v.heart_rate && <span className="mr-3">HR: {v.heart_rate}</span>}
+                      {v.heart_rate && (
+                        <span className="mr-3">HR: {v.heart_rate}</span>
+                      )}
                       {v.temp_c && <span>Temp: {v.temp_c}°C</span>}
                     </div>
                   </div>
@@ -1126,10 +1190,13 @@ export default function FacilityEncounterNursePage() {
               <Clock className="h-4 w-4 text-blue-700" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-blue-900">Awaiting Doctor Review</h3>
+              <h3 className="text-sm font-semibold text-blue-900">
+                Awaiting Doctor Review
+              </h3>
               <p className="mt-1 text-sm text-blue-800">
-                You've completed the nurse assessment. A doctor will continue the encounter 
-                with clinical documentation, labs, and prescription when ready.
+                You've completed the nurse assessment. A doctor will continue
+                the encounter with clinical documentation, labs, and
+                prescription when ready.
               </p>
             </div>
           </div>
@@ -1145,7 +1212,9 @@ export default function FacilityEncounterNursePage() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
                   <FlaskConical className="h-4 w-4 text-blue-600" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-900">Order Lab Tests</h2>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Order Lab Tests
+                </h2>
               </div>
               <button
                 type="button"
@@ -1181,7 +1250,10 @@ export default function FacilityEncounterNursePage() {
                 ) : (
                   <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
                     {labCatalog.map((test) => (
-                      <label key={test.id} className="flex items-center gap-2 cursor-pointer">
+                      <label
+                        key={test.id}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
                         <input
                           type="checkbox"
                           checked={selectedTests.includes(test.id)}
@@ -1189,13 +1261,20 @@ export default function FacilityEncounterNursePage() {
                             if (e.target.checked) {
                               setSelectedTests([...selectedTests, test.id]);
                             } else {
-                              setSelectedTests(selectedTests.filter(id => id !== test.id));
+                              setSelectedTests(
+                                selectedTests.filter((id) => id !== test.id)
+                              );
                             }
                           }}
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
                         <span className="text-sm text-slate-700">
-                          {test.name} {test.code && <span className="text-xs text-slate-500">({test.code})</span>}
+                          {test.name}{" "}
+                          {test.code && (
+                            <span className="text-xs text-slate-500">
+                              ({test.code})
+                            </span>
+                          )}
                         </span>
                       </label>
                     ))}
@@ -1266,7 +1345,9 @@ export default function FacilityEncounterNursePage() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
                   <Pill className="h-4 w-4 text-emerald-600" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-900">Create Prescription</h2>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Create Prescription
+                </h2>
               </div>
               <button
                 type="button"
@@ -1302,7 +1383,10 @@ export default function FacilityEncounterNursePage() {
                       Medications
                     </label>
                     {prescriptionItems.map((item, index) => (
-                      <div key={index} className="rounded-lg border border-slate-200 p-3">
+                      <div
+                        key={index}
+                        className="rounded-lg border border-slate-200 p-3"
+                      >
                         <div className="mb-2 flex items-center justify-between">
                           <span className="text-xs font-medium text-slate-600">
                             Medication {index + 1}
@@ -1310,7 +1394,9 @@ export default function FacilityEncounterNursePage() {
                           {prescriptionItems.length > 1 && (
                             <button
                               type="button"
-                              onClick={() => handleRemovePrescriptionItem(index)}
+                              onClick={() =>
+                                handleRemovePrescriptionItem(index)
+                              }
                               className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600"
                             >
                               <X className="h-4 w-4" />
@@ -1324,14 +1410,22 @@ export default function FacilityEncounterNursePage() {
                             </label>
                             <select
                               value={item.drug}
-                              onChange={(e) => handlePrescriptionItemChange(index, 'drug', e.target.value)}
+                              onChange={(e) =>
+                                handlePrescriptionItemChange(
+                                  index,
+                                  "drug",
+                                  e.target.value
+                                )
+                              }
                               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                               required
                             >
                               <option value="">Select medication...</option>
                               {drugCatalog.map((drug) => (
                                 <option key={drug.id} value={drug.id}>
-                                  {drug.name} {drug.strength && `${drug.strength}`} {drug.form && `- ${drug.form}`}
+                                  {drug.name}{" "}
+                                  {drug.strength && `${drug.strength}`}{" "}
+                                  {drug.form && `- ${drug.form}`}
                                 </option>
                               ))}
                             </select>
@@ -1343,7 +1437,13 @@ export default function FacilityEncounterNursePage() {
                             <input
                               type="text"
                               value={item.dose}
-                              onChange={(e) => handlePrescriptionItemChange(index, 'dose', e.target.value)}
+                              onChange={(e) =>
+                                handlePrescriptionItemChange(
+                                  index,
+                                  "dose",
+                                  e.target.value
+                                )
+                              }
                               placeholder="e.g., 500mg"
                               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             />
@@ -1355,7 +1455,13 @@ export default function FacilityEncounterNursePage() {
                             <input
                               type="text"
                               value={item.frequency}
-                              onChange={(e) => handlePrescriptionItemChange(index, 'frequency', e.target.value)}
+                              onChange={(e) =>
+                                handlePrescriptionItemChange(
+                                  index,
+                                  "frequency",
+                                  e.target.value
+                                )
+                              }
                               placeholder="e.g., 3 times daily"
                               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             />
@@ -1367,7 +1473,13 @@ export default function FacilityEncounterNursePage() {
                             <input
                               type="number"
                               value={item.duration_days}
-                              onChange={(e) => handlePrescriptionItemChange(index, 'duration_days', e.target.value)}
+                              onChange={(e) =>
+                                handlePrescriptionItemChange(
+                                  index,
+                                  "duration_days",
+                                  e.target.value
+                                )
+                              }
                               placeholder="e.g., 7"
                               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             />
@@ -1379,7 +1491,13 @@ export default function FacilityEncounterNursePage() {
                             <input
                               type="text"
                               value={item.instructions}
-                              onChange={(e) => handlePrescriptionItemChange(index, 'instructions', e.target.value)}
+                              onChange={(e) =>
+                                handlePrescriptionItemChange(
+                                  index,
+                                  "instructions",
+                                  e.target.value
+                                )
+                              }
                               placeholder="e.g., Take with food"
                               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             />
@@ -1422,7 +1540,10 @@ export default function FacilityEncounterNursePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={prescriptionSubmitting || prescriptionItems.every(item => !item.drug)}
+                  disabled={
+                    prescriptionSubmitting ||
+                    prescriptionItems.every((item) => !item.drug)
+                  }
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                 >
                   {prescriptionSubmitting ? (
@@ -1447,7 +1568,9 @@ export default function FacilityEncounterNursePage() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-50">
                   <ShieldAlert className="h-4 w-4 text-rose-600" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-900">Patient Allergies</h2>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Patient Allergies
+                </h2>
               </div>
               <button
                 type="button"
@@ -1460,7 +1583,9 @@ export default function FacilityEncounterNursePage() {
 
             {/* Existing Allergies List */}
             <div className="mb-6">
-              <h3 className="mb-3 text-sm font-medium text-slate-700">Recorded Allergies</h3>
+              <h3 className="mb-3 text-sm font-medium text-slate-700">
+                Recorded Allergies
+              </h3>
               {loadingAllergies ? (
                 <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1473,22 +1598,34 @@ export default function FacilityEncounterNursePage() {
               ) : (
                 <div className="space-y-2">
                   {allergies.map((allergy) => (
-                    <div key={allergy.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div
+                      key={allergy.id}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                    >
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-slate-900">{allergy.allergen}</span>
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              allergy.severity === 'LIFE_THREATENING' ? 'bg-red-100 text-red-700' :
-                              allergy.severity === 'SEVERE' ? 'bg-orange-100 text-orange-700' :
-                              allergy.severity === 'MODERATE' ? 'bg-amber-100 text-amber-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>
+                            <span className="font-medium text-slate-900">
+                              {allergy.allergen}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                allergy.severity === "LIFE_THREATENING"
+                                  ? "bg-red-100 text-red-700"
+                                  : allergy.severity === "SEVERE"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : allergy.severity === "MODERATE"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-green-100 text-green-700"
+                              }`}
+                            >
                               {allergy.severity}
                             </span>
                           </div>
                           <div className="mt-1 text-xs text-slate-600">
-                            {allergy.allergy_type} {allergy.reaction && `• Reaction: ${allergy.reaction}`}
+                            {allergy.allergy_type}{" "}
+                            {allergy.reaction &&
+                              `• Reaction: ${allergy.reaction}`}
                           </div>
                         </div>
                       </div>
@@ -1500,8 +1637,10 @@ export default function FacilityEncounterNursePage() {
 
             {/* Add New Allergy Form */}
             <div className="rounded-lg border-2 border-dashed border-slate-200 p-4">
-              <h3 className="mb-3 text-sm font-medium text-slate-700">Add New Allergy</h3>
-              
+              <h3 className="mb-3 text-sm font-medium text-slate-700">
+                Add New Allergy
+              </h3>
+
               {allergySuccess && (
                 <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
                   {allergySuccess}
@@ -1523,7 +1662,12 @@ export default function FacilityEncounterNursePage() {
                     <input
                       type="text"
                       value={allergyForm.allergen}
-                      onChange={(e) => setAllergyForm({...allergyForm, allergen: e.target.value})}
+                      onChange={(e) =>
+                        setAllergyForm({
+                          ...allergyForm,
+                          allergen: e.target.value,
+                        })
+                      }
                       placeholder="e.g., Penicillin"
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
                       required
@@ -1535,7 +1679,12 @@ export default function FacilityEncounterNursePage() {
                     </label>
                     <select
                       value={allergyForm.allergy_type}
-                      onChange={(e) => setAllergyForm({...allergyForm, allergy_type: e.target.value})}
+                      onChange={(e) =>
+                        setAllergyForm({
+                          ...allergyForm,
+                          allergy_type: e.target.value,
+                        })
+                      }
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
                     >
                       <option value="DRUG">Drug</option>
@@ -1552,7 +1701,12 @@ export default function FacilityEncounterNursePage() {
                     </label>
                     <select
                       value={allergyForm.severity}
-                      onChange={(e) => setAllergyForm({...allergyForm, severity: e.target.value})}
+                      onChange={(e) =>
+                        setAllergyForm({
+                          ...allergyForm,
+                          severity: e.target.value,
+                        })
+                      }
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
                     >
                       <option value="MILD">Mild</option>
@@ -1568,7 +1722,12 @@ export default function FacilityEncounterNursePage() {
                     <input
                       type="text"
                       value={allergyForm.reaction}
-                      onChange={(e) => setAllergyForm({...allergyForm, reaction: e.target.value})}
+                      onChange={(e) =>
+                        setAllergyForm({
+                          ...allergyForm,
+                          reaction: e.target.value,
+                        })
+                      }
                       placeholder="e.g., Rash, swelling"
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
                     />
@@ -1579,7 +1738,12 @@ export default function FacilityEncounterNursePage() {
                     </label>
                     <textarea
                       value={allergyForm.notes}
-                      onChange={(e) => setAllergyForm({...allergyForm, notes: e.target.value})}
+                      onChange={(e) =>
+                        setAllergyForm({
+                          ...allergyForm,
+                          notes: e.target.value,
+                        })
+                      }
                       rows={2}
                       placeholder="Additional notes..."
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
@@ -1626,7 +1790,9 @@ export default function FacilityEncounterNursePage() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50">
                   <Bell className="h-4 w-4 text-amber-600" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-900">Set Reminder</h2>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Set Reminder
+                </h2>
               </div>
               <button
                 type="button"
