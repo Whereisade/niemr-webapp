@@ -122,7 +122,7 @@ export default function StartEncounterButton({
       : "Starting…"
     : isContinuing
     ? "Continue Encounter"
-    : "Start Encounter";
+    : "Check in";
 
   const icon = isLoading ? (
     <Loader2 className="h-3.5 w-3.5 animate-spin" />
