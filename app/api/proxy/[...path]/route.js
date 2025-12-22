@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND = process.env.NIEMR_BACKEND_URL;
+const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
 const REFRESH_COOKIE = process.env.REFRESH_COOKIE || "niemr_refresh";
 
@@ -50,12 +50,29 @@ async function handler(req) {
   const refresh = req.cookies.get(REFRESH_COOKIE)?.value || null;
   if (!refresh) return pipe(r);
 
-  const refreshRes = await fetch(new URL("/api/auth/refresh", req.url), {
+  // Refresh directly against Django so we can reuse the new access token immediately
+  const rr = await fetch(`${BACKEND}/api/accounts/token/refresh/`, {
     method: "POST",
-    headers: { "x-refresh-token": refresh },
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh }),
   });
-  if (!refreshRes.ok) return pipe(r);
+  if (!rr.ok) return pipe(r);
 
-  const retry = await forward(req, req.cookies.get(ACCESS_COOKIE)?.value || null);
-  return pipe(retry);
+  const refreshed = await rr.json().catch(() => ({}));
+  const newAccess = refreshed?.access || null;
+  if (!newAccess) return pipe(r);
+
+  const retry = await forward(req, newAccess);
+  const res = pipe(retry);
+
+  // Update cookie in the same response
+  const secure = process.env.NODE_ENV === "production";
+  res.cookies.set(ACCESS_COOKIE, newAccess, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure,
+    path: "/",
+    maxAge: 60 * 25,
+  });
+  return res;
 }

@@ -77,6 +77,16 @@ function normalizeListAndCount(payload) {
   if (Array.isArray(payload)) {
     return { list: payload, count: payload.length };
   }
+  // /notifications/recent/ returns: { items: [...], total_unread: number }
+  if (payload && Array.isArray(payload.items)) {
+    return {
+      list: payload.items,
+      count:
+        typeof payload.total_unread === "number"
+          ? payload.total_unread
+          : payload.items.length,
+    };
+  }
   if (payload && Array.isArray(payload.results)) {
     return {
       list: payload.results,
@@ -100,7 +110,7 @@ export default async function FacilityDashboard() {
   upcomingQs.set("limit", "20");
 
   const [notifications, todaysAppointments, upcomingAppointments, providers, me] = await Promise.all([
-    safeFetchJSON("/notifications/items/?since=7d", []),
+    safeFetchJSON("/notifications/recent/?limit=7", { items: [], total_unread: 0 }),
     safeFetchJSON("/appointments/?date=today&limit=20", []),
     safeFetchJSON(`/appointments/?${upcomingQs.toString()}`, []),
     safeFetchJSON("/providers/?limit=5", []),
@@ -121,9 +131,9 @@ export default async function FacilityDashboard() {
   const isClinical = workspace.type === FACILITY_WORKSPACE_TYPES.CLINICAL;
   const isSuperAdmin = me.role === "SUPER_ADMIN";
 
-  const notifList = Array.isArray(notifications)
-    ? notifications
-    : notifications?.results || [];
+  const { list: notifList, count: unreadCount } = normalizeListAndCount(
+    notifications
+  );
 
   const { list: appts, count: todaysApptCount } = normalizeListAndCount(
     todaysAppointments
@@ -135,13 +145,7 @@ export default async function FacilityDashboard() {
     ? providers
     : providers?.results || [];
 
-  const unreadCount = notifList.filter((n) => {
-    if (!n) return false;
-    if (typeof n.unread === "boolean") return n.unread;
-    if (typeof n.is_read === "boolean") return !n.is_read;
-    if (typeof n.read === "boolean") return !n.read;
-    return !n.read_at;
-  }).length;
+
 
   const greetingName =
     [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
@@ -334,7 +338,7 @@ export default async function FacilityDashboard() {
 
             {/* Right: Actions */}
             <div className="flex flex-wrap items-center gap-3">
-              <NotificationsBell href="/notifications" />
+              <NotificationsBell href="/facility/notifications" />
 
               {/* Primary action buttons */}
               <div className="flex flex-wrap gap-2">
@@ -492,7 +496,7 @@ export default async function FacilityDashboard() {
               <CardHead
                 title="Recent Activity"
                 subtitle="Latest updates and alerts"
-                href="/notifications"
+                href="/facility/notifications"
                 icon={BellRing}
                 actionLabel="View all"
               />
@@ -608,7 +612,7 @@ export default async function FacilityDashboard() {
 
                 <div className="border-t border-slate-200 pt-2 mt-2">
                   <QuickLink
-                    href="/notifications"
+                    href="/facility/notifications"
                     icon={BellRing}
                     label="All Notifications"
                     badge={unreadCount > 0 ? unreadCount : undefined}

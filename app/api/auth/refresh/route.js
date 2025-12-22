@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const BACKEND = process.env.NIEMR_BACKEND_URL;
+const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
 
 export async function POST(req) {
