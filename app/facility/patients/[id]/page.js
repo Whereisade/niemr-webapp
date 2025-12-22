@@ -9,6 +9,7 @@ import PatientDocumentUploadProvider from "@/components/patient/PatientDocumentU
 import PatientVitalsHistory from "@/components/patient/PatientVitalsHistory";
 import PatientAllergies from "@/components/patient/Patientallergies";
 import NurseWorkflow from "@/components/nurse/NurseWorkflow";
+import PatientEncounterListModal from "@/components/patient/PatientEncounterListModal";
 import { Activity, FileText, Stethoscope, AlertTriangle } from "lucide-react";
 
 function formatDate(value) {
@@ -26,6 +27,7 @@ export default function FacilityPatientDetailPage() {
   const [patient, setPatient] = useState(null);
   const [patientError, setPatientError] = useState("");
   const [loadingPatient, setLoadingPatient] = useState(true);
+  const [encountersOpen, setEncountersOpen] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
@@ -127,6 +129,16 @@ export default function FacilityPatientDetailPage() {
                   <Activity className="h-4 w-4" />
                   View all vitals
                 </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setEncountersOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  title="View this patient's encounters"
+                >
+                  <Stethoscope className="h-4 w-4" />
+                  Encounters
+                </button>
               </div>
             </div>
 
@@ -320,6 +332,14 @@ export default function FacilityPatientDetailPage() {
           </div>
         </section>
       </div>
+
+      <PatientEncounterListModal
+        open={encountersOpen}
+        onClose={() => setEncountersOpen(false)}
+        patientId={patientId}
+        patientName={displayName}
+        scope="facility"
+      />
     </main>
   );
 }
