@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Users2,
   Stethoscope,
+  UserRound,
   ChevronRight,
   AlertCircle,
 } from "lucide-react";
@@ -33,6 +34,22 @@ function formatDateTime(value) {
   } catch {
     return String(value);
   }
+}
+
+function statusRank(status) {
+  const s = String(status || "").toUpperCase();
+  // "New/current" should be first/top
+  if (s === "CHECKED_IN") return 0;
+  if (s === "SCHEDULED") return 1;
+  if (s === "COMPLETED") return 2;
+  if (s === "CANCELLED") return 3;
+  if (s === "NO_SHOW") return 4;
+  return 99;
+}
+
+function safeTime(value) {
+  const t = Date.parse(value || "");
+  return Number.isNaN(t) ? 0 : t;
 }
 
 export default function FacilityAppointmentsPage() {
@@ -59,6 +76,17 @@ export default function FacilityAppointmentsPage() {
     ? data
     : [];
   const total = Number(data?.count ?? rows.length);
+
+  // Ensure new/current are first/top (even if backend pagination/order changes)
+  const sortedRows = rows
+    .slice()
+    .sort((a, b) => {
+      const r = statusRank(a.status) - statusRank(b.status);
+      if (r !== 0) return r;
+      const t = safeTime(a.start_at) - safeTime(b.start_at);
+      if (t !== 0) return t;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -138,8 +166,7 @@ export default function FacilityAppointmentsPage() {
               placeholder="Search patient / reason / notes…"
               defaultValue={q}
               onKeyDown={(e) =>
-                e.key === "Enter" &&
-                updateQuery({ q: e.currentTarget.value })
+                e.key === "Enter" && updateQuery({ q: e.currentTarget.value })
               }
               onBlur={(e) => updateQuery({ q: e.currentTarget.value })}
               className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
@@ -183,7 +210,7 @@ export default function FacilityAppointmentsPage() {
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <CardHead
           title="All Appointments"
-          subtitle={`Showing ${rows.length} of ${total}`}
+          subtitle={`Showing ${sortedRows.length} of ${total}`}
         />
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -191,6 +218,7 @@ export default function FacilityAppointmentsPage() {
               <tr>
                 <Th>Patient</Th>
                 <Th>Provider</Th>
+                <Th>Nurse</Th>
                 <Th>When</Th>
                 <Th>Status</Th>
                 <Th>Encounter</Th>
@@ -200,25 +228,21 @@ export default function FacilityAppointmentsPage() {
             <tbody className="divide-y divide-slate-100">
               {isLoading && !data ? (
                 <tr>
-                  <td colSpan={6} className="p-6 text-slate-600">
+                  <td colSpan={7} className="p-6 text-slate-600">
                     Loading appointments…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="p-6 text-rose-700 bg-rose-50"
-                  >
-                    Failed to load:{" "}
-                    {error.message || "Unknown error"}
+                  <td colSpan={7} className="p-6 text-rose-700 bg-rose-50">
+                    Failed to load: {error.message || "Unknown error"}
                   </td>
                 </tr>
-              ) : rows.length ? (
-                rows.map((a) => {
+              ) : sortedRows.length ? (
+                sortedRows.map((a) => {
                   const apptStatus = (a.status || "SCHEDULED").toUpperCase();
                   const isTerminal = TERMINAL_STATUSES.includes(apptStatus);
-                  
+
                   // Use backend-computed values if available, otherwise calculate
                   const showStartEncounter =
                     typeof a.can_start_encounter === "boolean"
@@ -248,6 +272,7 @@ export default function FacilityAppointmentsPage() {
                           {a.patient_name || a.patient || "—"}
                         </span>
                       </Td>
+
                       <Td className="text-slate-700">
                         <span className="inline-flex items-center gap-2">
                           <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100">
@@ -256,16 +281,26 @@ export default function FacilityAppointmentsPage() {
                           {a.provider_name || a.provider || "—"}
                         </span>
                       </Td>
-                      <Td>
-                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                          {formatDateTime(
-                            a.start_at || a.scheduled_for || a.date
-                          )}
+
+                      <Td className="text-slate-700">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100">
+                            <UserRound className="h-4 w-4 text-slate-700" />
+                          </span>
+                          {a.nurse_name || "—"}
                         </span>
                       </Td>
+
+                      <Td>
+                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                          {formatDateTime(a.start_at || a.scheduled_for || a.date)}
+                        </span>
+                      </Td>
+
                       <Td>
                         <StatusBadge value={a.status} />
                       </Td>
+
                       <Td>
                         {a.encounter_id || a.has_encounter ? (
                           <div className="flex flex-col gap-1">
@@ -279,19 +314,15 @@ export default function FacilityAppointmentsPage() {
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400">
-                            No encounter
-                          </span>
+                          <span className="text-xs text-slate-400">No encounter</span>
                         )}
                       </Td>
+
                       <Td className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {/* Only show Start Encounter if appointment allows it */}
                           {showStartEncounter && (
-                            <StartEncounterButton
-                              scope="facility"
-                              appointment={a}
-                            />
+                            <StartEncounterButton scope="facility" appointment={a} />
                           )}
 
                           {/* Show actions only if there are any */}
@@ -301,13 +332,10 @@ export default function FacilityAppointmentsPage() {
                                 <button
                                   key={action}
                                   type="button"
-                                  onClick={() =>
-                                    handleAction(a.id, action)
-                                  }
+                                  onClick={() => handleAction(a.id, action)}
                                   className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                                 >
-                                  {APPT_ACTION_LABELS[action] ||
-                                    action}
+                                  {APPT_ACTION_LABELS[action] || action}
                                 </button>
                               ))}
                             </div>
@@ -335,7 +363,7 @@ export default function FacilityAppointmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-8">
+                  <td colSpan={7} className="p-8">
                     <EmptyState
                       title="No appointments found"
                       subtitle="Try adjusting your search or status filters."
@@ -368,11 +396,7 @@ function CardHead({ title, subtitle }) {
           </div>
           <h2 className="text-slate-900 font-medium">{title}</h2>
         </div>
-        {subtitle ? (
-          <div className="ml-11 text-xs text-slate-500">
-            {subtitle}
-          </div>
-        ) : null}
+        {subtitle ? <div className="ml-11 text-xs text-slate-500">{subtitle}</div> : null}
       </div>
     </div>
   );
@@ -389,9 +413,7 @@ function Th({ children, className = "" }) {
 }
 
 function Td({ children, className = "" }) {
-  return (
-    <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>
-  );
+  return <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>;
 }
 
 function EmptyState({ title, subtitle }) {
@@ -401,9 +423,7 @@ function EmptyState({ title, subtitle }) {
         <CalendarRange className="h-6 w-6 text-slate-400" />
       </div>
       <div className="text-sm font-medium text-slate-900">{title}</div>
-      {subtitle ? (
-        <div className="mt-1 text-sm text-slate-500">{subtitle}</div>
-      ) : null}
+      {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
     </div>
   );
 }
@@ -411,9 +431,7 @@ function EmptyState({ title, subtitle }) {
 function Chip({ icon: Icon, label, value }) {
   return (
     <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-      {Icon ? (
-        <Icon className="h-4 w-4 text-slate-400" />
-      ) : null}
+      {Icon ? <Icon className="h-4 w-4 text-slate-400" /> : null}
       <span className="text-slate-600">{label}</span>
       <span className="font-semibold text-slate-900">{value}</span>
     </div>
