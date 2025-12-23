@@ -63,7 +63,7 @@ async function fetchMe() {
 export default async function PatientDashboard() {
   const [myAppointments, notifications, me] = await Promise.all([
     safeFetchJSON("/appointments/?mine=true&limit=10", []),
-    safeFetchJSON("/notifications/items/?since=7d", []),
+    safeFetchJSON("/notifications/?limit=10", []),
     fetchMe(),
   ]);
 
@@ -163,7 +163,7 @@ export default async function PatientDashboard() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <NotificationsBell href="/notifications" />
+              <NotificationsBell href="/patient/notifications" />
               
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -329,7 +329,7 @@ export default async function PatientDashboard() {
               <CardHead
                 title="Recent Updates"
                 subtitle="Latest notifications and alerts"
-                href="/notifications"
+                href="/patient/notifications"
                 icon={BellRing}
                 actionLabel="View all"
               />

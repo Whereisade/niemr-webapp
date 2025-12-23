@@ -189,7 +189,7 @@ function mapProviderTypeToLabel(providerType) {
 
 export default async function ProviderDashboard() {
   const [notifications, myAppointments, providersRaw, me] = await Promise.all([
-    safeFetchJSON("/notifications/items/?since=7d", []),
+    safeFetchJSON("/notifications/?limit=10", []),
     safeFetchJSON("/appointments/?date=today&mine=true&limit=10", []),
     safeFetchJSON("/providers/?limit=50", []),
     fetchMe(),
@@ -316,7 +316,7 @@ export default async function ProviderDashboard() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <NotificationsBell href="/notifications" />
+              <NotificationsBell href="/provider/notifications" />
               
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -493,7 +493,7 @@ export default async function ProviderDashboard() {
               <CardHead
                 title="Recent Activity"
                 subtitle="Latest updates and notifications"
-                href="/notifications"
+                href="/provider/notifications"
                 icon={BellRing}
                 actionLabel="View all"
               />
