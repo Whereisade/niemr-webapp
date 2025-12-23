@@ -39,8 +39,42 @@ export default function ProviderNewAppointmentPage() {
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
 
+  const [me, setMe] = useState(null);
+  const [loadingMe, setLoadingMe] = useState(true);
+
+  const [facilities, setFacilities] = useState([]);
+  const [facilityId, setFacilityId] = useState("");
+  const [loadingFacilities, setLoadingFacilities] = useState(true);
+
   useEffect(() => {
     let cancelled = false;
+
+    async function fetchMe() {
+      try {
+        setLoadingMe(true);
+        const meData = await apiFetch("/accounts/me/");
+        if (cancelled) return;
+        setMe(meData);
+      } catch (err) {
+        console.error("Failed to load me", err);
+      } finally {
+        if (!cancelled) setLoadingMe(false);
+      }
+    }
+
+    async function fetchFacilities() {
+      try {
+        setLoadingFacilities(true);
+        const res = await apiFetch("/facilities/?page=1&limit=200");
+        if (cancelled) return;
+        const items = Array.isArray(res) ? res : res?.results || [];
+        setFacilities(items);
+      } catch (err) {
+        console.error("Failed to load facilities", err);
+      } finally {
+        if (!cancelled) setLoadingFacilities(false);
+      }
+    }
 
     async function fetchPatients() {
       try {
@@ -60,12 +94,25 @@ export default function ProviderNewAppointmentPage() {
       }
     }
 
+    fetchMe();
+    fetchFacilities();
     fetchPatients();
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedPatient) return;
+    const fac = selectedPatient?.facility;
+    const inferred =
+      (fac && typeof fac === "object" && fac.id) ? String(fac.id) :
+      (typeof fac === "number") ? String(fac) :
+      (selectedPatient?.facility_id ? String(selectedPatient.facility_id) : "");
+    if (inferred) setFacilityId(inferred);
+  }, [selectedPatient]);
+
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -75,6 +122,16 @@ export default function ProviderNewAppointmentPage() {
     if (!patient || Number.isNaN(patient)) {
       setError("Please select a patient.");
       return;
+
+    if (!me?.id) {
+      setError("Could not determine the logged-in provider. Please re-login.");
+      return;
+    }
+
+    if (!facilityId) {
+      setError("Please select a facility for this appointment.");
+      return;
+    }
     }
 
     const startAt = combineDateTime(date, time);
@@ -89,15 +146,21 @@ export default function ProviderNewAppointmentPage() {
     const endAt = endDate.toISOString();
 
     const payload = {
-      patient,
+      patient: selectedPatient?.id,
       appt_type: apptType,
-      start_at: startAt,
-      end_at: endAt,
+      start_at: startAtIso,
+      end_at: endAtIso,
+      reason: reason.trim() || "",
+      // Independent providers must pick a facility (appointments are facility-scoped in backend)
+      facility: facilityId ? Number(facilityId) : undefined,
+      // Default provider to the logged-in independent provider user
+      provider: me?.id,
+      // Backend expects a boolean
+      notify_email: Boolean(notifyEmail.trim()),
     };
 
-    if (reason.trim()) payload.reason = reason.trim();
-    if (notifyEmail.trim()) payload.notify_email = notifyEmail.trim();
-
+    // remove undefined keys (DRF is happier)
+    Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
     setIsSubmitting(true);
     try {
       await createAppointment(payload);
@@ -179,7 +242,33 @@ export default function ProviderNewAppointmentPage() {
             )}
 
             {/* Patient select */}
-            <div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <UsersRound className="h-4 w-4" />
+            Facility
+          </div>
+
+          <div className="mt-3">
+            <select
+              value={facilityId}
+              onChange={(e) => setFacilityId(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:ring-2 focus:ring-slate-300"
+              disabled={loadingFacilities}
+            >
+              <option value="">{loadingFacilities ? "Loading facilities…" : "Select facility"}</option>
+              {facilities.map((f) => (
+                <option key={f.id} value={String(f.id)}>
+                  {f.name || f.facility_name || `Facility #${f.id}`}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              Appointments are facility-scoped. Choose where this appointment will take place.
+            </p>
+          </div>
+        </div>
+
+<div>
               <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
                 <UsersRound className="h-4 w-4 text-slate-500" />
                 Patient

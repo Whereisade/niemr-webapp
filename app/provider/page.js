@@ -1,827 +1,663 @@
+// app/provider/page.js
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import GreetingLine from "@/components/GreetingLine";
-import NotificationsBell from "@/components/notifications/NotificationsBell";
 import {
-  CalendarRange,
-  BellRing,
+  Calendar,
   ClipboardList,
-  ArrowRight,
-  ChevronRight,
-  UserRound,
-  Stethoscope,
-  FileText,
-  Pill,
-  Activity,
-  LineChart,
-  ShieldCheck,
-  Plus,
-  Clock,
-  CheckCircle2,
-  TrendingUp,
-  Sparkles,
-  Zap,
   FlaskConical,
-  Scan,
-  CreditCard,
-  Award,
-  BarChart3,
+  Pill,
   Users,
-  Target,
+  Bell,
+  Building2,
+  Stethoscope,
+  Activity,
 } from "lucide-react";
+import {
+  requireIndependentProvider,
+  authedFetchJSON,
+} from "@/lib/serverAuth";
 
-const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
-const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
-
-async function safeFetchJSON(path, fallback) {
-  try {
-    const res = await fetch(`/api/proxy${path}`, { cache: "no-store" });
-    if (!res.ok) return fallback;
-    return await res.json();
-  } catch {
-    return fallback;
+function normalizeResults(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.results)) return payload.results;
+  // Some routes mistakenly spread arrays into objects with numeric keys
+  if (payload && typeof payload === "object") {
+    const numericKeys = Object.keys(payload).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) return numericKeys.map((k) => payload[k]);
   }
+  return [];
 }
 
-async function fetchMe() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(ACCESS_COOKIE)?.value;
-  if (!token) return null;
-
-  try {
-    const res = await fetch(`${BACKEND}/api/accounts/me/`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-function normalizeListAndCount(payload) {
-  if (Array.isArray(payload)) {
-    return { list: payload, count: payload.length };
-  }
-  if (payload && Array.isArray(payload.results)) {
-    return {
-      list: payload.results,
-      count:
-        typeof payload.count === "number"
-          ? payload.count
-          : payload.results.length,
-    };
-  }
-  return { list: [], count: 0 };
-}
-
-const PROVIDER_ROLES = ["DOCTOR", "NURSE", "LAB", "PHARMACY"];
-
-const ROLE_TO_PROVIDER_TYPE = {
-  DOCTOR: "DOCTOR",
-  NURSE: "NURSE",
-  LAB: "LAB_SCIENTIST",
-  PHARMACY: "PHARMACIST",
-};
-
-const PROVIDER_TYPE_LABELS = {
-  DOCTOR: "Medical Doctor",
-  NURSE: "Nurse",
-  PHARMACIST: "Pharmacist",
-  LAB_SCIENTIST: "Medical Lab Scientist",
-  DENTIST: "Dentist",
-  OPTOMETRIST: "Optometrist",
-  PHYSIOTHERAPIST: "Physiotherapist",
-  OTHER: "Healthcare Provider",
-};
-
-function getProviderType(me, profile) {
-  if (profile?.provider_type) {
-    return profile.provider_type;
-  }
-  if (me?.role && ROLE_TO_PROVIDER_TYPE[me.role]) {
-    return ROLE_TO_PROVIDER_TYPE[me.role];
-  }
-  return me?.role || "OTHER";
-}
-
-function providerDashboardTitle(providerType) {
-  switch (providerType) {
+function roleLabel(role) {
+  switch ((role || "").toUpperCase()) {
     case "DOCTOR":
-      return "Doctor Workspace";
-    case "DENTIST":
-      return "Dentist Workspace";
-    case "OPTOMETRIST":
-      return "Optometrist Workspace";
-    case "PHYSIOTHERAPIST":
-      return "Physiotherapist Workspace";
+      return "Doctor";
     case "NURSE":
-      return "Nurse Workspace";
-    case "PHARMACIST":
-    case "PHARMACY":
-      return "Pharmacy Workspace";
-    case "LAB_SCIENTIST":
+      return "Nurse";
     case "LAB":
-      return "Lab Workspace";
-    default:
-      return "Provider Workspace";
-  }
-}
-
-function providerSubtitle(providerType) {
-  switch (providerType) {
-    case "LAB_SCIENTIST":
-    case "LAB":
-      return "Process lab orders, manage results, and track sample workflow.";
-    case "PHARMACIST":
+      return "Lab Scientist";
     case "PHARMACY":
-      return "Manage prescriptions, medication dispensing, and patient consultations.";
-    case "NURSE":
-      return "Coordinate patient care, record vitals, and support clinical workflow.";
-    case "DENTIST":
-      return "Manage dental procedures, treatment plans, and oral health records.";
-    case "OPTOMETRIST":
-      return "Provide eye care services, prescriptions, and vision health management.";
-    case "PHYSIOTHERAPIST":
-      return "Deliver therapy sessions, track progress, and manage rehabilitation plans.";
-    case "DOCTOR":
+      return "Pharmacist";
     default:
-      return "Deliver comprehensive patient care and clinical excellence.";
+      return role || "Provider";
   }
 }
 
-function computeProfileCompletion(profile) {
-  if (!profile) return null;
-  const fields = [
-    "provider_type",
-    "license_number",
-    "license_council",
-    "license_expiry",
-    "years_experience",
-    "specialties",
-  ];
-  let filled = 0;
-  let total = fields.length;
-
-  for (const field of fields) {
-    if (field === "specialties") {
-      if (Array.isArray(profile.specialties) && profile.specialties.length) {
-        filled += 1;
-      }
-    } else if (profile[field]) {
-      filled += 1;
-    }
+function formatDT(value) {
+  if (!value) return "—";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString();
+  } catch {
+    return String(value);
   }
-
-  if (!total) return null;
-  return Math.round((filled / total) * 100);
 }
 
-function mapProviderTypeToLabel(providerType) {
-  return PROVIDER_TYPE_LABELS[providerType] || PROVIDER_TYPE_LABELS.OTHER;
-}
+// Slightly richer stat card with subtle motion
+function StatCard({ title, value, icon: Icon, href, hint, accent = "blue" }) {
+  const accentClasses = {
+    blue: {
+      blob: "from-blue-500/20 via-indigo-500/10 to-sky-400/15",
+      iconBg: "bg-blue-50 text-blue-700",
+    },
+    emerald: {
+      blob: "from-emerald-500/20 via-teal-400/10 to-lime-400/15",
+      iconBg: "bg-emerald-50 text-emerald-700",
+    },
+    amber: {
+      blob: "from-amber-400/25 via-orange-400/10 to-yellow-300/15",
+      iconBg: "bg-amber-50 text-amber-700",
+    },
+    violet: {
+      blob: "from-violet-500/20 via-indigo-500/10 to-fuchsia-400/15",
+      iconBg: "bg-violet-50 text-violet-700",
+    },
+  }[accent] || {
+    blob: "from-blue-500/20 via-indigo-500/10 to-sky-400/15",
+    iconBg: "bg-blue-50 text-blue-700",
+  };
 
-export default async function ProviderDashboard() {
-  const [notifications, myAppointments, providersRaw, me] = await Promise.all([
-    safeFetchJSON("/notifications/?limit=10", []),
-    safeFetchJSON("/appointments/?date=today&mine=true&limit=10", []),
-    safeFetchJSON("/providers/?limit=50", []),
-    fetchMe(),
-  ]);
-
-  if (!me) {
-    redirect("/login/provider");
-  }
-
-  if (!PROVIDER_ROLES.includes(me.role)) {
-    if (me.role !== "PATIENT" && me.facility) {
-      redirect("/facility");
-    }
-    redirect("/login/provider");
-  }
-
-  const notifList = Array.isArray(notifications)
-    ? notifications
-    : notifications?.results || [];
-
-  const { list: appts, count: todaysApptCount } = normalizeListAndCount(
-    myAppointments
+  const card = (
+    <div className="group relative overflow-hidden rounded-2xl bg-white/95 p-4 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
+      {/* Accent gradient blob */}
+      <div
+        className={`pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gradient-to-br ${accentClasses.blob} blur-2xl transition group-hover:scale-110`}
+      />
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            {title}
+          </div>
+          <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+            {value}
+          </div>
+          {hint ? (
+            <div className="mt-1 text-[11px] text-slate-500">{hint}</div>
+          ) : null}
+        </div>
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-2xl ${accentClasses.iconBg} transition group-hover:scale-105`}
+        >
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
   );
 
-  const { list: providersList } = normalizeListAndCount(providersRaw);
-  const myProfile =
-    providersList.find(
-      (p) => p.user && (p.user.id === me.id || p.user.pk === me.id)
-    ) || null;
+  if (!href) return card;
 
-  const providerType = getProviderType(me, myProfile);
+  return (
+    <Link href={href} className="block">
+      {card}
+    </Link>
+  );
+}
 
-  const unreadCount = notifList.filter((n) => {
-    if (!n) return false;
-    if (typeof n.unread === "boolean") return n.unread;
-    if (typeof n.is_read === "boolean") return !n.is_read;
-    return !n.read_at;
-  }).length;
+// List card for upcoming work / notifications
+function ListCard({ title, icon: Icon, items, empty, renderItem, href, subtitle }) {
+  return (
+    <section className="relative overflow-hidden rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-slate-200">
+      {/* Accent gradient strip */}
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500" />
+      <div className="relative pt-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-slate-50 shadow-sm shadow-slate-900/10">
+              <Icon className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-slate-900">
+                {title}
+              </div>
+              {subtitle && (
+                <p className="text-[11px] text-slate-500">{subtitle}</p>
+              )}
+            </div>
+          </div>
+          {href ? (
+            <Link
+              href={href}
+              className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 shadow-sm transition hover:bg-slate-800"
+            >
+              View all
+            </Link>
+          ) : null}
+        </div>
 
-  const greetingName =
-    [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
-    me?.email ||
-    "";
+        <div className="space-y-2">
+          {items.length ? (
+            items.map(renderItem)
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+              {empty}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-  const typeLabel = mapProviderTypeToLabel(providerType);
-  const specialtiesText =
-    myProfile && Array.isArray(myProfile.specialties)
-      ? myProfile.specialties
-          .map((s) =>
-            typeof s === "string" ? s : s.name || s.title || s.code || ""
-          )
-          .filter(Boolean)
-          .join(", ")
-      : "";
-  const profileCompletion = computeProfileCompletion(myProfile);
-  const verificationStatus = (myProfile?.verification_status || "PENDING")
-    .toString()
-    .toUpperCase();
-  const isVerified = verificationStatus === "APPROVED";
+export default async function ProviderPage() {
+  const { me, token } = await requireIndependentProvider();
+  const role = (me?.role || "").toUpperCase();
 
-  const stats = [
-    {
-      label: "Today's Patients",
-      value: todaysApptCount,
-      icon: Users,
-      trend: "+3",
-      trendUp: true,
-      accent: "from-blue-500 to-indigo-600",
-      bgAccent: "bg-blue-50",
-      iconColor: "text-blue-600",
+  const now = new Date();
+  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const start = now.toISOString();
+  const end = in7Days.toISOString();
+
+  // Notifications (unread)
+  const notificationsPayload = await authedFetchJSON(
+    token,
+    `/notifications/notifications/?read=false&limit=5`,
+    null
+  );
+  const notifications = normalizeResults(notificationsPayload);
+
+  // Provider profile check (best effort)
+  const providersPayload = await authedFetchJSON(
+    token,
+    `/providers/?facility=none&limit=50`,
+    null
+  );
+  const providers = normalizeResults(providersPayload);
+  const myProfile = providers.find((p) => {
+    const u = p?.user;
+    if (typeof u === "number") return u === me?.id;
+    return u?.id === me?.id || u?.pk === me?.id;
+  });
+
+  // Role-specific data
+  let stats = [];
+  let primaryList = {
+    title: "",
+    icon: ClipboardList,
+    items: [],
+    empty: "",
+    href: "",
+    subtitle: "",
+    renderItem: () => null,
+  };
+
+  if (role === "LAB") {
+    const pending = normalizeResults(
+      await authedFetchJSON(
+        token,
+        `/labs/orders/?status=PENDING&limit=5`,
+        null
+      )
+    );
+    const inProgress = normalizeResults(
+      await authedFetchJSON(
+        token,
+        `/labs/orders/?status=IN_PROGRESS&limit=1`,
+        null
+      )
+    );
+    const completed = normalizeResults(
+      await authedFetchJSON(
+        token,
+        `/labs/orders/?status=COMPLETED&limit=1`,
+        null
+      )
+    );
+
+    stats = [
+      {
+        title: "Pending lab orders",
+        value: pending.length,
+        icon: FlaskConical,
+        href: "/provider/labs",
+        accent: "blue",
+      },
+      {
+        title: "In progress",
+        value: inProgress.length,
+        icon: Activity,
+        href: "/provider/labs",
+        accent: "amber",
+      },
+      {
+        title: "Completed today",
+        value: completed.length,
+        icon: ClipboardList,
+        href: "/provider/labs",
+        accent: "emerald",
+      },
+      {
+        title: "My patients",
+        value: "—",
+        icon: Users,
+        href: "/provider/patients",
+        accent: "violet",
+        hint: "Based on your lab activity",
+      },
+    ];
+
+    primaryList = {
+      title: "Pending lab orders",
+      subtitle: "Orders assigned to your lab queue.",
+      icon: FlaskConical,
+      items: pending,
+      empty: "No pending lab orders assigned to you.",
+      href: "/provider/labs",
+      renderItem: (o) => (
+        <Link
+          key={o.id}
+          href={`/provider/labs/${o.id}`}
+          className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/40"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-medium">
+              {o.test_name || o.test_type || `Order #${o.id}`}
+            </div>
+            <div className="text-xs text-slate-500">
+              {formatDT(o.created_at)}
+            </div>
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
+            <span>
+              Patient:{" "}
+              {o.patient_name ||
+                o.patient?.full_name ||
+                o.patient?.name ||
+                "—"}
+            </span>
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+              {o.status || "PENDING"}
+            </span>
+          </div>
+        </Link>
+      ),
+    };
+  } else if (role === "PHARMACY") {
+    const pendingRx = normalizeResults(
+      await authedFetchJSON(
+        token,
+        `/pharmacy/prescriptions/?status=PRESCRIBED&limit=5`,
+        null
+      )
+    );
+    const dispensed = normalizeResults(
+      await authedFetchJSON(
+        token,
+        `/pharmacy/prescriptions/?status=DISPENSED&limit=1`,
+        null
+      )
+    );
+
+    stats = [
+      {
+        title: "To dispense",
+        value: pendingRx.length,
+        icon: Pill,
+        href: "/provider/pharmacy",
+        accent: "emerald",
+      },
+      {
+        title: "Dispensed",
+        value: dispensed.length,
+        icon: ClipboardList,
+        href: "/provider/pharmacy",
+        accent: "blue",
+      },
+      {
+        title: "My patients",
+        value: "—",
+        icon: Users,
+        href: "/provider/patients",
+        accent: "violet",
+        hint: "Based on your prescriptions",
+      },
+      {
+        title: "Notifications",
+        value: notifications.length,
+        icon: Bell,
+        href: "/provider/notifications",
+        accent: "amber",
+      },
+    ];
+
+    primaryList = {
+      title: "Prescriptions to dispense",
+      subtitle: "Medication orders waiting for you.",
+      icon: Pill,
+      items: pendingRx,
+      empty: "No prescriptions waiting for dispensing.",
+      href: "/provider/pharmacy",
+      renderItem: (rx) => (
+        <Link
+          key={rx.id}
+          href={`/provider/pharmacy/${rx.id}`}
+          className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-800 transition hover:border-emerald-200 hover:bg-emerald-50/40"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-medium">
+              {rx.medication_name || `Prescription #${rx.id}`}
+            </div>
+            <div className="text-xs text-slate-500">
+              {formatDT(rx.created_at)}
+            </div>
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
+            <span>
+              Patient:{" "}
+              {rx.patient_name ||
+                rx.patient?.full_name ||
+                rx.patient?.name ||
+                "—"}
+            </span>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+              {rx.status || "PRESCRIBED"}
+            </span>
+          </div>
+        </Link>
+      ),
+    };
+  } else {
+    // Doctor / Nurse dashboard
+    const apptSummary = await authedFetchJSON(
+      token,
+      `/appointments/summary/?date=today&mine=true`,
+      null
+    );
+    const todaysCount =
+      apptSummary?.total ??
+      apptSummary?.count ??
+      apptSummary?.today ??
+      "—";
+
+    const upcoming = normalizeResults(
+      await authedFetchJSON(
+        token,
+        `/appointments/?mine=true&start=${encodeURIComponent(
+          start
+        )}&end=${encodeURIComponent(end)}&limit=3`,
+        null
+      )
+    );
+
+    const openEncounters = normalizeResults(
+      await authedFetchJSON(
+        token,
+        `/encounters/?limit=5`,
+        null
+      )
+    );
+
+    stats = [
+      {
+        title: "My appointments (today)",
+        value: String(todaysCount),
+        icon: Calendar,
+        href: "/provider/appointments",
+        accent: "blue",
+      },
+      {
+        title: "Open encounters",
+        value: openEncounters.length,
+        icon: ClipboardList,
+        href: "/provider/encounters",
+        accent: "emerald",
+      },
+      {
+        title: "My patients",
+        value: "—",
+        icon: Users,
+        href: "/provider/patients",
+        accent: "violet",
+        hint: "From your recent activity",
+      },
+      {
+        title: "Notifications",
+        value: notifications.length,
+        icon: Bell,
+        href: "/provider/notifications",
+        accent: "amber",
+      },
+    ];
+
+    primaryList = {
+      title: "Upcoming appointments",
+      subtitle: "Next 7 days across your schedule.",
+      icon: Calendar,
+      items: upcoming,
+      empty: "No upcoming appointments in the next 7 days.",
       href: "/provider/appointments",
-      cta: "View schedule",
-    },
+      renderItem: (a) => (
+        <Link
+          key={a.id}
+          href={`/provider/appointments`}
+          className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-800 transition hover:border-indigo-200 hover:bg-indigo-50/40"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-medium">
+              {a.patient_name ||
+                a.patient?.full_name ||
+                `Appointment #${a.id}`}
+            </div>
+            <div className="text-xs text-slate-500">
+              {formatDT(a.start_at || a.scheduled_for)}
+            </div>
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
+            <span>
+              Reason: {a.reason || "—"}
+            </span>
+            <span className="rounded-full bg-slate-900/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-50">
+              {a.status || "—"}
+            </span>
+          </div>
+        </Link>
+      ),
+    };
+  }
+
+  const quickLinks = [
+    { href: "/provider/patients", label: "Patients", icon: Users },
+    { href: "/provider/notifications", label: "Notifications", icon: Bell },
     {
-      label: "Pending Tasks",
-      value: unreadCount,
-      icon: Target,
-      badge: unreadCount > 0 ? "Action needed" : null,
-      accent: "from-amber-500 to-orange-600",
-      bgAccent: "bg-amber-50",
-      iconColor: "text-amber-600",
-      href: "/notifications",
-      cta: "Review tasks",
-    },
-    {
-      label: "Completion Rate",
-      value: "94%",
-      icon: BarChart3,
-      trend: "+2%",
-      trendUp: true,
-      accent: "from-emerald-500 to-teal-600",
-      bgAccent: "bg-emerald-50",
-      iconColor: "text-emerald-600",
-      href: "/provider/encounters",
-      cta: "View records",
+      href: "/provider/facility/apply",
+      label: "Apply to facility",
+      icon: Building2,
     },
   ];
 
+  const displayName =
+    me?.first_name || me?.username || "Provider";
+
   return (
-    <main className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
-      {/* Animated background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-96 w-96 animate-pulse rounded-full bg-gradient-to-br from-blue-400/20 to-indigo-400/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-96 w-96 animate-pulse rounded-full bg-gradient-to-tr from-violet-400/20 to-purple-400/20 blur-3xl" style={{ animationDelay: "1s" }} />
+    <main className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-100/40">
+      {/* Decorative blobs */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -right-24 -top-32 h-72 w-72 rounded-full bg-blue-500/15 blur-3xl" />
+        <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-emerald-400/15 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* Header */}
-        <header className="mb-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex-1">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/25">
+      <div className="relative mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-6 md:py-8 lg:px-8 lg:py-10">
+        {/* Hero / header card */}
+        <section className="relative overflow-hidden rounded-3xl bg-white/95 p-5 shadow-md shadow-blue-500/10 ring-1 ring-slate-200">
+          {/* Animated gradient border strip */}
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500" />
+          {/* Inner gradient wash */}
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-blue-50/70 via-emerald-50/40 to-transparent" />
+
+          <div className="relative mt-3 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-50 shadow-sm shadow-slate-900/20">
                 <Stethoscope className="h-3.5 w-3.5" />
-                <span>{providerDashboardTitle(providerType)}</span>
-                <Sparkles className="h-3 w-3" />
+                Independent provider workspace
               </div>
-              <GreetingLine
-                name={greetingName}
-                className="text-3xl font-bold tracking-tight text-slate-900 lg:text-4xl"
-              />
-              <p className="mt-2 text-base text-slate-600">
-                {providerSubtitle(providerType)}
-              </p>
+
+              <div className="space-y-1">
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                  Welcome back, {displayName}
+                </h1>
+                <p className="text-sm text-slate-600 md:text-[15px]">
+                  Hello, {" "}
+                  <span className="font-semibold">
+                    {roleLabel(role)}
+                  </span>
+                  . Keep an eye on today&apos;s work, open items, and
+                  recent notifications from one place.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {roleLabel(role)}
+                </span>
+                <span className="text-slate-400">•</span>
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
+                  NIEMR independent provider portal
+                </span>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <NotificationsBell href="/provider/notifications" />
-              
-              <div className="flex flex-wrap gap-2">
+            {/* Quick buttons cluster */}
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+              {quickLinks.map((l, idx) => (
                 <Link
-                  href="/provider/encounters"
-                  className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:ring-slate-300"
+                  key={l.href}
+                  href={l.href}
+                  className={`inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium shadow-sm transition ${
+                    idx === 0
+                      ? "bg-slate-900 text-slate-50 hover:bg-slate-800"
+                      : "bg-white text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50"
+                  }`}
                 >
-                  <Activity className="h-4 w-4" />
-                  Encounters
+                  <l.icon className="h-4 w-4" />
+                  {l.label}
                 </Link>
-                {/* <Link
-                  href="/encounters/new"
-                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/25 transition-all hover:shadow-xl hover:shadow-blue-500/30"
-                >
-                  <Plus className="h-4 w-4" />
-                  New Note
-                </Link> */}
-              </div>
+              ))}
             </div>
           </div>
-        </header>
+        </section>
 
-        {/* Enhanced Stat Cards */}
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {stats.map((stat) => (
-            <Link
-              key={stat.label}
-              href={stat.href}
-              className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:ring-slate-300"
-            >
-              {/* Gradient accent */}
-              <div className={`absolute right-0 top-0 h-32 w-32 bg-gradient-to-br ${stat.accent} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
-              
-              {/* Content */}
-              <div className="relative">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600">{stat.label}</p>
-                    <div className="mt-2 flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-slate-900">{stat.value}</span>
-                      {stat.trend && (
-                        <span className={`inline-flex items-center gap-1 text-sm font-medium ${stat.trendUp ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {stat.trendUp ? (
-                            <TrendingUp className="h-3.5 w-3.5" />
-                          ) : (
-                            <></>
-                          )}
-                          {stat.trend}
-                        </span>
-                      )}
-                      {stat.badge && (
-                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                          {stat.badge}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-all group-hover:gap-2">
-                      {stat.cta}
-                      <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <div className={`grid h-12 w-12 place-items-center rounded-xl ${stat.bgAccent} ring-1 ring-black/5`}>
-                    <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-                  </div>
-                </div>
-              </div>
-            </Link>
+        {/* Profile alert */}
+        {!myProfile ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span className="font-semibold">Heads up:</span> your provider
+            profile is not fully set up yet. If you just registered,
+            refresh this page. If this persists, complete your profile
+            or contact support.
+          </div>
+        ) : null}
+
+        {/* Stat row */}
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((s, idx) => (
+            <StatCard
+              key={s.title}
+              title={s.title}
+              value={s.value}
+              icon={s.icon}
+              href={s.href}
+              hint={s.hint}
+              accent={s.accent || ["blue", "emerald", "amber", "violet"][idx % 4]}
+            />
           ))}
         </section>
 
-        {/* Performance Metrics */}
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <PerformanceMetric
-            icon={Activity}
-            label="Completed Today"
-            value={appts.filter(a => a.status === 'COMPLETE').length}
-            sublabel="Patient visits"
-            color="emerald"
+        {/* Lists: primary workload + notifications feed */}
+        <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)]">
+          <ListCard
+            title={primaryList.title}
+            subtitle={primaryList.subtitle}
+            icon={primaryList.icon}
+            items={primaryList.items}
+            empty={primaryList.empty}
+            href={primaryList.href}
+            renderItem={primaryList.renderItem}
           />
-          <PerformanceMetric
-            icon={Clock}
-            label="Avg Note Time"
-            value="7m"
-            sublabel="Per encounter"
-            color="blue"
-          />
-          <PerformanceMetric
-            icon={CheckCircle2}
-            label="Orders Placed"
-            value="12"
-            sublabel="Labs & Imaging"
-            color="violet"
-          />
-          <PerformanceMetric
-            icon={Pill}
-            label="Prescriptions"
-            value="8"
-            sublabel="e-Rx written"
-            color="amber"
-          />
-        </section>
 
-        <div className="grid gap-8 lg:grid-cols-3">
-          {/* Main Content */}
-          <section className="lg:col-span-2 space-y-6">
-            {/* Appointments */}
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <CardHead
-                title="Today's Schedule"
-                subtitle={`${todaysApptCount} appointment${todaysApptCount !== 1 ? 's' : ''} scheduled`}
-                href="/provider/appointments"
-                icon={CalendarRange}
-                actionLabel="View all"
-              />
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b border-slate-200 bg-slate-50">
-                    <tr>
-                      <Th>Patient</Th>
-                      <Th>Reason</Th>
-                      <Th>Time</Th>
-                      <Th>Status</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {appts.length ? (
-                      appts.map((a) => (
-                        <tr key={a.id} className="group transition hover:bg-slate-50">
-                          <Td>
-                            <div className="flex items-center gap-2">
-                              <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50">
-                                <UserRound className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <span className="font-medium text-slate-900">
-                                {a.patient_name || a.patient?.full_name || "Patient"}
-                              </span>
-                            </div>
-                          </Td>
-                          <Td>
-                            <span className="text-sm text-slate-600">
-                              {a.reason || "Consultation"}
-                            </span>
-                          </Td>
-                          <Td>
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
-                              <Clock className="h-3 w-3" />
-                              {a.start_time || a.time || "—"}
-                            </span>
-                          </Td>
-                          <Td>
-                            <StatusPill value={a.status || "scheduled"} />
-                          </Td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4}>
-                          <EmptyState
-                            icon={CalendarRange}
-                            title="No appointments scheduled"
-                            subtitle="Your patient appointments will appear here."
-                            ctaHref="/provider/appointments"
-                            ctaLabel="View schedule"
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+          {/* Notifications in a timeline-ish feed */}
+          <section className="relative overflow-hidden rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-slate-200">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500" />
+            <div className="relative pt-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                    <Bell className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      Unread notifications
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Latest updates routed to your provider inbox.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="/provider/notifications"
+                  className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                >
+                  View all
+                </Link>
               </div>
-            </div>
 
-            {/* Recent Activity */}
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <CardHead
-                title="Recent Activity"
-                subtitle="Latest updates and notifications"
-                href="/provider/notifications"
-                icon={BellRing}
-                actionLabel="View all"
-              />
-              <ul className="divide-y divide-slate-100">
-                {notifList.length ? (
-                  notifList.slice(0, 5).map((n, i) => (
-                    <li key={n.id || i} className="p-4 transition hover:bg-slate-50">
-                      <div className="flex items-start gap-3">
-                        <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-blue-50">
-                          <BellRing className="h-5 w-5 text-blue-600" />
+              {notifications.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                  You&apos;re all caught up. New notifications will appear
+                  here.
+                </div>
+              ) : (
+                <ol className="space-y-2 border-l border-slate-200 pl-3">
+                  {notifications.map((n) => (
+                    <li key={n.id} className="relative pl-3">
+                      {/* Timeline dot */}
+                      <span className="absolute -left-[7px] top-2 flex h-3 w-3 items-center justify-center">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                      <article className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-800">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="font-medium">
+                            {n.title || n.type || "Notification"}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {formatDT(n.created_at)}
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-900">
-                            {n.title || n.kind || "Notification"}
-                          </p>
-                          <p className="mt-0.5 text-sm text-slate-600 line-clamp-2">
-                            {n.body || n.message || ""}
-                          </p>
-                        </div>
-                      </div>
+                        <p className="mt-1 text-xs text-slate-600">
+                          {n.message || n.body || "—"}
+                        </p>
+                      </article>
                     </li>
-                  ))
-                ) : (
-                  <li className="p-8 text-center">
-                    <p className="text-sm text-slate-500">You're all caught up!</p>
-                  </li>
-                )}
-              </ul>
+                  ))}
+                </ol>
+              )}
             </div>
           </section>
-
-          {/* Sidebar */}
-          <aside className="space-y-6">
-            {/* Quick Actions */}
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-600" />
-                  <h3 className="font-semibold text-slate-900">Quick Actions</h3>
-                </div>
-                <p className="mt-1 text-xs text-slate-600">Common clinical tasks</p>
-              </div>
-              <div className="p-4 space-y-2">
-                <QuickAction
-                  href="/encounters/new"
-                  icon={Stethoscope}
-                  label="New Encounter"
-                  primary
-                />
-                <QuickAction
-                  href="/labs/new"
-                  icon={FlaskConical}
-                  label="Order Lab Test"
-                />
-                <QuickAction
-                  href="/imaging/new"
-                  icon={Scan}
-                  label="Request Imaging"
-                />
-                <QuickAction
-                  href="/pharmacy/prescriptions/new"
-                  icon={Pill}
-                  label="Write Prescription"
-                />
-                
-                <div className="border-t border-slate-200 pt-2 mt-2">
-                  <QuickAction
-                    href="/provider/vitals"
-                    icon={Activity}
-                    label="View Vitals"
-                  />
-                  <QuickAction
-                    href="/provider/labs"
-                    icon={FlaskConical}
-                    label="Lab Orders"
-                  />
-                  <QuickAction
-                    href="/provider/pharmacy"
-                    icon={Pill}
-                    label="Prescriptions"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Profile & Credentials */}
-            <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 shadow-sm ring-1 ring-emerald-200">
-              <div className="p-5">
-                <div className="flex items-start gap-3">
-                  <div className={`grid h-11 w-11 place-items-center rounded-lg ${isVerified ? 'bg-emerald-100' : 'bg-amber-100'} shadow-sm`}>
-                    {isVerified ? (
-                      <ShieldCheck className="h-6 w-6 text-emerald-600" />
-                    ) : (
-                      <Award className="h-6 w-6 text-amber-600" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-slate-900">Professional Profile</h3>
-                    <p className="text-xs text-slate-600">{typeLabel}</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        isVerified 
-                          ? 'bg-emerald-100 text-emerald-700' 
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {isVerified ? "Verified" : "Pending"}
-                      </span>
-                      {profileCompletion && (
-                        <span className="text-xs text-slate-600">
-                          {profileCompletion}% complete
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                {specialtiesText && (
-                  <div className="mt-4 rounded-lg bg-white p-3 shadow-sm">
-                    <p className="text-xs font-medium text-slate-600">Specialties</p>
-                    <p className="mt-1 text-sm text-slate-900">{specialtiesText}</p>
-                  </div>
-                )}
-
-                {myProfile?.license_number && (
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-white p-2 shadow-sm">
-                      <p className="text-slate-600">License</p>
-                      <p className="font-semibold text-slate-900">
-                        {myProfile.license_council || "—"}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 shadow-sm">
-                      <p className="text-slate-600">Expires</p>
-                      <p className="font-semibold text-slate-900">
-                        {myProfile.license_expiry || "—"}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Settings Cards */}
-            <div className="space-y-3">
-              <SettingsCard
-                href="/settings/profile"
-                icon={UserRound}
-                title="Account Settings"
-                description="Update your profile information"
-              />
-              <SettingsCard
-                href="/provider/billing"
-                icon={CreditCard}
-                title="Billing & Charges"
-                description="View charges and payments"
-              />
-              <SettingsCard
-                href="/settings/notifications"
-                icon={BellRing}
-                title="Notifications"
-                description="Manage alert preferences"
-              />
-            </div>
-
-            {/* Facility Application CTA */}
-            <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-6 shadow-sm ring-1 ring-blue-200">
-              <h3 className="font-semibold text-slate-900">Join a Facility</h3>
-              <p className="mt-1 text-sm text-slate-600">
-                Apply to work with healthcare facilities and expand your practice.
-              </p>
-              <Link
-                href="/provider/facility/apply"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50"
-              >
-                <Plus className="h-4 w-4" />
-                Apply Now
-              </Link>
-            </div>
-          </aside>
-        </div>
+        </section>
       </div>
     </main>
   );
 }
 
-/* ─────────────── UI Components ─────────────── */
 
-function CardHead({ title, subtitle, href, icon: Icon, actionLabel }) {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-200 p-5">
-      <div className="flex items-center gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50">
-          <Icon className="h-5 w-5 text-blue-600" />
-        </div>
-        <div>
-          <h2 className="font-semibold text-slate-900">{title}</h2>
-          {subtitle && <p className="text-xs text-slate-600">{subtitle}</p>}
-        </div>
-      </div>
-      <Link
-        href={href}
-        className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-      >
-        {actionLabel}
-        <ArrowRight className="h-4 w-4" />
-      </Link>
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, subtitle, ctaHref, ctaLabel }) {
-  return (
-    <div className="py-12 text-center">
-      <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-slate-50">
-        <Icon className="h-8 w-8 text-slate-400" />
-      </div>
-      <div className="font-medium text-slate-900">{title}</div>
-      {subtitle && <div className="mt-1 text-sm text-slate-500">{subtitle}</div>}
-      {ctaHref && ctaLabel && (
-        <div className="mt-5">
-          <Link
-            href={ctaHref}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/25 hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            {ctaLabel}
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Th({ children }) {
-  return (
-    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, className = "" }) {
-  return (
-    <td className={`px-4 py-4 text-sm ${className}`}>
-      {children}
-    </td>
-  );
-}
-
-function StatusPill({ value }) {
-  const v = String(value || "").toUpperCase();
-  const configs = {
-    SCHEDULED: { bg: "bg-slate-100", text: "text-slate-700", ring: "ring-slate-300" },
-    CHECK_IN: { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-blue-300" },
-    COMPLETE: { bg: "bg-emerald-100", text: "text-emerald-700", ring: "ring-emerald-300" },
-    CANCELLED: { bg: "bg-rose-100", text: "text-rose-700", ring: "ring-rose-300" },
-  };
-  const config = configs[v] || configs.SCHEDULED;
-  const label = (v || "—").replaceAll("_", " ");
-  
-  return (
-    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ring-1 ${config.bg} ${config.text} ${config.ring}`}>
-      {label}
-    </span>
-  );
-}
-
-function QuickAction({ href, icon: Icon, label, primary }) {
-  return (
-    <Link
-      href={href}
-      className={`group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
-        primary
-          ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl"
-          : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-      }`}
-    >
-      <span className="flex items-center gap-2">
-        <Icon className="h-4 w-4" />
-        {label}
-      </span>
-      <ChevronRight className={`h-4 w-4 transition-transform group-hover:translate-x-0.5 ${primary ? "text-white/70" : "text-slate-400"}`} />
-    </Link>
-  );
-}
-
-function PerformanceMetric({ icon: Icon, label, value, sublabel, color }) {
-  const colors = {
-    emerald: "bg-emerald-50 text-emerald-600",
-    blue: "bg-blue-50 text-blue-600",
-    violet: "bg-violet-50 text-violet-600",
-    amber: "bg-amber-50 text-amber-600",
-  };
-  const colorClasses = colors[color] || colors.blue;
-  const [bg, text] = colorClasses.split(" ");
-
-  return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-center justify-between">
-        <div className={`grid h-10 w-10 place-items-center rounded-lg ${bg}`}>
-          <Icon className={`h-5 w-5 ${text}`} />
-        </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-slate-900">{value}</div>
-          <div className="text-xs text-slate-600">{label}</div>
-        </div>
-      </div>
-      {sublabel && (
-        <div className="mt-2 text-xs text-slate-500">{sublabel}</div>
-      )}
-    </div>
-  );
-}
-
-function SettingsCard({ href, icon: Icon, title, description }) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-start gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md hover:ring-slate-300"
-    >
-      <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-slate-50">
-        <Icon className="h-5 w-5 text-slate-600" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-slate-900">{title}</div>
-        <div className="text-xs text-slate-600">{description}</div>
-      </div>
-      <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
-    </Link>
-  );
-}

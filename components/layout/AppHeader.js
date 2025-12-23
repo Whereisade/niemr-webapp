@@ -16,6 +16,11 @@ import {
   CalendarClock,
   FlaskConical,
   CreditCard,
+  ClipboardList,
+  Users,
+  Bell,
+  Pill,
+  Boxes,
 } from "lucide-react";
 
 import LogoutButton from "@/components/LogoutButton";
@@ -75,7 +80,7 @@ function buildNavForUser(user) {
   // Facility staff (Super admin, admin, clinical or frontdesk WITH facility)
   if (hasFacility && STAFF_ROLES.includes(user.role)) {
     return [
-      { href: "/facility", label: "Facility", icon: LayoutDashboard },
+      { href: "/facility", label: "Home", icon: LayoutDashboard },
       {
         href: "/facility/appointments",
         label: "Appointments",
@@ -87,19 +92,59 @@ function buildNavForUser(user) {
   }
 
   // Independent providers (no facility, but clinical provider role)
+
   if (!hasFacility && PROVIDER_ROLES.includes(user.role)) {
-    return [
-      { href: "/provider", label: "Worklist", icon: LayoutDashboard },
-      {
-        href: "/provider/appointments",
-        label: "Appointments",
-        icon: CalendarClock,
-      },
-      { href: "/provider/labs", label: "Labs", icon: FlaskConical },
-    ];
+    const base = [{ href: "/provider", label: "Home", icon: LayoutDashboard }];
+
+    if (user.role === "DOCTOR") {
+      return [
+        ...base,
+        { href: "/provider/appointments", label: "Appointments", icon: CalendarClock },
+        { href: "/provider/encounters", label: "Encounters", icon: ClipboardList },
+        { href: "/provider/patients", label: "Patients", icon: Users },
+        { href: "/provider/labs", label: "Labs", icon: FlaskConical },
+        { href: "/provider/pharmacy", label: "Pharmacy", icon: Pill },
+        { href: "/provider/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    if (user.role === "NURSE") {
+      return [
+        ...base,
+        { href: "/provider/appointments", label: "Appointments", icon: CalendarClock },
+        { href: "/provider/encounters", label: "Encounters", icon: ClipboardList },
+        { href: "/provider/patients", label: "Patients", icon: Users },
+        { href: "/provider/vitals", label: "Vitals", icon: Activity },
+        { href: "/provider/labs", label: "Labs", icon: FlaskConical },
+        { href: "/provider/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    if (user.role === "LAB") {
+      return [
+        ...base,
+        { href: "/provider/labs", label: "Labs", icon: FlaskConical },
+        { href: "/provider/labs/catalog", label: "Lab catalog", icon: ClipboardList },
+        { href: "/provider/patients", label: "Patients", icon: Users },
+        { href: "/provider/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    if (user.role === "PHARMACY") {
+      return [
+        ...base,
+        { href: "/provider/pharmacy", label: "Pharmacy", icon: Pill },
+        { href: "/provider/pharmacy/catalog", label: "Catalog", icon: ClipboardList },
+        { href: "/provider/pharmacy/stock", label: "Stock", icon: Boxes },
+        { href: "/provider/patients", label: "Patients", icon: Users },
+        { href: "/provider/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    return base;
   }
 
-  // Fallback
+// Fallback
   return [{ href: "/", label: "Home", icon: Home }];
 }
 

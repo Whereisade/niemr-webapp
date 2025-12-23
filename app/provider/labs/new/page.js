@@ -16,6 +16,10 @@ export default function ProviderNewLabOrderPage() {
 
   const [patientId, setPatientId] = useState("");
   const [externalLabName, setExternalLabName] = useState("");
+  const [outsourcedTo, setOutsourcedTo] = useState("");
+  const [externalLabs, setExternalLabs] = useState([]);
+  const [loadingLabs, setLoadingLabs] = useState(true);
+  const [labsError, setLabsError] = useState("");
   const [priority, setPriority] = useState("ROUTINE");
   const [notes, setNotes] = useState("");
 
@@ -49,6 +53,40 @@ export default function ProviderNewLabOrderPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchExternalLabs() {
+      setLoadingLabs(true);
+      setLabsError("");
+
+      try {
+        const data = await apiFetch("/providers/?facility=none&type=LAB");
+        const list =
+          Array.isArray(data)
+            ? data
+            : Array.isArray(data?.results)
+              ? data.results
+              : data && typeof data === "object"
+                ? Object.values(data)
+                : [];
+
+        if (!cancelled) setExternalLabs(list);
+      } catch (e) {
+        if (!cancelled) setLabsError(e?.message || "Failed to load external labs.");
+      } finally {
+        if (!cancelled) setLoadingLabs(false);
+      }
+    }
+
+    fetchExternalLabs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
@@ -73,10 +111,22 @@ export default function ProviderNewLabOrderPage() {
       return;
     }
 
+    const isOtherLab = outsourcedTo === "__other__";
+    const resolvedOutsourcedTo =
+      outsourcedTo && !isOtherLab ? Number(outsourcedTo) : null;
+
+    const resolvedExternalName = externalLabName.trim();
+
+    if (!resolvedExternalName) {
+      setError("Please select an external lab (or choose Other and enter a name).");
+      return;
+    }
+
     const payload = {
       patient,
       priority: priority || "ROUTINE",
-      external_lab_name: externalLabName.trim(),
+      outsourced_to: resolvedOutsourcedTo,
+      external_lab_name: resolvedExternalName,
       note: notes.trim(),
     };
 
@@ -146,17 +196,72 @@ export default function ProviderNewLabOrderPage() {
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            External lab name
+            External lab
           </label>
-          <input
-            type="text"
-            value={externalLabName}
-            onChange={(e) => setExternalLabName(e.target.value)}
-            placeholder="e.g. Acme Diagnostics"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+
+          <select
+            value={outsourcedTo}
+            onChange={(e) => {
+              const v = e.target.value;
+              setOutsourcedTo(v);
+
+              if (!v || v === "__other__") {
+                setExternalLabName("");
+                return;
+              }
+
+              const selected = externalLabs.find(
+                (lab) => String(lab?.user ?? lab?.user_id ?? "") === String(v)
+              );
+
+              const label =
+                selected?.full_name ||
+                selected?.user_name ||
+                selected?.user_email ||
+                selected?.email ||
+                "External lab";
+
+              setExternalLabName(label);
+            }}
+            disabled={loadingLabs}
+            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+          >
+            <option value="">{loadingLabs ? "Loading labs..." : "Select external lab"}</option>
+            {externalLabs.map((lab) => {
+              const value = String(lab?.user ?? lab?.user_id ?? "");
+              const label =
+                lab?.full_name ||
+                lab?.user_name ||
+                lab?.user_email ||
+                lab?.email ||
+                value ||
+                "External lab";
+
+              return (
+                <option key={value || label} value={value}>
+                  {label}
+                </option>
+              );
+            })}
+            <option value="__other__">Other (enter name)</option>
+          </select>
+
+          {outsourcedTo === "__other__" ? (
+            <input
+              type="text"
+              value={externalLabName}
+              onChange={(e) => setExternalLabName(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+              placeholder="Enter external lab name"
+            />
+          ) : null}
+
+          {labsError ? (
+            <p className="mt-2 text-xs text-red-600">{labsError}</p>
+          ) : null}
+
           <p className="mt-1 text-xs text-slate-500">
-            You don’t have access to any facility’s internal lab catalog.
+            Choose an independent lab scientist from the dropdown (or select Other).
           </p>
         </div>
 

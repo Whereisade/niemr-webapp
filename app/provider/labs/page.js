@@ -229,6 +229,15 @@ export default function ProviderLabOrdersPage() {
           >
             New lab order
           </Link>
+          {meRole === "LAB" ? (
+            <Link
+              href="/provider/labs/catalog"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+            >
+              Lab catalog
+            </Link>
+          ) : null}
+
         </div>
       </header>
 
