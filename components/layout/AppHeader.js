@@ -79,15 +79,71 @@ function buildNavForUser(user) {
 
   // Facility staff (Super admin, admin, clinical or frontdesk WITH facility)
   if (hasFacility && STAFF_ROLES.includes(user.role)) {
+    const base = [{ href: "/facility", label: "Home", icon: LayoutDashboard }];
+
+    if (user.role === "DOCTOR") {
+      return [
+        ...base,
+        { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
+        { href: "/facility/encounters", label: "Encounters", icon: ClipboardList },
+        { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/labs", label: "Labs", icon: FlaskConical },
+        { href: "/facility/pharmacy", label: "Pharmacy", icon: Pill },
+        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    if (user.role === "NURSE") {
+      return [
+        ...base,
+        { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
+        { href: "/facility/encounters", label: "Encounters", icon: ClipboardList },
+        { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/vitals", label: "Vitals", icon: Activity },
+        { href: "/facility/labs", label: "Labs", icon: FlaskConical },
+        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    if (user.role === "LAB") {
+      return [
+        ...base,
+        { href: "/facility/labs", label: "Labs", icon: FlaskConical },
+        { href: "/facility/labs/catalog", label: "Lab catalog", icon: ClipboardList },
+        { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    if (user.role === "PHARMACY") {
+      return [
+        ...base,
+        { href: "/facility/pharmacy", label: "Pharmacy", icon: Pill },
+        { href: "/facility/pharmacy/catalog", label: "Catalog", icon: ClipboardList },
+        { href: "/facility/pharmacy/stock", label: "Stock", icon: Boxes },
+        { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+      ];
+    }
+
+    if (user.role === "FRONTDESK") {
+      return [
+        ...base,
+        { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
+        { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/billing", label: "Billing", icon: CreditCard },
+      ];
+    }
+
+    // ADMIN / SUPER_ADMIN / other facility staff
     return [
-      { href: "/facility", label: "Home", icon: LayoutDashboard },
-      {
-        href: "/facility/appointments",
-        label: "Appointments",
-        icon: CalendarClock,
-      },
+      ...base,
+      { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
+      { href: "/facility/patients", label: "Patients", icon: Users },
       { href: "/facility/labs", label: "Labs", icon: FlaskConical },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
+      { href: "/facility/reports", label: "Reports", icon: ClipboardList },
+      { href: "/facility/staff", label: "Staff", icon: Users, accent: true },
     ];
   }
 
