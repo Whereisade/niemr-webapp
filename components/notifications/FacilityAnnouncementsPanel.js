@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Megaphone, Loader2, RefreshCw, Link as LinkIcon } from "lucide-react";
 
 import { apiFetch } from "@/lib/api";
 import { createAnnouncement, fetchAnnouncements } from "@/lib/notifications";
@@ -40,6 +41,19 @@ function normalizeList(res) {
   return [];
 }
 
+function priorityBadgeClasses(priority) {
+  switch ((priority || "").toUpperCase()) {
+    case "URGENT":
+      return "bg-rose-50 text-rose-700 border-rose-200";
+    case "HIGH":
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    case "LOW":
+      return "bg-slate-50 text-slate-700 border-slate-200";
+    default:
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  }
+}
+
 export default function FacilityAnnouncementsPanel() {
   const [me, setMe] = useState(null);
   const [loadingMe, setLoadingMe] = useState(true);
@@ -51,7 +65,11 @@ export default function FacilityAnnouncementsPanel() {
   const [body, setBody] = useState("");
   const [priority, setPriority] = useState("NORMAL");
   const [actionUrl, setActionUrl] = useState("");
-  const [audienceRoles, setAudienceRoles] = useState(["FRONTDESK", "NURSE", "DOCTOR"]);
+  const [audienceRoles, setAudienceRoles] = useState([
+    "FRONTDESK",
+    "NURSE",
+    "DOCTOR",
+  ]);
 
   const [submitting, setSubmitting] = useState(false);
   const [flash, setFlash] = useState(null);
@@ -76,7 +94,11 @@ export default function FacilityAnnouncementsPanel() {
   async function loadAnnouncements() {
     setLoadingList(true);
     try {
-      const res = await fetchAnnouncements({ active: true, current: true, limit: 20 });
+      const res = await fetchAnnouncements({
+        active: true,
+        current: true,
+        limit: 20,
+      });
       setAnnouncements(normalizeList(res));
     } catch (e) {
       setAnnouncements([]);
@@ -128,188 +150,318 @@ export default function FacilityAnnouncementsPanel() {
       setFlash({ type: "success", message: "Announcement sent." });
       await loadAnnouncements();
     } catch (err) {
-      setFlash({ type: "error", message: err?.message || "Failed to send announcement." });
+      setFlash({
+        type: "error",
+        message: err?.message || "Failed to send announcement.",
+      });
     } finally {
       setSubmitting(false);
       setTimeout(() => setFlash(null), 4000);
     }
   }
 
+  const totalAnnouncements = announcements.length;
+  const latestAnnouncement = announcements[0];
+
   return (
-    <div className="mb-6">
-      <div className="rounded-2xl border bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Facility Announcements</h2>
-            {/* <p className="text-sm text-gray-600">
-              Broadcast important updates to role-scoped channels (frontdesk, nurses, doctors, etc.).
-            </p> */}
+    <section className="mb-6">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
+        {/* Soft gradient flair */}
+        <div className="pointer-events-none absolute inset-x-0 -top-16 h-32 bg-gradient-to-r from-blue-500/15 via-indigo-500/10 to-emerald-500/15 blur-3xl" />
+        {/* Top strip */}
+        <div className="relative h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500" />
+
+        <div className="relative p-5 md:p-6 space-y-6">
+          {/* Header + stats */}
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600/10 text-blue-700">
+                <Megaphone className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+                  Facility announcements
+                </h2>
+                <p className="mt-1 text-xs text-slate-600 md:text-sm">
+                  Broadcast important updates to role-scoped channels
+                  (frontdesk, nurses, doctors, lab, pharmacy) so operations
+                  stay in sync.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-right text-[11px] text-slate-500">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2">
+                <div className="font-medium text-slate-500">
+                  Active messages
+                </div>
+                <div className="mt-0.5 text-lg font-semibold text-slate-900">
+                  {loadingList ? "…" : totalAnnouncements}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2">
+                <div className="font-medium text-slate-500">
+                  Last priority
+                </div>
+                <div className="mt-0.5 text-xs font-semibold text-slate-900">
+                  {latestAnnouncement?.priority || "—"}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2">
+                <div className="font-medium text-slate-500">Role</div>
+                <div className="mt-0.5 text-xs font-semibold text-slate-900">
+                  {loadingMe
+                    ? "Checking…"
+                    : me?.role || "Not available"}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Composer */}
-        {!loadingMe && canBroadcast ? (
-          <form onSubmit={onSubmit} className="mt-4 grid gap-3">
-            {flash ? (
-              <div
-                className={`rounded-lg px-3 py-2 text-sm ${
-                  flash.type === "success" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
-                }`}
-              >
-                {flash.message}
-              </div>
-            ) : null}
-
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Title</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. System downtime tonight"
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Message</label>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Write the announcement..."
-                rows={3}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium">Priority</label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
-                >
-                  {PRIORITY_OPTIONS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="md:col-span-2 grid gap-2">
-                <label className="text-sm font-medium">Action URL (optional)</label>
-                <input
-                  value={actionUrl}
-                  onChange={(e) => setActionUrl(e.target.value)}
-                  placeholder="e.g. /facility/appointments"
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
-                />
-                <p className="text-xs text-gray-500">Used when clicking the notification.</p>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Audience (role-scoped channels)</label>
-              <div className="flex flex-wrap gap-2">
-                {ROLE_OPTIONS.map((r) => (
-                  <button
-                    key={r.value}
-                    type="button"
-                    onClick={() => toggleRole(r.value)}
-                    className={`rounded-full border px-3 py-1 text-sm transition ${
-                      audienceRoles.includes(r.value)
-                        ? "bg-blue-50 border-blue-200 text-blue-800"
-                        : "bg-white text-gray-700"
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500">
-                Leave roles unchecked to target all facility staff.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={loadAnnouncements}
-                className="rounded-lg border px-4 py-2 text-sm"
-                disabled={submitting}
-              >
-                Refresh
-              </button>
-              <button
-                type="submit"
-                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm disabled:opacity-60"
-                disabled={submitting}
-              >
-                {submitting ? "Sending..." : "Send Announcement"}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
-            Only the admins/frontdesk will broadcast announcements.
-          </div>
-        )}
-
-        {/* Recent announcements */}
-        <div className="mt-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-800">Recent announcements</h3>
-            <button
-              onClick={loadAnnouncements}
-              className="text-sm text-blue-700 hover:underline"
-              type="button"
+          {/* Composer / permission info */}
+          {!loadingMe && canBroadcast ? (
+            <form
+              onSubmit={onSubmit}
+              className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4 md:px-5 md:py-5"
             >
-              Reload
-            </button>
-          </div>
-          <div className="mt-2 grid gap-2">
-            {loadingList ? (
-              <div className="text-sm text-gray-600">Loading...</div>
-            ) : announcements.length === 0 ? (
-              <div className="text-sm text-gray-600">No announcements yet.</div>
-            ) : (
-              announcements.slice(0, 10).map((a) => (
-                <div key={a.id} className="rounded-xl border p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-semibold">{a.title}</div>
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                          {a.priority}
-                        </span>
-                      </div>
-                      {a.body ? (
-                        <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{a.body}</div>
-                      ) : null}
-                      <div className="mt-2 text-xs text-gray-500 flex flex-wrap gap-2">
-                        <span>
-                          Audience: {Array.isArray(a.audience_roles) && a.audience_roles.length ? a.audience_roles.join(", ") : "ALL"}
-                        </span>
-                        <span>•</span>
-                        <span>{a.created_at ? new Date(a.created_at).toLocaleString() : ""}</span>
-                      </div>
-                    </div>
-                    {a.action_url ? (
-                      <a
-                        href={a.action_url}
-                        className="text-sm text-blue-700 hover:underline whitespace-nowrap"
-                      >
-                        Open
-                      </a>
-                    ) : null}
+              {flash && (
+                <div
+                  className={`mb-2 rounded-2xl px-4 py-3 text-sm ${
+                    flash.type === "success"
+                      ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border border-rose-200 bg-rose-50 text-rose-800"
+                  }`}
+                >
+                  {flash.message}
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-[minmax(0,2.1fr)_minmax(0,1.4fr)]">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-700">
+                      Title
+                    </label>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g. System downtime tonight"
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-700">
+                      Message
+                    </label>
+                    <textarea
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      placeholder="Write the announcement…"
+                      rows={3}
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
                   </div>
                 </div>
-              ))
-            )}
+
+                <div className="space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-700">
+                        Priority
+                      </label>
+                      <select
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        {PRIORITY_OPTIONS.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1 md:col-span-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-700">
+                        Action URL (optional)
+                      </label>
+                      <div className="flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 py-1.5">
+                        <LinkIcon className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                        <input
+                          value={actionUrl}
+                          onChange={(e) => setActionUrl(e.target.value)}
+                          placeholder="e.g. /facility/appointments"
+                          className="h-7 w-full border-none bg-transparent text-sm text-slate-900 outline-none"
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Users are taken here when they open the notification.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-700">
+                      Audience (role-scoped channels)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {ROLE_OPTIONS.map((r) => {
+                        const active = audienceRoles.includes(r.value);
+                        return (
+                          <button
+                            key={r.value}
+                            type="button"
+                            onClick={() => toggleRole(r.value)}
+                            className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                              active
+                                ? "border-blue-200 bg-blue-50 text-blue-800"
+                                : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50/70"
+                            }`}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                            {r.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Leave all roles unchecked to target{" "}
+                      <span className="font-semibold">all facility staff</span>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={loadAnnouncements}
+                  className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                  disabled={submitting}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh list
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending…
+                    </>
+                  ) : (
+                    <>
+                      <Megaphone className="h-4 w-4" />
+                      Send announcement
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-700">
+              Only{" "}
+              <span className="font-semibold">Super Admin, Admin,</span> and{" "}
+              <span className="font-semibold">Frontdesk</span> users can
+              broadcast facility-wide announcements. You&apos;ll still see
+              announcements addressed to your role below.
+            </div>
+          )}
+
+          {/* Recent announcements */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                Recent announcements
+              </h3>
+              <button
+                onClick={loadAnnouncements}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                type="button"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Reload
+              </button>
+            </div>
+
+            <div className="grid gap-2">
+              {loadingList ? (
+                <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                  <span>Loading announcements…</span>
+                </div>
+              ) : announcements.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-sm text-slate-500">
+                  No announcements yet. When admins or frontdesk post messages,
+                  they will appear here.
+                </div>
+              ) : (
+                announcements.slice(0, 10).map((a) => (
+                  <article
+                    key={a.id}
+                    className="rounded-2xl border border-slate-100 bg-white px-3 py-3 text-sm text-slate-800 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm font-semibold text-slate-900">
+                            {a.title}
+                          </h4>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ${priorityBadgeClasses(
+                              a.priority
+                            )}`}
+                          >
+                            {a.priority || "NORMAL"}
+                          </span>
+                        </div>
+                        {a.body ? (
+                          <p className="whitespace-pre-wrap text-sm text-slate-700">
+                            {a.body}
+                          </p>
+                        ) : null}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                          <span>
+                            Audience:{" "}
+                            {Array.isArray(a.audience_roles) &&
+                            a.audience_roles.length
+                              ? a.audience_roles.join(", ")
+                              : "ALL"}
+                          </span>
+                          {a.created_at && <span>•</span>}
+                          {a.created_at && (
+                            <span>
+                              {new Date(
+                                a.created_at
+                              ).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {a.action_url ? (
+                        <a
+                          href={a.action_url}
+                          className="ml-2 inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                        >
+                          Open
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
+
+

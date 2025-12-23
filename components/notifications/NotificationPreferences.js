@@ -102,8 +102,13 @@ export default function NotificationPreferences() {
       const topicList = data.topics || [];
       const channelList = data.channels || ["IN_APP", "EMAIL"];
 
+      // Normalize channels to simple string keys (some APIs return objects)
+      const normalizedChannels = Array.isArray(channelList)
+        ? channelList.map((ch) => (typeof ch === "string" ? ch : ch?.value || ch?.id || String(ch)))
+        : [];
+
       setTopics(topicList);
-      setChannels(channelList);
+      setChannels(normalizedChannels);
 
       // Build preferences map: { "TOPIC:CHANNEL": enabled }
       const prefMap = {};
@@ -317,36 +322,43 @@ export default function NotificationPreferences() {
 
       {/* Channel quick actions */}
       <div className="flex flex-wrap gap-3">
-        {channels.filter((ch) => ch !== "PUSH").map((channel) => {
-          const config = CHANNEL_CONFIG[channel] || { label: channel, icon: Bell };
-          const Icon = config.icon;
+        {channels
+          .filter((ch) => ch !== "PUSH")
+          .map((channel) => {
+            const config = CHANNEL_CONFIG[channel] || {
+              label: channel,
+              icon: Bell,
+            };
+            const Icon = config.icon;
 
-          return (
-            <div
-              key={channel}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-            >
-              <Icon className="h-4 w-4 text-slate-500" />
-              <span className="text-sm font-medium text-slate-700">{config.label}</span>
-              <button
-                type="button"
-                onClick={() => handleEnableAll(channel)}
-                disabled={isSaving}
-                className="rounded px-2 py-0.5 text-xs text-emerald-600 hover:bg-emerald-50"
+            return (
+              <div
+                key={channel}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
               >
-                Enable all
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDisableAll(channel)}
-                disabled={isSaving}
-                className="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100"
-              >
-                Disable all
-              </button>
-            </div>
-          );
-        })}
+                <Icon className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">
+                  {config.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleEnableAll(channel)}
+                  disabled={isSaving}
+                  className="rounded px-2 py-0.5 text-xs text-emerald-600 hover:bg-emerald-50"
+                >
+                  Enable all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDisableAll(channel)}
+                  disabled={isSaving}
+                  className="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100"
+                >
+                  Disable all
+                </button>
+              </div>
+            );
+          })}
       </div>
 
       {/* Preferences matrix */}
@@ -358,22 +370,27 @@ export default function NotificationPreferences() {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Notification Type
                 </th>
-                {channels.filter((ch) => ch !== "PUSH").map((channel) => {
-                  const config = CHANNEL_CONFIG[channel] || { label: channel, icon: Bell };
-                  const Icon = config.icon;
+                {channels
+                  .filter((ch) => ch !== "PUSH")
+                  .map((channel) => {
+                    const config = CHANNEL_CONFIG[channel] || {
+                      label: channel,
+                      icon: Bell,
+                    };
+                    const Icon = config.icon;
 
-                  return (
-                    <th
-                      key={channel}
-                      className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-600"
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <Icon className="h-4 w-4" />
-                        <span>{config.label}</span>
-                      </div>
-                    </th>
-                  );
-                })}
+                    return (
+                      <th
+                        key={channel}
+                        className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-600"
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <Icon className="h-4 w-4" />
+                          <span>{config.label}</span>
+                        </div>
+                      </th>
+                    );
+                  })}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -382,7 +399,9 @@ export default function NotificationPreferences() {
                   {/* Group header */}
                   <tr key={group} className="bg-slate-50/50">
                     <td
-                      colSpan={channels.length + 1}
+                      colSpan={
+                        channels.filter((ch) => ch !== "PUSH").length + 1
+                      }
                       className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
                     >
                       {group}
@@ -395,32 +414,36 @@ export default function NotificationPreferences() {
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {formatTopicLabel(topicKey)}
                       </td>
-                      {channels.filter((ch) => ch !== "PUSH").map((channel) => {
-                        const enabled = getPreferenceValue(topicKey, channel);
-                        const key = `${topicKey}:${channel}`;
-                        const isPending = key in pendingChanges;
+                      {channels
+                        .filter((ch) => ch !== "PUSH")
+                        .map((channel) => {
+                          const enabled = getPreferenceValue(topicKey, channel);
+                          const key = `${topicKey}:${channel}`;
+                          const isPending = key in pendingChanges;
 
-                        return (
-                          <td key={channel} className="px-4 py-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => togglePreference(topicKey, channel)}
-                              disabled={isSaving}
-                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
-                                enabled ? "bg-blue-600" : "bg-slate-200"
-                              } ${isPending ? "ring-2 ring-amber-300" : ""}`}
-                              role="switch"
-                              aria-checked={enabled}
-                            >
-                              <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                  enabled ? "translate-x-6" : "translate-x-1"
-                                }`}
-                              />
-                            </button>
-                          </td>
-                        );
-                      })}
+                          return (
+                            <td key={channel} className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  togglePreference(topicKey, channel)
+                                }
+                                disabled={isSaving}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
+                                  enabled ? "bg-blue-600" : "bg-slate-200"
+                                } ${isPending ? "ring-2 ring-amber-300" : ""}`}
+                                role="switch"
+                                aria-checked={enabled}
+                              >
+                                <span
+                                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                                    enabled ? "translate-x-6" : "translate-x-1"
+                                  }`}
+                                />
+                              </button>
+                            </td>
+                          );
+                        })}
                     </tr>
                   ))}
                 </>
@@ -439,32 +462,36 @@ export default function NotificationPreferences() {
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {formatTopicLabel(topicKey)}
                       </td>
-                      {channels.filter((ch) => ch !== "PUSH").map((channel) => {
-                        const enabled = getPreferenceValue(topicKey, channel);
-                        const key = `${topicKey}:${channel}`;
-                        const isPending = key in pendingChanges;
+                      {channels
+                        .filter((ch) => ch !== "PUSH")
+                        .map((channel) => {
+                          const enabled = getPreferenceValue(topicKey, channel);
+                          const key = `${topicKey}:${channel}`;
+                          const isPending = key in pendingChanges;
 
-                        return (
-                          <td key={channel} className="px-4 py-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => togglePreference(topicKey, channel)}
-                              disabled={isSaving}
-                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
-                                enabled ? "bg-blue-600" : "bg-slate-200"
-                              } ${isPending ? "ring-2 ring-amber-300" : ""}`}
-                              role="switch"
-                              aria-checked={enabled}
-                            >
-                              <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                  enabled ? "translate-x-6" : "translate-x-1"
-                                }`}
-                              />
-                            </button>
-                          </td>
-                        );
-                      })}
+                          return (
+                            <td key={channel} className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  togglePreference(topicKey, channel)
+                                }
+                                disabled={isSaving}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
+                                  enabled ? "bg-blue-600" : "bg-slate-200"
+                                } ${isPending ? "ring-2 ring-amber-300" : ""}`}
+                                role="switch"
+                                aria-checked={enabled}
+                              >
+                                <span
+                                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                                    enabled ? "translate-x-6" : "translate-x-1"
+                                  }`}
+                                />
+                              </button>
+                            </td>
+                          );
+                        })}
                     </tr>
                   );
                 })}
@@ -475,9 +502,9 @@ export default function NotificationPreferences() {
 
       {/* Help text */}
       <p className="text-xs text-slate-500">
-        Changes are saved when you click "Save changes". In-app notifications are
-        always displayed in the notification center. Email notifications may be
-        delayed based on your quiet hours settings.
+        Changes are saved when you click "Save changes". In-app notifications
+        are always displayed in the notification center. Email notifications may
+        be delayed based on your quiet hours settings.
       </p>
     </div>
   );
