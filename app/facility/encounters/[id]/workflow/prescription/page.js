@@ -16,6 +16,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Bed,
+  BellRing,
 } from "lucide-react";
 
 function normalizeList(body) {
@@ -68,6 +69,7 @@ export default function FacilityEncounterPrescriptionPage() {
   const [note, setNote] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
+  const [admitSending, setAdmitSending] = useState(false);
   const [success, setSuccess] = useState("");
 
   // Bed assignment modal state
@@ -172,7 +174,40 @@ export default function FacilityEncounterPrescriptionPage() {
   const isLocked = Boolean(encounter?.locked || encounter?.locked_at);
   const isWaitingLabs = String(encounter?.status || "").toUpperCase() === "WAITING_LABS";
   const isCrossedOut = String(encounter?.status || "").toUpperCase() === "CROSSED_OUT";
+  const isClosed = String(encounter?.status || "").toUpperCase() === "CLOSED";
   const readOnly = !canEdit || isLocked || isWaitingLabs || isCrossedOut;
+
+  async function handleRequestWardAdmission() {
+    if (!encounterId) return;
+    setError("");
+    setSuccess("");
+
+    if (!canEdit) {
+      setError("Only doctors (or admins) can request ward admission.");
+      return;
+    }
+    if (isClosed || isCrossedOut) {
+      setError("This encounter is closed/crossed out.");
+      return;
+    }
+    if (!encounter?.patient) {
+      setError("This encounter does not have a patient linked.");
+      return;
+    }
+
+    setAdmitSending(true);
+    try {
+      await apiFetch(`/encounters/${encounterId}/request_admission/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setSuccess("Ward admission request sent to nursing staff.");
+    } catch (err) {
+      setError(err?.message || "Failed to send ward admission request.");
+    } finally {
+      setAdmitSending(false);
+    }
+  }
 
   function addCatalogDrug(drug) {
     const code = String(drug?.code || "").trim();
@@ -362,6 +397,20 @@ export default function FacilityEncounterPrescriptionPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRequestWardAdmission}
+            disabled={admitSending || !encounter?.patient || !canEdit || isClosed || isCrossedOut}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+          >
+            {admitSending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <BellRing className="h-4 w-4" />
+            )}
+            Admit to Ward
+          </button>
+
           {/* Bed Assignment Status/Button */}
           {bedAssignment ? (
             <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
