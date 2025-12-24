@@ -87,7 +87,13 @@ export default function ProviderPatientDetailPage() {
 
       const encId = enc?.id;
       if (encId) {
-        router.push(`/provider/encounters/${encId}/workflow/labs`);
+        const role = String(me?.role || "").toUpperCase();
+        // Doctor starts at clinical note; Nurse starts at nurse workflow.
+        if (role === "NURSE") {
+          router.push(`/provider/encounters/${encId}/workflow/nurse`);
+        } else {
+          router.push(`/provider/encounters/${encId}/workflow/clinical`);
+        }
         return;
       }
       router.push("/provider/encounters");

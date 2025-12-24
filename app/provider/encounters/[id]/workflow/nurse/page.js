@@ -292,8 +292,8 @@ export default function ProviderEncounterNursePage() {
     }
   }
 
-  function handleProceedToLabs() {
-    router.push(`/provider/encounters/${encounterId}/workflow/labs`);
+  function handleProceedToClinical() {
+    router.push(`/provider/encounters/${encounterId}/workflow/clinical`);
   }
 
   if (loading) {
@@ -369,10 +369,10 @@ export default function ProviderEncounterNursePage() {
           {canProceed ? (
             <button
               type="button"
-              onClick={handleProceedToLabs}
+              onClick={handleProceedToClinical}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              Continue to Labs
+              Continue to Clinical
               <ArrowRight className="h-4 w-4" />
             </button>
           ) : (

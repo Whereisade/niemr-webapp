@@ -16,8 +16,10 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
-export default function FacilityNewPatientPage() {
+export default function ProviderNewPatientPage() {
   const router = useRouter();
+
+  const [me, setMe] = useState(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -27,11 +29,9 @@ export default function FacilityNewPatientPage() {
   const [gender, setGender] = useState("");
 
   const [facilityId, setFacilityId] = useState(null);
-  const [me, setMe] = useState(null);
   const [loadingMe, setLoadingMe] = useState(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [startingEncounter, setStartingEncounter] = useState(false);
   const [error, setError] = useState("");
 
   // Load /accounts/me/ to get facility id
@@ -41,11 +41,12 @@ export default function FacilityNewPatientPage() {
     async function fetchMe() {
       try {
         setLoadingMe(true);
-        const meData = await apiFetch("/accounts/me/");
+        const me = await apiFetch("/accounts/me/");
         if (cancelled) return;
 
-        setMe(meData);
-        const fac = meData?.facility;
+        setMe(me || null);
+
+        const fac = me?.facility;
         if (fac && typeof fac === "object" && fac.id) {
           setFacilityId(fac.id);
         } else if (typeof fac === "number") {
@@ -55,6 +56,7 @@ export default function FacilityNewPatientPage() {
         }
       } catch (err) {
         console.error("Failed to load /accounts/me/ for facility", err);
+        setMe(null);
         setFacilityId(null);
       } finally {
         if (!cancelled) setLoadingMe(false);
@@ -98,28 +100,14 @@ export default function FacilityNewPatientPage() {
     setIsSubmitting(true);
     try {
       const created = await createPatient(payload);
-      if (canCreate) {
-        setStartingEncounter(true);
-        try {
-          const enc = await apiFetch("/encounters/start-from-patient/", {
-            method: "POST",
-            body: JSON.stringify({ patient_id: created?.id }),
-          });
-
-          const encId = enc?.id;
-          if (encId) {
-            router.push(`/provider/encounters/${encId}/workflow/labs`);
-            return;
-          }
-        } catch (e) {
-          console.error("Start encounter failed", e);
-          // If it fails, we still take the user to the patient list.
-        } finally {
-          setStartingEncounter(false);
-        }
+      // IMPORTANT: Creating a patient should NOT auto-start an encounter.
+      // Independent providers can start an encounter manually from the patient record.
+      const createdId = created?.id;
+      if (createdId) {
+        router.push(`/provider/patients/${createdId}`);
+      } else {
+        router.push("/provider/patients");
       }
-
-      router.push("/provider/patients");
     } catch (err) {
       console.error("Create patient failed", err);
       setError(
@@ -131,9 +119,9 @@ export default function FacilityNewPatientPage() {
     }
   }
 
-  const canCreate = me?.role === "DOCTOR" || me?.role === "NURSE" || me?.role === "PHARMACY" || me?.role === "LAB";
+  const canCreate = me?.role === "DOCTOR" || me?.role === "NURSE";
 
-  const submitDisabled = isSubmitting || loadingMe || startingEncounter || (me && !canCreate);
+  const submitDisabled = isSubmitting || loadingMe || (me && !canCreate);
 
   const hasFacility = Boolean(facilityId);
 
@@ -157,15 +145,14 @@ export default function FacilityNewPatientPage() {
       <header className="relative space-y-3">
         <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
           <UserPlus className="h-3.5 w-3.5" />
-          New facility patient
+          New patient
         </div>
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
             Register a new patient
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Capture core demographic details to create a patient record for this
-            facility.
+            Capture core demographic details to create a patient record.
           </p>
         </div>
 
@@ -196,7 +183,7 @@ export default function FacilityNewPatientPage() {
             ) : hasFacility ? (
               "Facility will be linked automatically."
             ) : (
-              "No facility found on your profile · patient will still be created."
+              "Independent workspace · patient will be linked to you."
             )}
           </span>
         </div>

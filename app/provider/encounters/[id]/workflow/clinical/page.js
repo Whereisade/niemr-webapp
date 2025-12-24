@@ -628,6 +628,15 @@ export default function ProviderEncounterClinicalPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/provider/encounters/${encounterId}/workflow/labs`}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+            title="Order/request labs for this encounter"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Labs
+          </Link>
+
           <button
             onClick={handleSave}
             disabled={saving || readOnly}
