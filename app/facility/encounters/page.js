@@ -34,6 +34,20 @@ function formatDateTime(value) {
   }
 }
 
+
+function sortNewestFirst(items) {
+  const arr = Array.isArray(items) ? [...items] : [];
+  arr.sort((a, b) => {
+    const ta = new Date(a?.created_at || a?.occurred_at || 0).getTime();
+    const tb = new Date(b?.created_at || b?.occurred_at || 0).getTime();
+    if (tb != ta) return tb - ta;
+    const ida = Number(a?.id || 0);
+    const idb = Number(b?.id || 0);
+    return idb - ida;
+  });
+  return arr;
+}
+
 export default function FacilityEncountersPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -61,16 +75,18 @@ export default function FacilityEncountersPage() {
   // Normalize data -> rows
   useEffect(() => {
     if (Array.isArray(data?.results)) {
-      setRows(data.results);
+      setRows(sortNewestFirst(data.results));
     } else if (Array.isArray(data)) {
-      setRows(data);
+      setRows(sortNewestFirst(data));
     } else if (data && typeof data === "object") {
       const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
       if (numericKeys.length) {
         setRows(
-          numericKeys
-            .sort((a, b) => Number(a) - Number(b))
-            .map((k) => data[k])
+          sortNewestFirst(
+            numericKeys
+              .sort((a, b) => Number(a) - Number(b))
+              .map((k) => data[k])
+          )
         );
       } else {
         setRows([]);

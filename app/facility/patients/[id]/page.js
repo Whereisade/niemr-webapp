@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import PatientDocumentsProvider from "@/components/patient/PatientDocumentsProvider";
@@ -21,6 +21,8 @@ function formatDate(value) {
 
 export default function FacilityPatientDetailPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const openEncounters = searchParams.get('open_encounters');
   const params = useParams();
   const patientId = params?.id;
 
@@ -28,6 +30,12 @@ export default function FacilityPatientDetailPage() {
   const [patientError, setPatientError] = useState("");
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [encountersOpen, setEncountersOpen] = useState(false);
+
+  useEffect(() => {
+    if (openEncounters === '1') {
+      setEncountersOpen(true);
+    }
+  }, [openEncounters]);
 
   useEffect(() => {
     if (!patientId) return;

@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
+import { apiFetch } from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
 import Paginator from "@/components/Paginator";
 import StartEncounterButton from "@/components/encounters/StartEncounterButton";
@@ -52,9 +54,39 @@ function safeTime(value) {
   return Number.isNaN(t) ? 0 : t;
 }
 
+
+function getContinueEncounterHref(encounterId, stage) {
+  if (!encounterId) return null;
+  const s = String(stage || "").toUpperCase();
+  if (s === "LABS") return `/facility/encounters/${encounterId}/workflow/labs`;
+  if (s === "WAITING_LABS") return `/facility/encounters/${encounterId}/workflow/waiting-labs`;
+  if (s === "NOTE") return `/facility/encounters/${encounterId}/workflow/clinical`;
+  if (s === "PRESCRIPTION") return `/facility/encounters/${encounterId}/workflow/prescription`;
+  return `/facility/encounters/${encounterId}`;
+}
+
 export default function FacilityAppointmentsPage() {
   const sp = useSearchParams();
   const router = useRouter();
+
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMe() {
+      try {
+        const data = await apiFetch('/accounts/me/', { method: 'GET' });
+        if (!cancelled) setMe(data || null);
+      } catch {
+        if (!cancelled) setMe(null);
+      } finally {
+        if (!cancelled) setMeLoading(false);
+      }
+    }
+    loadMe();
+    return () => { cancelled = true; };
+  }, []);
   const pathname = usePathname();
 
   const page = Number(sp.get("page") || 1);
@@ -76,6 +108,9 @@ export default function FacilityAppointmentsPage() {
     ? data
     : [];
   const total = Number(data?.count ?? rows.length);
+
+  const role = String(me?.role || "").toUpperCase();
+  const isDoctor = role === "DOCTOR";
 
   // Ensure new/current are first/top (even if backend pagination/order changes)
   const sortedRows = rows
@@ -325,6 +360,18 @@ export default function FacilityAppointmentsPage() {
                             <StartEncounterButton scope="facility" appointment={a} />
                           )}
 
+
+                          {/* Continue Encounter (Doctor) - hidden when encounter is closed */}
+                          {isDoctor && a.encounter_id && !['CLOSED','CROSSED_OUT'].includes(String(a.encounter_status || '').toUpperCase()) && (
+                            <Link
+                              href={getContinueEncounterHref(a.encounter_id, a.encounter_stage) || `/facility/encounters/${a.encounter_id}`}
+                              className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-1 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+                              title="Continue encounter workflow"
+                            >
+                              Continue encounter
+                              <ChevronRight className="h-4 w-4" />
+                            </Link>
+                          )}
                           {/* Show actions only if there are any */}
                           {actions.length > 0 && (
                             <div className="inline-flex flex-wrap justify-end gap-1">

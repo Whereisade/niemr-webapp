@@ -231,9 +231,20 @@ export default function FacilityEncounterWaitingLabsPage() {
                     <div className="text-sm font-semibold text-slate-900">
                       Lab Order #{o?.id}
                     </div>
-                    <div className="text-xs text-slate-600">
-                      Status: <span className="font-medium text-slate-900">{o?.status || "—"}</span>{" "}
-                      • Ordered: {fmtDateTime(o?.ordered_at)}
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                      <div>
+                        Status: <span className="font-medium text-slate-900">{o?.status || "—"}</span>{" "}
+                        • Ordered: {fmtDateTime(o?.ordered_at)}
+                      </div>
+                      {o?.id ? (
+                        <Link
+                          href={`/facility/labs/${o.id}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-800 hover:bg-slate-50"
+                          title="View this lab order and results"
+                        >
+                          View lab result
+                        </Link>
+                      ) : null}
                     </div>
                   </div>
 
