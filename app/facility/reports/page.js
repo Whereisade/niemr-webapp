@@ -43,8 +43,8 @@ const REPORT_TYPES = [
   {
     id: "billing",
     label: "Billing statement",
-    description: "Payments, charges and balances for a specific invoice.",
-    helper: "Use the Billing ID from the Billing list. Date range optional.",
+    description: "Payments, charges and balances for a patient statement.",
+    helper: "Use the Patient ID (or a Charge ID for a single-charge receipt). Date range optional.",
     icon: ReceiptIcon, // simple alias too
   },
 ];
@@ -222,12 +222,12 @@ export default function FacilityReportsPage() {
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900"
               placeholder={
                 activeType?.id === "encounter"
-                  ? "e.g. EN-000123"
+                  ? "e.g. 123 or EN-000123"
                   : activeType?.id === "lab"
-                  ? "e.g. LAB-000456"
+                  ? "e.g. 456 or LAB-000456"
                   : activeType?.id === "imaging"
-                  ? "e.g. IMG-000789"
-                  : "e.g. BIL-000321"
+                  ? "e.g. 789 or IMG-000789"
+                  : "e.g. Patient ID (e.g. 321)"
               }
             />
             {activeType?.helper && (

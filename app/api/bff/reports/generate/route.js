@@ -1,77 +1,89 @@
-import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
-const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
+const BACKEND = (process.env.NIEMR_BACKEND_URL || "http://localhost:8000").replace(/\/+$/, "");
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
+const REFRESH_COOKIE = process.env.REFRESH_COOKIE || "niemr_refresh";
 
-function withTrailingSlash(path) {
-  return path.endsWith("/") ? path : path + "/";
+function safeCopyHeaders(from, to) {
+  from.forEach((v, k) => {
+    // These can break binary streaming / duplicate encoding.
+    if (!/^content-encoding$|^transfer-encoding$|^connection$/i.test(k)) {
+      to.set(k, v);
+    }
+  });
+}
+
+async function callBackend({ bodyBuf, contentType, access }) {
+  const headers = new Headers();
+  headers.set("Accept", "*/*");
+  if (contentType) headers.set("Content-Type", contentType);
+  if (access) headers.set("Authorization", `Bearer ${access}`);
+
+  return fetch(`${BACKEND}/api/reports/generate/`, {
+    method: "POST",
+    headers,
+    body: bodyBuf,
+  });
+}
+
+async function refreshAccess(refreshToken) {
+  const rr = await fetch(`${BACKEND}/api/accounts/token/refresh/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh: refreshToken }),
+  });
+  if (!rr.ok) return null;
+  const data = await rr.json().catch(() => ({}));
+  return data?.access || null;
 }
 
 export async function POST(req) {
-  try {
-    const cookieStore = await cookies();
-    const accessCookie = cookieStore.get(ACCESS_COOKIE);
-    const access = accessCookie?.value || null;
+  // Read request cookies
+  const access = req.cookies.get(ACCESS_COOKIE)?.value || null;
+  const refresh = req.cookies.get(REFRESH_COOKIE)?.value || null;
 
-    const body = await req.text(); // raw body (JSON from client)
+  // Preserve raw body so we can retry after refresh
+  const contentType = req.headers.get("content-type") || "application/json";
+  const bodyBuf = await req.arrayBuffer();
 
-    const headers = new Headers();
-    headers.set("Accept", "*/*");
+  // 1) First try with current access
+  let backendRes = await callBackend({ bodyBuf, contentType, access });
 
-    // forward JSON content-type if present
-    const incomingContentType = req.headers.get("content-type");
-    if (incomingContentType) {
-      headers.set("Content-Type", incomingContentType);
+  // 2) Refresh & retry on 401
+  let newAccess = null;
+  if (backendRes.status === 401 && refresh) {
+    newAccess = await refreshAccess(refresh);
+    if (newAccess) {
+      backendRes = await callBackend({ bodyBuf, contentType, access: newAccess });
     }
-
-    if (access) {
-      headers.set("Authorization", `Bearer ${access}`);
-    }
-
-    const target = `${BACKEND}${withTrailingSlash("/api/reports/generate")}`.replace(
-      /\/+$/,
-      "/generate"
-    );
-
-    const backendRes = await fetch(target, {
-      method: "POST",
-      headers,
-      body,
-    });
-
-    const arrayBuf = await backendRes.arrayBuffer();
-
-    // clone headers from backend
-    const outHeaders = new Headers();
-    backendRes.headers.forEach((value, key) => {
-      outHeaders.set(key, value);
-    });
-
-    // helpful for debugging if things go wrong
-    outHeaders.set(
-      "X-NIEMR-Reports-Debug",
-      JSON.stringify({
-        status: backendRes.status,
-        backend_url: target,
-        had_access: Boolean(access),
-      })
-    );
-
-    return new Response(arrayBuf, {
-      status: backendRes.status,
-      headers: outHeaders,
-    });
-  } catch (err) {
-    return new Response(
-      JSON.stringify({
-        detail: `BFF error while calling reports/generate: ${
-          err?.message || String(err)
-        }`,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
   }
+
+  const outHeaders = new Headers();
+  safeCopyHeaders(backendRes.headers, outHeaders);
+
+  // Helpful header for debugging
+  outHeaders.set(
+    "X-NIEMR-Reports-Debug",
+    JSON.stringify({
+      status: backendRes.status,
+      refreshed: Boolean(newAccess),
+      backend_url: `${BACKEND}/api/reports/generate/`,
+    })
+  );
+
+  const buf = await backendRes.arrayBuffer();
+  const res = new NextResponse(buf, { status: backendRes.status, headers: outHeaders });
+
+  if (newAccess) {
+    const secure = process.env.NODE_ENV === "production";
+    res.cookies.set(ACCESS_COOKIE, newAccess, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+      maxAge: 60 * 25,
+    });
+  }
+
+  return res;
 }
