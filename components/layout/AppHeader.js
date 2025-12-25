@@ -140,10 +140,9 @@ function buildNavForUser(user) {
       ...base,
       { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
       { href: "/facility/patients", label: "Patients", icon: Users },
-      { href: "/facility/labs", label: "Labs", icon: FlaskConical },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
       { href: "/facility/reports", label: "Reports", icon: ClipboardList },
-      { href: "/facility/staff", label: "Staff", icon: Users, accent: true },
+      { href: "/facility/providers", label: "Staff", icon: Users, accent: true },
     ];
   }
 

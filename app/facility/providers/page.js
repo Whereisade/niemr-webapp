@@ -16,6 +16,9 @@ import {
   XCircle,
   Clock,
   Users2,
+  Ban,
+  Undo2,
+  Trash2,
 } from "lucide-react";
 
 function formatName(p) {
@@ -89,10 +92,33 @@ export default function FacilityProvidersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Load current user (for role-based actions)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const data = await apiFetch("/accounts/me/", { method: "GET" });
+        if (!cancelled) setMe(data || null);
+      } catch {
+        if (!cancelled) setMe(null);
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [data, setData] = useState(null);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [me, setMe] = useState(null);
+  const myRole = String(me?.role || "").toUpperCase();
+  const canManageProviders = myRole === "ADMIN" || myRole === "SUPER_ADMIN";
 
   const [searchInput, setSearchInput] = useState(
     searchParams.get("q") || ""
@@ -228,6 +254,29 @@ export default function FacilityProvidersPage() {
     setStatusFilterInput(value);
     applyFilters(searchInput.trim(), value);
   }
+  async function refreshProviders() {
+    const qs = new URLSearchParams(searchParams);
+    qs.set("facility", "current");
+
+    const res = await apiFetch(`/providers/?${qs.toString()}`);
+    setData(res);
+
+    let items = [];
+    if (Array.isArray(res?.results)) {
+      items = res.results;
+    } else if (Array.isArray(res)) {
+      items = res;
+    } else if (res && typeof res === "object") {
+      const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
+      if (numericKeys.length) {
+        items = numericKeys
+          .sort((a, b) => Number(a) - Number(b))
+          .map((k) => res[k]);
+      }
+    }
+
+    setRows(items);
+  }
 
   async function handleStatusChange(providerId, nextStatus) {
     if (!providerId || !nextStatus) return;
@@ -316,6 +365,57 @@ export default function FacilityProvidersPage() {
         err?.message ||
           "Failed to update application. Please try again."
       );
+    }
+  }
+
+  async function handleSuspend(providerId) {
+    if (!providerId) return;
+    const ok = window.confirm("Suspend this provider? They will be unable to log in.");
+    if (!ok) return;
+
+    try {
+      await apiFetch(`/providers/${providerId}/suspend/`, { method: "POST" });
+      await refreshProviders();
+    } catch (err) {
+      console.error("Failed to suspend provider", err);
+      alert(err?.message || "Failed to suspend provider. Please try again.");
+    }
+  }
+
+  async function handleUnsuspend(providerId) {
+    if (!providerId) return;
+    const ok = window.confirm("Re-activate this provider's account?");
+    if (!ok) return;
+
+    try {
+      await apiFetch(`/providers/${providerId}/unsuspend/`, { method: "POST" });
+      await refreshProviders();
+    } catch (err) {
+      console.error("Failed to unsuspend provider", err);
+      alert(err?.message || "Failed to unsuspend provider. Please try again.");
+    }
+  }
+
+  async function handleRemove(provider) {
+    const providerId = provider?.id;
+    if (!providerId) return;
+
+    const isFacilityCreated = !!provider?.created_by_facility;
+    const ok = window.confirm(
+      isFacilityCreated
+        ? "Sack this provider? This will PERMANENTLY delete their account created by your facility."
+        : "Remove this provider from your facility? (Their account will remain, but they will be detached from this facility.)"
+    );
+    if (!ok) return;
+
+    try {
+      await apiFetch(`/providers/${providerId}/remove-from-facility/`, {
+        method: "POST",
+      });
+      await refreshProviders();
+    } catch (err) {
+      console.error("Failed to remove provider", err);
+      alert(err?.message || "Failed to remove provider. Please try again.");
     }
   }
 
@@ -486,7 +586,47 @@ export default function FacilityProvidersPage() {
                               </button>
                             </>
                           )}
-                        </div>
+                        
+                          {canManageProviders && (
+                            <>
+                              {p.is_active ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSuspend(p.id)}
+                                  className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+                                  title="Suspend provider account"
+                                >
+                                  <Ban className="h-3.5 w-3.5" />
+                                  Suspend
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnsuspend(p.id)}
+                                  className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
+                                  title="Re-activate provider account"
+                                >
+                                  <Undo2 className="h-3.5 w-3.5" />
+                                  Unsuspend
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemove(p)}
+                                className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100"
+                                title={
+                                  p.created_by_facility
+                                    ? "Sack (delete) provider account"
+                                    : "Remove provider from facility"
+                                }
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                {p.created_by_facility ? "Sack" : "Remove"}
+                              </button>
+                            </>
+                          )}
+</div>
                       </td>
                     </tr>
                   );

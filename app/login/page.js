@@ -25,7 +25,7 @@ export default function LoginChooser() {
     {
       href: "/login/provider",
       title: "Independent Provider",
-      desc: "For doctors, nurses, and other practitioners accessing their NIEMR workspace and patient notes.",
+      desc: "For doctors, lab scientists, pharmacists and other practitioners accessing their NIEMR workspace and patient notes.",
       icon: Stethoscope,
       accent: "from-emerald-600/10 to-emerald-600/20 text-emerald-700",
     },
@@ -109,7 +109,7 @@ export default function LoginChooser() {
           Why sign in with NIEMR?
         </h2>
         <p className="mt-2 text-slate-600 max-w-2xl mx-auto text-sm md:text-base">
-          NIEMR securely connects your healthcare workflow — from labs to pharmacy — 
+          NIEMR securely connects your healthcare workflow 
           so you can focus on what truly matters: patient care and efficiency.
         </p>
 
@@ -118,12 +118,12 @@ export default function LoginChooser() {
             {
               icon: ShieldCheck,
               title: "Secure Access",
-              text: "Every login is protected by JWT tokens and strict role permissions.",
+              text: "Every time you log in, your account is secured with a safe digital pass.",
             },
             {
               icon: Workflow,
               title: "Connected Workflow",
-              text: "Access your labs, imaging, and prescriptions from one place.",
+              text: "Access your encounters, labs and prescriptions from one place.",
             },
             {
               icon: Cloud,

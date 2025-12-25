@@ -24,7 +24,7 @@ export default function RegisterChooser() {
     {
       href: "/register/provider",
       title: "Independent Provider",
-      desc: "For solo practitioners, physiotherapists, and clinicians who need a simple yet powerful EMR with e-Rx and visit tracking built in.",
+      desc: "For clinicians, lab scientists, and pharmarcists who need a simple yet powerful EMR with e-Rx and visit tracking built in.",
       icon: Stethoscope,
       accent: "from-emerald-600/10 to-emerald-600/20 text-emerald-700",
     },
