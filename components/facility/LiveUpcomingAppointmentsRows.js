@@ -61,6 +61,8 @@ export default function LiveUpcomingAppointmentsRows({
   initialAppointments = [],
   pollInterval = 20000,
   maxItems = 3,
+  onlyApptTypes = null,
+  onlyStatuses = null,
 }) {
   const [items, setItems] = useState(normalizeToArray(initialAppointments));
   const pollRef = useRef(null);
@@ -94,12 +96,32 @@ export default function LiveUpcomingAppointmentsRows({
   const upcoming = useMemo(() => {
     const now = new Date();
 
+    const typeSet = new Set(
+      (Array.isArray(onlyApptTypes) ? onlyApptTypes : [])
+        .map((v) => String(v || "").toUpperCase())
+        .filter(Boolean)
+    );
+
+    const statusSet = new Set(
+      (Array.isArray(onlyStatuses) ? onlyStatuses : [])
+        .map((v) => String(v || "").toUpperCase())
+        .filter(Boolean)
+    );
+
     const withDates = items
       .map((a) => ({ a, d: parseStartDate(a) }))
       .filter(({ a, d }) => {
         if (!d || d.getTime() < now.getTime()) return false;
         const st = String(a?.status || "").toUpperCase();
         if (TERMINAL_STATUSES.has(st)) return false;
+
+        if (typeSet.size) {
+          const at = String(a?.appt_type || "").toUpperCase();
+          if (!typeSet.has(at)) return false;
+        }
+
+        if (statusSet.size && !statusSet.has(st)) return false;
+
         return true;
       })
       .sort((x, y) => x.d - y.d)
@@ -108,9 +130,20 @@ export default function LiveUpcomingAppointmentsRows({
 
     if (withDates.length) return withDates;
 
-    // Fallback: if we can't parse start dates, just show the first few.
-    return items.slice(0, maxItems);
-  }, [items, maxItems]);
+    // Fallback: if we can't parse start dates, still respect filters.
+    const filtered = items.filter((a) => {
+      const st = String(a?.status || "").toUpperCase();
+      if (TERMINAL_STATUSES.has(st)) return false;
+      if (typeSet.size) {
+        const at = String(a?.appt_type || "").toUpperCase();
+        if (!typeSet.has(at)) return false;
+      }
+      if (statusSet.size && !statusSet.has(st)) return false;
+      return true;
+    });
+
+    return filtered.slice(0, maxItems);
+  }, [items, maxItems, onlyApptTypes, onlyStatuses]);
 
   if (!upcoming.length) {
     return (

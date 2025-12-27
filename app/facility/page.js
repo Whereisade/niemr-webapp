@@ -15,6 +15,9 @@ import {
   Building2,
   Stethoscope,
   Activity,
+  HeartPulse,
+  FlaskConical,
+  Pill,
   LineChart,
   FileText,
   ShieldCheck,
@@ -99,10 +102,27 @@ function normalizeListAndCount(payload) {
   return { list: [], count: 0 };
 }
 
+async function safeFetchCount(path, fallback = 0) {
+  const payload = await safeFetchJSON(path, null);
+  if (!payload) return fallback;
+  const { count } = normalizeListAndCount(payload);
+  return typeof count === "number" ? count : fallback;
+}
+
 export default async function FacilityDashboard() {
   const now = new Date();
   const end = new Date(now);
   end.setDate(end.getDate() + 30);
+
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(now);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const dayRangeQs = new URLSearchParams();
+  dayRangeQs.set("start", dayStart.toISOString());
+  dayRangeQs.set("end", dayEnd.toISOString());
+  dayRangeQs.set("limit", "1");
 
   const upcomingQs = new URLSearchParams();
   upcomingQs.set("start", now.toISOString());
@@ -121,15 +141,44 @@ export default async function FacilityDashboard() {
     redirect("/login/facility");
   }
 
-  if (!FACILITY_ROLES.includes(me.role)) {
+  const role = String(me.role || "").toUpperCase();
+
+  if (!FACILITY_ROLES.includes(role)) {
     redirect("/login/facility");
   }
 
-  const workspace = getFacilityWorkspaceConfig(me.role);
+  const workspace = getFacilityWorkspaceConfig(role);
   const isOwner = workspace.type === FACILITY_WORKSPACE_TYPES.OWNER;
   const isFrontdesk = workspace.type === FACILITY_WORKSPACE_TYPES.FRONTDESK;
   const isClinical = workspace.type === FACILITY_WORKSPACE_TYPES.CLINICAL;
-  const isSuperAdmin = me.role === "SUPER_ADMIN";
+  const isSuperAdmin = role === "SUPER_ADMIN";
+
+  // Role-based enhanced widgets: fetch just the counts we need.
+  let labCounts = { pending: 0, inProgress: 0, completedToday: 0, cancelled: 0 };
+  let rxCounts = { prescribed: 0, partial: 0, dispensed: 0, cancelled: 0 };
+
+  if (role === "LAB") {
+    const [pending, inProgress, completedToday, cancelled] = await Promise.all([
+      safeFetchCount("/labs/orders/?status=PENDING&limit=1", 0),
+      safeFetchCount("/labs/orders/?status=IN_PROGRESS&limit=1", 0),
+      safeFetchCount(`/labs/orders/?status=COMPLETED&${dayRangeQs.toString()}`, 0),
+      safeFetchCount("/labs/orders/?status=CANCELLED&limit=1", 0),
+    ]);
+    labCounts = { pending, inProgress, completedToday, cancelled };
+  }
+
+  if (role === "PHARMACY") {
+    const [prescribed, partial, dispensed, cancelled] = await Promise.all([
+      safeFetchCount("/pharmacy/prescriptions/?status=PRESCRIBED&limit=1", 0),
+      safeFetchCount(
+        "/pharmacy/prescriptions/?status=PARTIALLY_DISPENSED&limit=1",
+        0
+      ),
+      safeFetchCount("/pharmacy/prescriptions/?status=DISPENSED&limit=1", 0),
+      safeFetchCount("/pharmacy/prescriptions/?status=CANCELLED&limit=1", 0),
+    ]);
+    rxCounts = { prescribed, partial, dispensed, cancelled };
+  }
 
   const { list: notifList, count: unreadCount } = normalizeListAndCount(
     notifications
@@ -140,6 +189,50 @@ export default async function FacilityDashboard() {
   );
 
   const { list: upcomingAppts } = normalizeListAndCount(upcomingAppointments);
+
+  // Role-focused schedule: lab/pharmacy users should see their service queue by default.
+  const scheduleApptTypes =
+    role === "LAB" ? ["LAB"] : role === "PHARMACY" ? ["PHARMACY"] : null;
+
+  function filterByApptType(list, allowedTypes) {
+    if (!Array.isArray(list)) return [];
+    if (!Array.isArray(allowedTypes) || allowedTypes.length === 0) return list;
+    const set = new Set(allowedTypes.map((v) => String(v || "").toUpperCase()));
+    return list.filter((a) =>
+      set.has(String(a?.appt_type || "").toUpperCase())
+    );
+  }
+
+  const visibleAppts = filterByApptType(appts, scheduleApptTypes);
+  const visibleUpcomingAppts = filterByApptType(upcomingAppts, scheduleApptTypes);
+
+  const todaysCountForDashboard = scheduleApptTypes
+    ? visibleAppts.length
+    : todaysApptCount;
+
+  const statusCounts = visibleAppts.reduce((acc, a) => {
+    const st = String(a?.status || "SCHEDULED").toUpperCase();
+    acc[st] = (acc[st] || 0) + 1;
+    return acc;
+  }, {});
+
+  const scheduleTitle = isOwner
+    ? "Upcoming Schedule"
+    : role === "LAB"
+      ? "Lab Queue"
+      : role === "PHARMACY"
+        ? "Pharmacy Queue"
+        : role === "DOCTOR"
+          ? "My Schedule"
+          : "Upcoming Schedule";
+
+  const scheduleSubtitle = isOwner
+    ? "Live · next 3 upcoming appointments"
+    : role === "LAB"
+      ? "Live · next 3 lab visits"
+      : role === "PHARMACY"
+        ? "Live · next 3 pickups"
+        : "Live · next 3 upcoming appointments";
 
   const provs = Array.isArray(providers)
     ? providers
@@ -166,7 +259,7 @@ export default async function FacilityDashboard() {
     stats = [
       {
         label: "Today's Appointments",
-        value: todaysApptCount,
+        value: todaysCountForDashboard,
         icon: CalendarRange,
         trend: "+12%",
         trendUp: true,
@@ -200,11 +293,80 @@ export default async function FacilityDashboard() {
         cta: "View notifications",
       },
     ];
+  } else if (role === "LAB") {
+    stats = [
+      {
+        label: "Pending Lab Orders",
+        value: labCounts.pending,
+        icon: FlaskConical,
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
+        href: "/facility/labs?status=PENDING",
+        cta: "Review queue",
+      },
+      {
+        label: "In Progress",
+        value: labCounts.inProgress,
+        icon: Activity,
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
+        href: "/facility/labs?status=IN_PROGRESS",
+        cta: "Continue work",
+      },
+      {
+        label: "Unread Alerts",
+        value: unreadCount,
+        icon: BellRing,
+        badge: unreadCount > 0 ? "Review" : null,
+        accent: "from-amber-500 to-orange-600",
+        bgAccent: "bg-amber-50",
+        iconColor: "text-amber-600",
+        href: "/facility/notifications",
+        cta: "View updates",
+      },
+    ];
+  } else if (role === "PHARMACY") {
+    const dispenseQueue = rxCounts.prescribed + rxCounts.partial;
+    stats = [
+      {
+        label: "Dispense Queue",
+        value: dispenseQueue,
+        icon: Pill,
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
+        href: "/facility/pharmacy?status=PRESCRIBED",
+        cta: "Open queue",
+      },
+      {
+        label: "Dispensed",
+        value: rxCounts.dispensed,
+        icon: CheckCircle2,
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
+        href: "/facility/pharmacy?status=DISPENSED",
+        cta: "View history",
+      },
+      {
+        label: "Unread Alerts",
+        value: unreadCount,
+        icon: BellRing,
+        badge: unreadCount > 0 ? "Review" : null,
+        accent: "from-amber-500 to-orange-600",
+        bgAccent: "bg-amber-50",
+        iconColor: "text-amber-600",
+        href: "/facility/notifications",
+        cta: "View updates",
+      },
+    ];
   } else if (isFrontdesk) {
     stats = [
       {
         label: "Appointments Today",
-        value: todaysApptCount,
+        value: todaysCountForDashboard,
         icon: CalendarRange,
         trend: "+8%",
         trendUp: true,
@@ -240,7 +402,7 @@ export default async function FacilityDashboard() {
     stats = [
       {
         label: "My Appointments",
-        value: todaysApptCount,
+        value: todaysCountForDashboard,
         icon: CalendarRange,
         accent: "from-blue-500 to-indigo-600",
         bgAccent: "bg-blue-50",
@@ -274,7 +436,7 @@ export default async function FacilityDashboard() {
     stats = [
       {
         label: "Total Appointments",
-        value: todaysApptCount,
+        value: todaysCountForDashboard,
         icon: CalendarRange,
         accent: "from-blue-500 to-indigo-600",
         bgAccent: "bg-blue-50",
@@ -301,6 +463,135 @@ export default async function FacilityDashboard() {
         iconColor: "text-amber-600",
         href: "/notifications",
         cta: "View all",
+      },
+    ];
+  }
+
+  // Enhanced widgets (quick metrics) – role based.
+  let quickMetrics = [];
+  if (isOwner) {
+    quickMetrics = [
+      {
+        icon: Activity,
+        label: "Patient Flow",
+        value: "94%",
+        sublabel: "On-time check-ins",
+        color: "emerald",
+      },
+      {
+        icon: Clock,
+        label: "Avg Wait Time",
+        value: "11m",
+        sublabel: "vs 15m yesterday",
+        color: "blue",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Completed",
+        value: appts.filter((a) => a.status === "COMPLETED").length,
+        sublabel: "Today's visits",
+        color: "violet",
+      },
+      {
+        icon: BarChart3,
+        label: "Utilization",
+        value: "87%",
+        sublabel: "Capacity used",
+        color: "amber",
+      },
+    ];
+  } else if (role === "LAB") {
+    quickMetrics = [
+      {
+        icon: FlaskConical,
+        label: "Pending",
+        value: labCounts.pending,
+        sublabel: "Awaiting collection",
+        color: "blue",
+      },
+      {
+        icon: Activity,
+        label: "In Progress",
+        value: labCounts.inProgress,
+        sublabel: "Being processed",
+        color: "emerald",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Completed",
+        value: labCounts.completedToday,
+        sublabel: "Ordered today",
+        color: "violet",
+      },
+      {
+        icon: BellRing,
+        label: "Unread Alerts",
+        value: unreadCount,
+        sublabel: "Notifications",
+        color: "amber",
+      },
+    ];
+  } else if (role === "PHARMACY") {
+    quickMetrics = [
+      {
+        icon: Pill,
+        label: "Prescribed",
+        value: rxCounts.prescribed,
+        sublabel: "Awaiting dispense",
+        color: "blue",
+      },
+      {
+        icon: Activity,
+        label: "Partial",
+        value: rxCounts.partial,
+        sublabel: "Partially dispensed",
+        color: "emerald",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Dispensed",
+        value: rxCounts.dispensed,
+        sublabel: "Completed",
+        color: "violet",
+      },
+      {
+        icon: BellRing,
+        label: "Unread Alerts",
+        value: unreadCount,
+        sublabel: "Notifications",
+        color: "amber",
+      },
+    ];
+  } else {
+    // Default staff widgets
+    quickMetrics = [
+      {
+        icon: CalendarRange,
+        label: isFrontdesk ? "Scheduled" : "Appointments",
+        value: todaysCountForDashboard,
+        sublabel: "Today",
+        color: "blue",
+      },
+      {
+        icon: Activity,
+        label: "Checked-in",
+        value: statusCounts.CHECKED_IN || 0,
+        sublabel: isFrontdesk ? "Ready for triage" : "In queue",
+        color: "emerald",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Completed",
+        value: statusCounts.COMPLETED || 0,
+        sublabel: "Today",
+        color: "violet",
+      },
+      {
+        icon: BellRing,
+        label: "Unread Alerts",
+        value: unreadCount,
+        sublabel: "Notifications",
+        color: "amber",
       },
     ];
   }
@@ -342,7 +633,7 @@ export default async function FacilityDashboard() {
 
               {/* Primary action buttons */}
               <div className="flex flex-wrap gap-2">
-                {(isOwner || isClinical || isFrontdesk) && (
+                {(isOwner || isFrontdesk || role === "DOCTOR" || role === "NURSE") && (
                   <Link
                     href="/facility/appointments"
                     className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:ring-slate-300"
@@ -431,35 +722,18 @@ export default async function FacilityDashboard() {
 
         {/* Quick Metrics */}
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
-            icon={Activity}
-            label="Patient Flow"
-            value="94%"
-            sublabel="On-time check-ins"
-            color="emerald"
-          />
-          <MetricCard
-            icon={Clock}
-            label="Avg Wait Time"
-            value="11m"
-            sublabel="vs 15m yesterday"
-            color="blue"
-          />
-          <MetricCard
-            icon={CheckCircle2}
-            label="Completed"
-            value={appts.filter((a) => a.status === "COMPLETED").length}
-            sublabel="Today's visits"
-            color="violet"
-          />
-          <MetricCard
-            icon={BarChart3}
-            label="Utilization"
-            value="87%"
-            sublabel="Capacity used"
-            color="amber"
-          />
+          {quickMetrics.map((m, idx) => (
+            <MetricCard
+              key={idx}
+              icon={m.icon}
+              label={m.label}
+              value={m.value}
+              sublabel={m.sublabel}
+              color={m.color}
+            />
+          ))}
         </section>
+
 
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Main Content: Appointments */}
@@ -467,8 +741,8 @@ export default async function FacilityDashboard() {
             {/* Appointments Table */}
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
               <CardHead
-                title="Upcoming Schedule"
-                subtitle="Live · next 3 upcoming appointments"
+                title={scheduleTitle}
+                subtitle={scheduleSubtitle}
                 href="/facility/appointments"
                 icon={CalendarRange}
                 actionLabel="View all"
@@ -485,7 +759,7 @@ export default async function FacilityDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    <LiveUpcomingAppointmentsRows initialAppointments={upcomingAppts} />
+                    <LiveUpcomingAppointmentsRows initialAppointments={visibleUpcomingAppts} onlyApptTypes={scheduleApptTypes} />
                   </tbody>
                 </table>
               </div>
@@ -559,18 +833,52 @@ export default async function FacilityDashboard() {
                   primary
                 />
 
-                {(isOwner || isClinical || isFrontdesk) && (
+                {(isOwner || isFrontdesk || role === "DOCTOR" || role === "NURSE") && (
                   <QuickLink
                     href="/facility/patients"
                     icon={Users2}
                     label="Manage Patients"
                   />
                 )}
-                <QuickLink
-                  href="/facility/wards"
-                  icon={Bed}
-                  label="Ward Management"
-                />
+                {role !== "LAB" && role !== "PHARMACY" && (
+                  <QuickLink
+                    href="/facility/wards"
+                    icon={Bed}
+                    label="Ward Management"
+                  />
+                )}
+
+                {role === "DOCTOR" && (
+                  <QuickLink
+                    href="/facility/encounters?mine=1"
+                    icon={FileText}
+                    label="My Encounters"
+                  />
+                )}
+
+                {role === "NURSE" && (
+                  <QuickLink
+                    href="/facility/vitals"
+                    icon={HeartPulse}
+                    label="Capture Vitals"
+                  />
+                )}
+
+                {role === "LAB" && (
+                  <QuickLink
+                    href="/facility/labs?status=PENDING"
+                    icon={FlaskConical}
+                    label="Lab Orders"
+                  />
+                )}
+
+                {role === "PHARMACY" && (
+                  <QuickLink
+                    href="/facility/pharmacy?status=PRESCRIBED"
+                    icon={Pill}
+                    label="Dispense Queue"
+                  />
+                )}
 
                 {isOwner && (
                   <>
@@ -600,14 +908,12 @@ export default async function FacilityDashboard() {
                   />
                 )}
 
-                {isClinical && (
-                  <>
-                    <QuickLink
-                      href="/facility/labs/new"
-                      icon={FileText}
-                      label="Order Lab Test"
-                    />
-                  </>
+                {(role === "DOCTOR" || role === "NURSE") && (
+                  <QuickLink
+                    href="/facility/labs/new"
+                    icon={FileText}
+                    label="Order Lab Test"
+                  />
                 )}
 
                 <div className="border-t border-slate-200 pt-2 mt-2">
