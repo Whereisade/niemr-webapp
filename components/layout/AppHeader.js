@@ -110,6 +110,8 @@ function buildNavForUser(user) {
         ...base,
         { href: "/facility/labs", label: "Labs", icon: FlaskConical },
         { href: "/facility/labs/catalog", label: "Lab catalog", icon: ClipboardList },
+        { href: "/facility/billing", label: "Billing", icon: CreditCard },
+        { href: "/facility/payments", label: "Payments", icon: CreditCard },
         { href: "/facility/patients", label: "Patients", icon: Users },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
       ];
@@ -121,6 +123,8 @@ function buildNavForUser(user) {
         { href: "/facility/pharmacy", label: "Pharmacy", icon: Pill },
         { href: "/facility/pharmacy/catalog", label: "Catalog", icon: ClipboardList },
         { href: "/facility/pharmacy/stock", label: "Stock", icon: Boxes },
+        { href: "/facility/billing", label: "Billing", icon: CreditCard },
+        { href: "/facility/payments", label: "Payments", icon: CreditCard },
         { href: "/facility/patients", label: "Patients", icon: Users },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
       ];
@@ -132,6 +136,7 @@ function buildNavForUser(user) {
         { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
         { href: "/facility/patients", label: "Patients", icon: Users },
         { href: "/facility/billing", label: "Billing", icon: CreditCard },
+        { href: "/facility/payments", label: "Payments", icon: CreditCard },
       ];
     }
 
@@ -141,6 +146,7 @@ function buildNavForUser(user) {
       { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
       { href: "/facility/patients", label: "Patients", icon: Users },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
+      { href: "/facility/payments", label: "Payments", icon: CreditCard },
       { href: "/facility/reports", label: "Reports", icon: ClipboardList },
       { href: "/facility/providers", label: "Staff", icon: Users, accent: true },
     ];
@@ -180,6 +186,8 @@ function buildNavForUser(user) {
         ...base,
         { href: "/provider/labs", label: "Labs", icon: FlaskConical },
         { href: "/provider/labs/catalog", label: "Lab catalog", icon: ClipboardList },
+        { href: "/provider/billing", label: "Billing", icon: CreditCard },
+        { href: "/provider/payments", label: "Payments", icon: CreditCard },
         { href: "/provider/patients", label: "Patients", icon: Users },
         { href: "/provider/notifications", label: "Notifications", icon: Bell },
       ];
@@ -191,6 +199,8 @@ function buildNavForUser(user) {
         { href: "/provider/pharmacy", label: "Pharmacy", icon: Pill },
         { href: "/provider/pharmacy/catalog", label: "Catalog", icon: ClipboardList },
         { href: "/provider/pharmacy/stock", label: "Stock", icon: Boxes },
+        { href: "/provider/billing", label: "Billing", icon: CreditCard },
+        { href: "/provider/payments", label: "Payments", icon: CreditCard },
         { href: "/provider/patients", label: "Patients", icon: Users },
         { href: "/provider/notifications", label: "Notifications", icon: Bell },
       ];

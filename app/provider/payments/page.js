@@ -1,9 +1,33 @@
 "use client";
 
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 import { usePayments } from "@/lib/usePayments";
+import RecordPaymentModal from "@/components/billing/RecordPaymentModal";
 
-function formatDateTime(value) {
+function normalizeResults(payload) {
+  if (!payload) return { count: 0, results: [] };
+  if (Array.isArray(payload.results)) return payload;
+  if (Array.isArray(payload)) return { count: payload.length, results: payload };
+  if (typeof payload === "object") {
+    const keys = Object.keys(payload).filter((k) => /^\d+$/.test(k));
+    if (keys.length) {
+      const results = keys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => payload[k]);
+      return { count: results.length, results };
+    }
+  }
+  return { count: 0, results: [] };
+}
+
+function formatMoney(v) {
+  if (v === null || v === undefined) return "—";
+  const n = Number(v);
+  if (Number.isNaN(n)) return String(v);
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(value) {
   if (!value) return "—";
   try {
     const d = new Date(value);
@@ -14,212 +38,194 @@ function formatDateTime(value) {
   }
 }
 
-function formatMoney(v) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (Number.isNaN(n)) return String(v);
-  return n.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 export default function ProviderPaymentsPage() {
-  const sp = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [patient, setPatient] = useState("");
+  const [method, setMethod] = useState("");
+  const [search, setSearch] = useState("");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  const page    = Number(sp.get("page") || 1);
-  const limit   = Number(sp.get("limit") || 20);
-  const patient = sp.get("patient") || "";
-  const method  = sp.get("method")  || "";
-  const s       = sp.get("s")       || "";
+  const params = useMemo(
+    () => ({
+      page,
+      limit,
+      patient: patient || undefined,
+      method: method || undefined,
+      s: search || undefined,
+    }),
+    [page, limit, patient, method, search]
+  );
 
-  const { data, error, isLoading } = usePayments({
-    page,
-    limit,
-    patient,
-    method,
-    s,
-  });
+  const { data, error, isLoading, mutate } = usePayments(params);
+  const { count, results } = normalizeResults(data);
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
-  const total = Number(data?.count ?? rows.length);
-
-  const updateQuery = (patch) => {
-    const params = new URLSearchParams(sp?.toString() || "");
-    Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") {
-        params.delete(k);
-      } else {
-        params.set(k, String(v));
-      }
-    });
-    if ("patient" in patch || "method" in patch || "s" in patch || "limit" in patch) {
-      params.set("page", "1");
-    }
-    router.push(`${pathname}?${params.toString()}`);
-  };
-
-  if (isLoading && !data) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          Billing – Payments
-        </h1>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
-          Loading payments…
-        </div>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          Billing – Payments
-        </h1>
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
-        </div>
-      </main>
-    );
-  }
+  const onSaved = () => mutate?.();
 
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-5 p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Billing – Payments
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Payments received for patients in this facility.
+          <h1 className="text-xl font-semibold text-slate-900">Payments</h1>
+          <p className="text-sm text-slate-500">Payments received in your independent scope.</p>
+        </div>
+
+        <button
+          onClick={() => setShowPaymentModal(true)}
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+        >
+          Record payment
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-5">
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium text-slate-700">Search</label>
+          <input
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+            placeholder="Reference, note…"
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-700">Patient ID</label>
+          <input
+            value={patient}
+            onChange={(e) => {
+              setPage(1);
+              setPatient(e.target.value);
+            }}
+            placeholder="e.g. 123"
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-700">Method</label>
+          <select
+            value={method}
+            onChange={(e) => {
+              setPage(1);
+              setMethod(e.target.value);
+            }}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          >
+            <option value="">All</option>
+            {["CASH", "POS", "TRANSFER", "CARD", "CHEQUE", "OTHER"].map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-700">Per page</label>
+          <select
+            value={limit}
+            onChange={(e) => {
+              setPage(1);
+              setLimit(Number(e.target.value));
+            }}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="text-base font-semibold text-slate-900">Payments</h2>
+          <p className="text-xs text-slate-500">
+            Showing {results.length} of {count || 0}
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="search"
-            placeholder="Search reference / note…"
-            defaultValue={s}
-            onBlur={(e) => updateQuery({ s: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <input
-            type="text"
-            placeholder="Filter by patient ID…"
-            defaultValue={patient}
-            onBlur={(e) => updateQuery({ patient: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={method}
-            onChange={(e) => updateQuery({ method: e.target.value })}
-          >
-            <option value="">All methods</option>
-            <option value="CASH">Cash</option>
-            <option value="POS">POS</option>
-            <option value="TRANSFER">Transfer</option>
-            <option value="INSURANCE">Insurance</option>
-          </select>
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-32"
-            value={String(limit)}
-            onChange={(e) => updateQuery({ limit: e.target.value })}
-          >
-            <option value="20">Show 20</option>
-            <option value="50">Show 50</option>
-            <option value="100">Show 100</option>
-          </select>
-        </div>
-      </header>
+        {isLoading ? (
+          <div className="p-4 text-sm text-slate-500">Loading payments…</div>
+        ) : error ? (
+          <div className="p-4 text-sm text-rose-700">{error.message}</div>
+        ) : results.length ? (
+          <div className="overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
+                <tr>
+                  <th className="px-3 py-2">ID</th>
+                  <th className="px-3 py-2">Patient</th>
+                  <th className="px-3 py-2">Method</th>
+                  <th className="px-3 py-2 text-right">Amount</th>
+                  <th className="px-3 py-2 text-right">Allocated</th>
+                  <th className="px-3 py-2 text-right">Unallocated</th>
+                  <th className="px-3 py-2">Reference</th>
+                  <th className="px-3 py-2">Received</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {results.map((p) => (
+                  <tr key={p.id} className="text-xs text-slate-700">
+                    <td className="px-3 py-2 font-medium text-slate-900">#{p.id}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-slate-900">
+                        {p.patient_name || `Patient #${p.patient}`}
+                      </div>
+                      <div className="text-[11px] text-slate-500">ID: {p.patient}</div>
+                    </td>
+                    <td className="px-3 py-2">{p.method}</td>
+                    <td className="px-3 py-2 text-right font-medium">{formatMoney(p.amount)}</td>
+                    <td className="px-3 py-2 text-right">{formatMoney(p.allocated_total)}</td>
+                    <td className="px-3 py-2 text-right">{formatMoney(p.unallocated_total)}</td>
+                    <td className="px-3 py-2">{p.reference || "—"}</td>
+                    <td className="px-3 py-2">{fmtDate(p.received_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-4 text-sm text-slate-500">No payments found.</div>
+        )}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Patient
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Reference
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Method
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Amount
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Paid At
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((pmt) => (
-              <tr key={pmt.id} className="hover:bg-slate-50">
-                <td className="p-3 text-sm text-slate-800">
-                  {pmt.patient || pmt.patient_id || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {pmt.reference || pmt.receipt_number || "—"}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {pmt.method || pmt.payment_method || "—"}
-                </td>
-                <td className="p-3 text-sm text-right text-slate-800">
-                  {formatMoney(pmt.amount)}
-                </td>
-                <td className="p-3 text-sm text-slate-800">
-                  {formatDateTime(pmt.paid_at || pmt.created_at)}
-                </td>
-              </tr>
-            ))}
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+          <div className="text-xs text-slate-500">
+            Page {page} • {count ? Math.ceil(count / limit) : 1} pages
+          </div>
 
-            {!rows.length && (
-              <tr>
-                <td
-                  className="p-4 text-center text-sm text-slate-500"
-                  colSpan={5}
-                >
-                  No payments found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
-          >
-            Next
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={count ? page >= Math.ceil(count / limit) : results.length < limit}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
-    </main>
+
+      <RecordPaymentModal
+        open={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSaved={onSaved}
+        defaultPatientId={patient || undefined}
+        title="Record payment (Independent)"
+      />
+    </div>
   );
 }

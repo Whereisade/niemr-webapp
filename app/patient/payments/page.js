@@ -109,7 +109,9 @@ export default function PatientPaymentsPage() {
             <option value="CASH">Cash</option>
             <option value="POS">POS</option>
             <option value="TRANSFER">Transfer</option>
-            <option value="INSURANCE">Insurance</option>
+            <option value="CARD">Card</option>
+            <option value="CHEQUE">Cheque</option>
+            <option value="OTHER">Other</option>
           </select>
           <select
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
@@ -137,7 +139,7 @@ export default function PatientPaymentsPage() {
                 Amount
               </th>
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Paid At
+                Received
               </th>
             </tr>
           </thead>
@@ -154,7 +156,7 @@ export default function PatientPaymentsPage() {
                   {formatMoney(pmt.amount)}
                 </td>
                 <td className="p-3 text-sm text-slate-800">
-                  {formatDateTime(pmt.paid_at || pmt.created_at)}
+                  {formatDateTime(pmt.received_at || pmt.created_at)}
                 </td>
               </tr>
             ))}

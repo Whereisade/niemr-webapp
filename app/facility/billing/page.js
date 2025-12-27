@@ -1,12 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 import { useCharges } from "@/lib/useCharges";
 import { useBillingLedger } from "@/lib/useBillingLedger";
-import { downloadReport, downloadBillingPdf } from "@/lib/reports";
+import RevenueByServicePanel from "@/components/billing/RevenueByServicePanel";
+import RecordPaymentModal from "@/components/billing/RecordPaymentModal";
 
-function formatDateTime(value) {
+function normalizeResults(payload) {
+  if (!payload) return { count: 0, results: [] };
+  if (Array.isArray(payload.results)) return payload;
+  if (Array.isArray(payload)) return { count: payload.length, results: payload };
+  if (typeof payload === "object") {
+    const keys = Object.keys(payload).filter((k) => /^\d+$/.test(k));
+    if (keys.length) {
+      const results = keys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => payload[k]);
+      return { count: results.length, results };
+    }
+  }
+  return { count: 0, results: [] };
+}
+
+function formatMoney(v) {
+  if (v === null || v === undefined) return "—";
+  const n = Number(v);
+  if (Number.isNaN(n)) return String(v);
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(value) {
   if (!value) return "—";
   try {
     const d = new Date(value);
@@ -17,329 +40,293 @@ function formatDateTime(value) {
   }
 }
 
-function formatMoney(v) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (Number.isNaN(n)) return String(v);
-  return n.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+const STATUS_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "UNPAID", label: "Unpaid" },
+  { value: "PARTIALLY_PAID", label: "Partially paid" },
+  { value: "PAID", label: "Paid" },
+  { value: "VOID", label: "Void" },
+];
 
 export default function FacilityBillingPage() {
-  const sp = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [patient, setPatient] = useState("");
+  const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  const page = Number(sp.get("page") || 1);
-  const limit = Number(sp.get("limit") || 20);
-  const status = sp.get("status") || "";
-  const patient = sp.get("patient") || "";
-  const s = sp.get("s") || "";
-
-  const { data, error, isLoading } = useCharges({
-    page,
-    limit,
-    status,
-    patient,
-    s,
-  });
-
-  const hasPatient = Boolean(patient);
-
-  const {
-    data: ledger,
-    error: ledgerError,
-    isLoading: ledgerLoading,
-  } = useBillingLedger(
-    hasPatient ? { patient } : {},
-    { enabled: hasPatient }
+  const params = useMemo(
+    () => ({
+      page,
+      limit,
+      patient: patient || undefined,
+      status: status || undefined,
+      s: search || undefined,
+    }),
+    [page, limit, patient, status, search]
   );
 
-  const [downloadingId, setDownloadingId] = useState(null);
+  const { data, error, isLoading, mutate } = useCharges(params);
+  const { count, results } = normalizeResults(data);
 
-  async function handleReceiptDownload(ch) {
-    if (!ch?.id) return;
-    try {
-      setDownloadingId(ch.id);
-      await downloadBillingPdf(ch.id);
-    } catch (err) {
-      console.error("Failed to download billing receipt", err);
-      alert(
-        err?.message || "Failed to download receipt. Please try again."
-      );
-    } finally {
-      setDownloadingId(null);
-    }
-  }
+  const ledgerEnabled = Boolean(patient);
+  const ledger = useBillingLedger(
+    patient ? { patient } : {},
+    { enabled: ledgerEnabled }
+  );
 
-  const rows = Array.isArray(data?.results)
-    ? data.results
-    : Array.isArray(data)
-    ? data
-    : [];
-  const total = Number(data?.count ?? rows.length);
-
-  const updateQuery = (patch) => {
-    const params = new URLSearchParams(sp?.toString() || "");
-    Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") {
-        params.delete(k);
-      } else {
-        params.set(k, String(v));
-      }
-    });
-    if (
-      "status" in patch ||
-      "patient" in patch ||
-      "s" in patch ||
-      "limit" in patch
-    ) {
-      params.set("page", "1");
-    }
-    router.push(`${pathname}?${params.toString()}`);
+  const onPaymentSaved = () => {
+    mutate?.();
+    ledger.mutate?.();
   };
 
-  const rawCharges =
-    ledger?.charges_total ??
-    (ledger && ledger["charges...al"]) ??
-    0;
-  const rawPayments = ledger?.payments_total ?? 0;
-  const rawBalance =
-    ledger?.balance ?? (Number(rawCharges) - Number(rawPayments));
-
-  if (isLoading && !data) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          Facility Billing – Charges
-        </h1>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
-          Loading charges…
-        </div>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 mb-4">
-          Facility Billing – Charges
-        </h1>
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto max-w-7xl p-6 md:p-10 space-y-6">
-      {/* Header */}
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-5 p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Facility Billing – Charges
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Charges raised for all patients in this facility. Enter a
-            patient to view their balance.
+          <h1 className="text-xl font-semibold text-slate-900">Billing</h1>
+          <p className="text-sm text-slate-500">
+            View charges and record payments for facility patients.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="search"
-            placeholder="Search description / service…"
-            defaultValue={s}
-            onBlur={(e) => updateQuery({ s: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <input
-            type="text"
-            placeholder="Filter by patient ID…"
-            defaultValue={patient}
-            onBlur={(e) => updateQuery({ patient: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-56"
-          />
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            value={status}
-            onChange={(e) => updateQuery({ status: e.target.value })}
-          >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="PARTIAL">Partial</option>
-            <option value="PAID">Paid</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-32"
-            value={String(limit)}
-            onChange={(e) => updateQuery({ limit: e.target.value })}
-          >
-            <option value="20">Show 20</option>
-            <option value="50">Show 50</option>
-            <option value="100">Show 100</option>
-          </select>
+        <div className="flex items-center gap-2">
           <button
-            type="button"
-            disabled={!hasPatient || ledgerLoading}
-            onClick={async () => {
-              try {
-                if (!patient) {
-                  alert("Enter a patient ID first.");
-                  return;
-                }
-                await downloadReport({
-                  report_type: "BILLING",
-                  ref_id: patient,
-                  as_pdf: true,
-                  save_as_attachment: false,
-                });
-              } catch (err) {
-                alert(
-                  err?.message ||
-                    "Failed to generate billing statement. Please try again."
-                );
-              }
-            }}
-            className="inline-flex items-center justify-center rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setShowPaymentModal(true)}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
-            Download Patient Statement (PDF)
+            Record payment
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* Ledger summary */}
-      {hasPatient && (
-        <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-800">
-                Patient Billing Summary
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Charges, payments, and balance for patient ID:{" "}
-                <span className="font-mono">{patient}</span>
-              </p>
-              {ledgerError && (
-                <p className="mt-1 text-xs text-rose-600">
-                  Failed to load ledger summary:{" "}
-                  {ledgerError.message || "Unknown error"}
-                </p>
-              )}
+      {/* Filters */}
+      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-5">
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium text-slate-700">Search</label>
+          <input
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+            placeholder="Service code/name, description…"
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-700">Patient ID</label>
+          <input
+            value={patient}
+            onChange={(e) => {
+              setPage(1);
+              setPatient(e.target.value);
+            }}
+            placeholder="e.g. 123"
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-700">Status</label>
+          <select
+            value={status}
+            onChange={(e) => {
+              setPage(1);
+              setStatus(e.target.value);
+            }}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-700">Per page</label>
+          <select
+            value={limit}
+            onChange={(e) => {
+              setPage(1);
+              setLimit(Number(e.target.value));
+            }}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Ledger */}
+      {ledgerEnabled ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-base font-semibold text-slate-900">Patient ledger</h2>
+          {ledger.isLoading && !ledger.data ? (
+            <div className="mt-3 text-sm text-slate-500">Loading ledger…</div>
+          ) : ledger.error ? (
+            <div className="mt-3 text-sm text-rose-700">{ledger.error.message}</div>
+          ) : ledger.data ? (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="text-xs text-slate-500">Charges</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {formatMoney(ledger.data.charges_total)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="text-xs text-slate-500">Payments</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {formatMoney(ledger.data.payments_total)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="text-xs text-slate-500">Allocated</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {formatMoney(ledger.data.allocated_total)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="text-xs text-slate-500">Outstanding</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {formatMoney(ledger.data.outstanding ?? ledger.data.balance)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="text-xs text-slate-500">Unallocated</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {formatMoney(ledger.data.unallocated)}
+                </div>
+              </div>
             </div>
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                <dt className="text-xs font-medium text-slate-500">
-                  Charges
-                </dt>
-                <dd className="text-sm font-semibold text-slate-900">
-                  {formatMoney(rawCharges)}
-                </dd>
-              </div>
-              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                <dt className="text-xs font-medium text-slate-500">
-                  Payments
-                </dt>
-                <dd className="text-sm font-semibold text-slate-900">
-                  {formatMoney(rawPayments)}
-                </dd>
-              </div>
-              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                <dt className="text-xs font-medium text-slate-500">
-                  Balance
-                </dt>
-                <dd className="text-sm font-semibold text-slate-900">
-                  {formatMoney(rawBalance)}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </section>
-      )}
-
-      {/* Table */}
-      <section className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-800">
-            Charges ({total})
-          </h2>
+          ) : null}
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Patient
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Description
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status
-                </th>
-                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Amount
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Created At
-                </th>
-                {/* NEW Receipt column */}
-                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Receipt
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {rows.map((ch) => (
-                <tr key={ch.id} className="hover:bg-slate-50">
-                  <td className="p-3 text-sm text-slate-800">
-                    {ch.patient || ch.patient_id || "—"}
-                  </td>
-                  <td className="p-3 text-sm text-slate-800">
-                    {ch.description || `Service #${ch.service}` || "—"}
-                  </td>
-                  <td className="p-3 text-sm text-slate-800">
-                    {ch.status || "—"}
-                  </td>
-                  <td className="p-3 text-sm text-right text-slate-800">
-                    {formatMoney(ch.amount)}
-                  </td>
-                  <td className="p-3 text-sm text-slate-800">
-                    {formatDateTime(ch.created_at)}
-                  </td>
-                  {/* NEW Receipt cell */}
-                  <td className="p-3 text-sm text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleReceiptDownload(ch)}
-                      disabled={downloadingId === ch.id}
-                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {downloadingId === ch.id ? "Generating…" : "PDF"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+      ) : null}
 
-              {!rows.length && (
+      {/* Revenue breakdown */}
+      <RevenueByServicePanel
+        params={{
+          patient: patient || undefined,
+          status: status || undefined,
+          s: search || undefined,
+        }}
+      />
+
+      {/* Charges table */}
+      <div className="rounded-2xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="text-base font-semibold text-slate-900">Charges</h2>
+          <p className="text-xs text-slate-500">
+            Showing {results.length} of {count || 0}
+          </p>
+        </div>
+
+        {isLoading ? (
+          <div className="p-4 text-sm text-slate-500">Loading charges…</div>
+        ) : error ? (
+          <div className="p-4 text-sm text-rose-700">{error.message}</div>
+        ) : results.length ? (
+          <div className="overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
                 <tr>
-                  <td
-                    className="p-4 text-center text-sm text-slate-500"
-                    colSpan={6}
-                  >
-                    No charges found.
-                  </td>
+                  <th className="px-3 py-2">ID</th>
+                  <th className="px-3 py-2">Patient</th>
+                  <th className="px-3 py-2">Service</th>
+                  <th className="px-3 py-2 text-right">Amount</th>
+                  <th className="px-3 py-2 text-right">Paid</th>
+                  <th className="px-3 py-2 text-right">Outstanding</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Created</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {results.map((c) => {
+                  const paid = Number(c.allocated_total || 0);
+                  const amt = Number(c.amount || 0);
+                  const outstanding = Math.max(amt - paid, 0);
+
+                  return (
+                    <tr key={c.id} className="text-xs text-slate-700">
+                      <td className="px-3 py-2 font-medium text-slate-900">
+                        #{c.id}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-900">
+                          {c.patient_name || `Patient #${c.patient}`}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          ID: {c.patient}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-900">
+                          {c.service_name || c.service_code || "—"}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {c.service_code}
+                          {c.description ? ` • ${c.description}` : ""}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {formatMoney(amt)}
+                      </td>
+                      <td className="px-3 py-2 text-right">{formatMoney(paid)}</td>
+                      <td className="px-3 py-2 text-right">
+                        {formatMoney(outstanding)}
+                      </td>
+                      <td className="px-3 py-2">{c.status}</td>
+                      <td className="px-3 py-2">{fmtDate(c.created_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-4 text-sm text-slate-500">No charges found.</div>
+        )}
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+          <div className="text-xs text-slate-500">
+            Page {page} • {count ? Math.ceil(count / limit) : 1} pages
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={count ? page >= Math.ceil(count / limit) : results.length < limit}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </section>
-    </main>
+      </div>
+
+      <RecordPaymentModal
+        open={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSaved={onPaymentSaved}
+        defaultPatientId={patient || undefined}
+        title="Record payment (Facility)"
+      />
+    </div>
   );
 }
