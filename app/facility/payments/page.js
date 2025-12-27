@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { usePayments } from "@/lib/usePayments";
 import RecordPaymentModal from "@/components/billing/RecordPaymentModal";
+import PatientDropdown from "@/components/billing/PatientDropdown";
 
 function normalizeResults(payload) {
   if (!payload) return { count: 0, results: [] };
@@ -94,15 +95,15 @@ export default function FacilityPaymentsPage() {
         </div>
 
         <div>
-          <label className="text-xs font-medium text-slate-700">Patient ID</label>
-          <input
+          <label className="text-xs font-medium text-slate-700">Patient</label>
+          <PatientDropdown
             value={patient}
-            onChange={(e) => {
+            onChange={(val) => {
               setPage(1);
-              setPatient(e.target.value);
+              setPatient(val);
             }}
-            placeholder="e.g. 123"
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+            placeholder="All patients"
+            className="mt-1"
           />
         </div>
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useRevenueByService } from "@/lib/useRevenueByService";
+import { apiFetch } from "@/lib/api";
 
 function formatMoney(v) {
   if (v === null || v === undefined) return "—";
@@ -22,9 +23,57 @@ export default function RevenueByServicePanel({ params = {}, title = "Revenue br
   const stableParams = useMemo(() => params || {}, [JSON.stringify(params || {})]);
 
   const { data, error, isLoading } = useRevenueByService(stableParams);
+  const [userRole, setUserRole] = useState(null);
 
-  const categories = Array.isArray(data?.categories) ? data.categories : [];
-  const services = Array.isArray(data?.services) ? data.services : [];
+  useEffect(() => {
+    async function loadMe() {
+      try {
+        const me = await apiFetch("/accounts/me/");
+        setUserRole(me?.role?.toUpperCase() || null);
+      } catch {
+        // ignore
+      }
+    }
+    loadMe();
+  }, []);
+
+  // Filter categories based on user role
+  const allCategories = Array.isArray(data?.categories) ? data.categories : [];
+  const categories = useMemo(() => {
+    if (!userRole) return allCategories;
+
+    // LAB users should only see LABS category
+    if (userRole === "LAB") {
+      return allCategories.filter((c) => c.category === "LABS");
+    }
+
+    // PHARMACY users should only see PHARMACY category
+    if (userRole === "PHARMACY") {
+      return allCategories.filter((c) => c.category === "PHARMACY");
+    }
+
+    // DOCTOR and NURSE can see all categories
+    return allCategories;
+  }, [allCategories, userRole]);
+
+  // Filter services based on user role
+  const allServices = Array.isArray(data?.services) ? data.services : [];
+  const services = useMemo(() => {
+    if (!userRole) return allServices;
+
+    // LAB users should only see LAB services
+    if (userRole === "LAB") {
+      return allServices.filter((s) => s.category === "LABS");
+    }
+
+    // PHARMACY users should only see PHARMACY services
+    if (userRole === "PHARMACY") {
+      return allServices.filter((s) => s.category === "PHARMACY");
+    }
+
+    // DOCTOR and NURSE can see all services
+    return allServices;
+  }, [allServices, userRole]);
 
   const topServices = services.slice(0, 8);
 
@@ -50,7 +99,7 @@ export default function RevenueByServicePanel({ params = {}, title = "Revenue br
       ) : (
         <>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {(categories.length ? categories : [{ category: "LABS" }, { category: "PHARMACY" }, { category: "OTHER" }]).map(
+            {(categories.length ? categories : []).map(
               (c) => (
                 <div key={c.category} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                   <div className="text-xs font-medium text-slate-600">{categoryLabel(c.category)}</div>
@@ -76,6 +125,12 @@ export default function RevenueByServicePanel({ params = {}, title = "Revenue br
               )
             )}
           </div>
+
+          {categories.length === 0 && (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              No revenue data available for your category.
+            </div>
+          )}
 
           <div className="mt-5">
             <div className="flex items-center justify-between">

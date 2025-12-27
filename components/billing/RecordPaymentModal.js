@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, CreditCard, Loader2, RefreshCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import PatientDropdown from "@/components/billing/PatientDropdown";
 
 function normalizeList(payload) {
   if (!payload) return [];
@@ -124,7 +125,7 @@ export default function RecordPaymentModal({
     setError("");
 
     if (!patientId) {
-      setError("Patient ID is required.");
+      setError("Patient is required.");
       return;
     }
 
@@ -242,12 +243,12 @@ export default function RecordPaymentModal({
               </div>
 
               <div>
-                <label className="text-xs font-medium text-slate-700">Patient ID</label>
-                <input
+                <label className="text-xs font-medium text-slate-700">Patient</label>
+                <PatientDropdown
                   value={patientId}
-                  onChange={(e) => setPatientId(e.target.value)}
-                  placeholder="e.g. 123"
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+                  onChange={setPatientId}
+                  placeholder="Select patient…"
+                  className="mt-1"
                 />
               </div>
 
