@@ -69,6 +69,15 @@ function getPrescriberId(rx) {
   return v;
 }
 
+function getOutsourcedToId(rx) {
+  const v = rx?.outsourced_to;
+  if (v === null || v === undefined) return null;
+  if (typeof v === "object") {
+    return v.id ?? v.user_id ?? null;
+  }
+  return v;
+}
+
 export default function ProviderPharmacyPage() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -82,7 +91,7 @@ export default function ProviderPharmacyPage() {
   const end = sp.get("end") || "";
   const s = sp.get("s") || "";
 
-  const { data, error, isLoading } = usePrescriptions({
+  const { data, error, isLoading, mutate } = usePrescriptions({
     page,
     limit,
     status,
@@ -142,13 +151,20 @@ export default function ProviderPharmacyPage() {
   const isProviderPharmacist =
     meRole === "PHARMACY" || providerType === "PHARMACIST";
 
+  const canDispense = ["PHARMACY", "ADMIN", "SUPER_ADMIN"].includes(meRole) || isProviderPharmacist;
+
   const { rows: rawRows, total } = normalisePrescriptionsPayload(data);
 
   // "My prescriptions" filter is applied client-side on the current page
+  // - For doctors: prescriptions created by me.
+  // - For pharmacists: prescriptions outsourced/assigned to me.
   const rows = useMemo(() => {
     if (!onlyMine || !meId) return rawRows;
+    if (isProviderPharmacist) {
+      return rawRows.filter((rx) => getOutsourcedToId(rx) === meId);
+    }
     return rawRows.filter((rx) => getPrescriberId(rx) === meId);
-  }, [rawRows, onlyMine, meId]);
+  }, [rawRows, onlyMine, meId, isProviderPharmacist]);
 
   const stats = useMemo(() => {
     let draft = 0;
@@ -226,7 +242,7 @@ export default function ProviderPharmacyPage() {
     : "My prescriptions";
 
   const headerSubtitle = isProviderPharmacist
-    ? "Review prescriptions you’re involved with across facilities. Dispensing stays in the facility workspace."
+    ? "Review prescriptions assigned to you and dispense from your independent pharmacy stock."
     : "View and track medications you’ve prescribed for your patients.";
 
   return (
@@ -251,6 +267,14 @@ export default function ProviderPharmacyPage() {
         {/* Actions + stats */}
         <div className="flex flex-col items-end gap-3">
           <div className="flex flex-wrap justify-end gap-2">
+            {canDispense ? (
+              <Link
+                href="/provider/pharmacy/new"
+                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
+              >
+                Prescribe drug
+              </Link>
+            ) : null}
             <Link
               href="/provider/pharmacy/catalog"
               className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
@@ -309,7 +333,7 @@ export default function ProviderPharmacyPage() {
                 : "text-slate-600 hover:bg-slate-50")
             }
           >
-            My prescriptions (page)
+            {isProviderPharmacist ? "Assigned to me (page)" : "My prescriptions (page)"}
           </button>
           <button
             type="button"
@@ -321,7 +345,7 @@ export default function ProviderPharmacyPage() {
                 : "text-slate-600 hover:bg-slate-50")
             }
           >
-            All facility prescriptions (page)
+            {isProviderPharmacist ? "All prescriptions (page)" : "All facility prescriptions (page)"}
           </button>
         </div>
       </section>
@@ -546,6 +570,8 @@ export default function ProviderPharmacyPage() {
         open={detailsOpen}
         id={detailsId}
         onClose={() => setDetailsOpen(false)}
+        allowDispense={canDispense}
+        onUpdated={() => mutate()}
       />
     </main>
   );

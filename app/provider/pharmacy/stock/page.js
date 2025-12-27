@@ -6,12 +6,15 @@ import {
   Pill,
   Boxes,
   History,
-  TrendingDown,
-  TrendingUp,
   Search,
   Loader2,
   ArrowLeft,
+  PlusCircle,
+  Edit3,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -26,8 +29,16 @@ function formatDateTime(value) {
 
 function normaliseList(payload) {
   if (!payload) return [];
-  if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object") {
+    const numericKeys = Object.keys(payload).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      return numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => payload[k]);
+    }
+  }
   return [];
 }
 
@@ -36,446 +47,494 @@ export default function ProviderPharmacyStockPage() {
   const [loadingMe, setLoadingMe] = useState(true);
 
   const [stock, setStock] = useState([]);
-  const [loadingStock, setLoadingStock] = useState(true);
-  const [stockError, setStockError] = useState(null);
-
   const [txns, setTxns] = useState([]);
-  const [loadingTxns, setLoadingTxns] = useState(true);
-  const [txnsError, setTxnsError] = useState(null);
+  const [catalog, setCatalog] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
 
-  // --- load current provider user ---
-  useEffect(() => {
-    let cancelled = false;
-    async function loadMe() {
-      try {
-        const res = await fetch("/api/proxy/accounts/me/", {
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          if (!cancelled) setMe(null);
-          return;
-        }
-        const json = await res.json();
-        if (!cancelled) setMe(json);
-      } finally {
-        if (!cancelled) setLoadingMe(false);
-      }
+  // Adjust stock form
+  const [adjustStockId, setAdjustStockId] = useState("");
+  const [adjustDelta, setAdjustDelta] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjusting, setAdjusting] = useState(false);
+
+  // Update price form
+  const [priceDrugId, setPriceDrugId] = useState("");
+  const [priceValue, setPriceValue] = useState("");
+  const [updatingPrice, setUpdatingPrice] = useState(false);
+
+  const [flashError, setFlashError] = useState("");
+  const [flashSuccess, setFlashSuccess] = useState("");
+
+  async function loadAll() {
+    try {
+      setLoading(true);
+      setError("");
+      const [meRes, stockRes, txnsRes, catalogRes] = await Promise.all([
+        apiFetch("/accounts/me/", { method: "GET" }),
+        apiFetch("/pharmacy/stock/?page=1&limit=500", { method: "GET" }),
+        apiFetch("/pharmacy/stock/txns/?page=1&limit=200", { method: "GET" }),
+        apiFetch("/pharmacy/catalog/?page=1&limit=1000", { method: "GET" }),
+      ]);
+
+      setMe(meRes);
+      setStock(normaliseList(stockRes));
+      setTxns(normaliseList(txnsRes));
+      setCatalog(normaliseList(catalogRes));
+    } catch (e) {
+      setError(e?.message || "Failed to load stock.");
+    } finally {
+      setLoadingMe(false);
+      setLoading(false);
     }
-    loadMe();
-    return () => {
-      cancelled = true;
-    };
+  }
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const meRole = (me?.role || "").toUpperCase();
-  const facility = me?.facility || null;
+  const meRole = String(me?.role || "").toUpperCase();
+  const canManage = ["PHARMACY", "ADMIN", "SUPER_ADMIN"].includes(meRole);
 
-  // --- load stock + txns once we know the user ---
-  useEffect(() => {
-    if (!me) {
-      setLoadingStock(false);
-      setLoadingTxns(false);
+  const stockRows = useMemo(() => {
+    const rows = normaliseList({ results: stock })
+      .map((s) => {
+        const drug = s.drug || {};
+        const qty = Number(s.qty_on_hand ?? s.current_qty ?? 0) || 0;
+        const unitPrice = Number(drug.unit_price ?? 0) || 0;
+        return {
+          id: s.id,
+          drugId: drug.id,
+          code: drug.code || "",
+          name: drug.name || "",
+          strength: drug.strength || "",
+          form: drug.form || "",
+          qty,
+          unitPrice,
+          updatedAt: s.updated_at || s.last_updated || s.modified_at || null,
+        };
+      })
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+    if (!search.trim()) return rows;
+    const term = search.toLowerCase();
+    return rows.filter((r) => {
+      return (
+        (r.code || "").toLowerCase().includes(term) ||
+        (r.name || "").toLowerCase().includes(term) ||
+        (r.strength || "").toLowerCase().includes(term) ||
+        (r.form || "").toLowerCase().includes(term)
+      );
+    });
+  }, [stock, search]);
+
+  const stats = useMemo(() => {
+    let totalLines = stockRows.length;
+    let totalQty = 0;
+    let totalValue = 0;
+    for (const r of stockRows) {
+      totalQty += r.qty;
+      totalValue += r.qty * (r.unitPrice || 0);
+    }
+    return { totalLines, totalQty, totalValue };
+  }, [stockRows]);
+
+  const catalogOptions = useMemo(() => {
+    return catalog
+      .filter((d) => d && d.is_active !== false)
+      .map((d) => {
+        const label = `${d.name || d.code || "Drug"}${d.strength ? ` ${d.strength}` : ""}${d.form ? ` • ${d.form}` : ""}`;
+        return { id: d.id, code: d.code, label };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [catalog]);
+
+  async function handleAdjust(e) {
+    e.preventDefault();
+    setFlashError("");
+    setFlashSuccess("");
+    const sid = Number(adjustStockId);
+    const delta = Number(adjustDelta);
+    if (!Number.isFinite(sid) || sid <= 0) {
+      setFlashError("Select a stock item.");
+      return;
+    }
+    if (!Number.isFinite(delta) || delta === 0) {
+      setFlashError("Enter a non-zero quantity change.");
       return;
     }
 
-    let cancelled = false;
-
-    async function loadAll() {
-      setLoadingStock(true);
-      setLoadingTxns(true);
-      setStockError(null);
-      setTxnsError(null);
-
-      try {
-        const [stockRes, txnsRes] = await Promise.all([
-          fetch("/api/proxy/pharmacy/stock/", { cache: "no-store" }),
-          fetch("/api/proxy/pharmacy/stock/txns/", { cache: "no-store" }),
-        ]);
-
-        if (!cancelled) {
-          if (!stockRes.ok) {
-            throw new Error(`Failed to load stock (${stockRes.status})`);
-          }
-          if (!txnsRes.ok) {
-            throw new Error(
-              `Failed to load stock history (${txnsRes.status})`
-            );
-          }
-
-          const [stockJson, txnsJson] = await Promise.all([
-            stockRes.json(),
-            txnsRes.json(),
-          ]);
-
-          setStock(normaliseList(stockJson));
-          setTxns(normaliseList(txnsJson));
-        }
-      } catch (err) {
-        if (!cancelled) {
-          const msg =
-            err?.message ||
-            "Failed to load stock information for this facility.";
-          setStockError(msg);
-          setTxnsError(msg);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingStock(false);
-          setLoadingTxns(false);
-        }
-      }
-    }
-
-    loadAll();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [me]);
-
-  // --- derived rows & stats (read-only) ---
-
-  const stockRows = useMemo(() => {
-    let rows = stock.map((s) => {
-      const drug = s.drug || {};
-      return {
-        id: s.id,
-        drugId: drug.id,
-        code: drug.code || "",
-        name: drug.name || "",
-        strength: drug.strength || "",
-        form: drug.form || "",
-        route: drug.route || "",
-        current_qty: s.current_qty ?? 0,
-      };
-    });
-    if (search.trim()) {
-      const term = search.toLowerCase();
-      rows = rows.filter((r) => {
-        return (
-          r.code.toLowerCase().includes(term) ||
-          r.name.toLowerCase().includes(term) ||
-          r.strength.toLowerCase().includes(term)
-        );
+    try {
+      setAdjusting(true);
+      await apiFetch("/pharmacy/stock/adjust/", {
+        method: "POST",
+        body: JSON.stringify({ stock: sid, delta, reason: adjustReason || "" }),
       });
+      setFlashSuccess("Stock updated.");
+      setAdjustStockId("");
+      setAdjustDelta("");
+      setAdjustReason("");
+      await loadAll();
+    } catch (e2) {
+      setFlashError(e2?.message || "Failed to adjust stock.");
+    } finally {
+      setAdjusting(false);
     }
-    rows.sort((a, b) => a.name.localeCompare(b.name));
-    return rows;
-  }, [stock, search]);
+  }
 
-  const stockStats = useMemo(() => {
-    const totalLines = stockRows.length;
-    let totalQty = 0;
-    let low = 0;
-    for (const r of stockRows) {
-      const q = Number(r.current_qty) || 0;
-      totalQty += q;
-      if (q <= 10) low += 1;
+  async function handleUpdatePrice(e) {
+    e.preventDefault();
+    setFlashError("");
+    setFlashSuccess("");
+    const did = Number(priceDrugId);
+    const unitPrice = Number(priceValue);
+    if (!Number.isFinite(did) || did <= 0) {
+      setFlashError("Select a drug to update.");
+      return;
     }
-    return { totalLines, totalQty, low };
-  }, [stockRows]);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      setFlashError("Enter a valid unit price.");
+      return;
+    }
+    try {
+      setUpdatingPrice(true);
+      await apiFetch(`/pharmacy/catalog/${did}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ unit_price: unitPrice }),
+      });
+      setFlashSuccess("Price updated.");
+      setPriceDrugId("");
+      setPriceValue("");
+      await loadAll();
+    } catch (e2) {
+      setFlashError(e2?.message || "Failed to update price.");
+    } finally {
+      setUpdatingPrice(false);
+    }
+  }
 
-  // --- guards ---
-
-  if (loadingMe) {
+  if (loadingMe || loading) {
     return (
       <main className="mx-auto max-w-5xl p-6 md:p-10">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-          Checking provider profile…
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading stock…
+          </div>
         </div>
       </main>
     );
   }
 
-  if (!me) {
+  if (error) {
     return (
-      <main className="mx-auto max-w-3xl p-6 md:p-10">
-        <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
+      <main className="mx-auto max-w-5xl space-y-4 p-6 md:p-10">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
           <ArrowLeft className="h-4 w-4" />
-          <Link
-            href="/provider"
-            className="text-sky-700 hover:underline"
-          >
-            Back to Provider dashboard
+          <Link href="/provider/pharmacy" className="text-sky-700 hover:underline">
+            Back to pharmacy
           </Link>
         </div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
-          You must be logged in as a provider to view facility stock.
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          {error}
         </div>
       </main>
     );
   }
 
-  const headerBadgeText =
-    meRole === "PHARMACY"
-      ? "Independent Pharmacy · Facility stock"
-      : "Provider · Facility stock";
-
-  const headerSubtitle = facility
-    ? "Read-only view of pharmacy stock in your current facility."
-    : "You are not currently linked to any facility. Stock data may be empty.";
-
   return (
-    <main className="relative mx-auto max-w-6xl space-y-6 p-6 md:p-10">
-      {/* soft background glows */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-56 w-56 rounded-full bg-sky-100/60 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-56 w-56 rounded-full bg-emerald-100/60 blur-3xl" />
-
-      {/* Header */}
-      <header className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
+      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-sky-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-sky-700">
             <Pill className="h-3.5 w-3.5" />
-            {headerBadgeText}
+            Provider · Pharmacy
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Stock & inventory (read only)
+            Stock
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            {headerSubtitle}
+            Monitor inventory, adjust quantities, and update catalog pricing.
           </p>
         </div>
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/provider/pharmacy"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-            Back to Pharmacy
+            <ArrowLeft className="h-4 w-4" />
+            Back
           </Link>
         </div>
       </header>
 
-      {/* Summary cards */}
-      <section className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard
-          icon={Boxes}
-          label="Stock lines"
-          value={stockStats.totalLines}
-          hint="Unique drugs in this facility."
-        />
-        <SummaryCard
-          icon={TrendingUp}
-          label="Total quantity"
-          value={stockStats.totalQty}
-          hint="Sum of all current quantities."
-        />
-        <SummaryCard
-          icon={TrendingDown}
-          label="Low stock"
-          value={stockStats.low}
-          hint="Items at or below 10 units."
-        />
+      {!canManage ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Stock management is restricted to PHARMACY/Admin roles.
+        </div>
+      ) : null}
+
+      {(flashError || flashSuccess) && (
+        <div>
+          {flashError ? (
+            <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4" />
+              <div>{flashError}</div>
+            </div>
+          ) : null}
+          {flashSuccess ? (
+            <div className="mt-2 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <CheckCircle2 className="mt-0.5 h-4 w-4" />
+              <div>{flashSuccess}</div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Stock lines" value={stats.totalLines} icon={Boxes} />
+        <StatCard label="Total qty" value={stats.totalQty} icon={PlusCircle} />
+        <StatCard label="Est. value" value={stats.totalValue.toLocaleString()} icon={Edit3} />
       </section>
 
-      {/* Main content: stock table + history (both read-only) */}
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1.4fr)]">
-        {/* Stock table */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Current stock (read only)
-            </div>
-            <div className="text-xs text-slate-500">
-              Lines:{" "}
-              <span className="font-semibold text-slate-800">
-                {stockRows.length}
-              </span>
-            </div>
-          </div>
+      <section className="grid gap-4 md:grid-cols-2">
+        {/* Adjust stock */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Adjust stock</h2>
+          <p className="mt-1 text-sm text-slate-600">Add or remove quantity for a stock item.</p>
 
-          <div className="relative mb-3">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-              <Search className="h-4 w-4 text-slate-400" />
+          <form onSubmit={handleAdjust} className="mt-4 space-y-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Stock item
+              </label>
+              <select
+                value={adjustStockId}
+                onChange={(e) => setAdjustStockId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              >
+                <option value="">Select…</option>
+                {stockRows.map((r) => (
+                  <option key={r.id} value={String(r.id)}>
+                    {r.name || r.code || `Stock #${r.id}`} {r.code ? `(${r.code})` : ""} — qty {r.qty}
+                  </option>
+                ))}
+              </select>
             </div>
-            <input
-              type="search"
-              placeholder="Search by drug name, code, strength…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
-            />
-          </div>
 
-          {loadingStock ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading stock…
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Change (delta)
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={adjustDelta}
+                  onChange={(e) => setAdjustDelta(e.target.value)}
+                  placeholder="e.g. 10 or -5"
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Reason (optional)
+                </label>
+                <input
+                  type="text"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  placeholder="e.g. Restock"
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
             </div>
-          ) : stockError ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-              {stockError}
-            </div>
-          ) : (
-            <div className="max-h-[380px] overflow-y-auto rounded-lg border border-slate-100">
-              <table className="min-w-full divide-y divide-slate-100 text-xs">
-                <thead className="bg-slate-50 text-slate-700">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold">
-                      Drug
-                    </th>
-                    <th className="px-3 py-2 text-left font-semibold">
-                      Strength
-                    </th>
-                    <th className="px-3 py-2 text-left font-semibold">
-                      Form / Route
-                    </th>
-                    <th className="px-3 py-2 text-right font-semibold">
-                      Current qty
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {stockRows.length ? (
-                    stockRows.map((row) => {
-                      const isLow = (row.current_qty || 0) <= 10;
-                      return (
-                        <tr
-                          key={row.id || row.drugId}
-                          className="hover:bg-slate-50/70 transition"
-                        >
-                          <td className="px-3 py-2 text-xs font-medium text-slate-900">
-                            {row.name || "—"}
-                            <span className="ml-1 font-mono text-[10px] text-slate-500">
-                              {row.code ? `(${row.code})` : ""}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-xs text-slate-600">
-                            {row.strength || "—"}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-slate-600">
-                            {row.form || "—"}{" "}
-                            {row.route ? `· ${row.route}` : ""}
-                          </td>
-                          <td className="px-3 py-2 text-right text-xs">
-                            <span
-                              className={
-                                "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold " +
-                                (isLow
-                                  ? "bg-amber-50 text-amber-700"
-                                  : "bg-emerald-50 text-emerald-700")
-                              }
-                            >
-                              {row.current_qty ?? 0}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-3 py-6 text-center text-xs text-slate-500"
-                      >
-                        No stock records found for this facility.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+
+            <button
+              type="submit"
+              disabled={!canManage || adjusting}
+              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60"
+            >
+              {adjusting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Update stock
+            </button>
+          </form>
         </div>
 
-        {/* Right column: stock history (read only) */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50">
-              <History className="h-4 w-4 text-slate-700" />
-            </div>
+        {/* Update price */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Update price</h2>
+          <p className="mt-1 text-sm text-slate-600">Edit catalog unit price used for billing totals.</p>
+
+          <form onSubmit={handleUpdatePrice} className="mt-4 space-y-3">
             <div>
-              <div className="text-sm font-semibold text-slate-900">
-                Stock history
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Recent movements recorded by pharmacy/admin.
-              </div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Drug
+              </label>
+              <select
+                value={priceDrugId}
+                onChange={(e) => setPriceDrugId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              >
+                <option value="">Select…</option>
+                {catalogOptions.map((d) => (
+                  <option key={d.id} value={String(d.id)}>
+                    {d.label} {d.code ? `(${d.code})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Unit price
+              </label>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={priceValue}
+                onChange={(e) => setPriceValue(e.target.value)}
+                placeholder="e.g. 1500"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={!canManage || updatingPrice}
+              className="inline-flex items-center gap-2 rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60"
+            >
+              {updatingPrice ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save price
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {/* Stock table */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-1.5 w-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500" />
+
+        <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <Boxes className="h-3.5 w-3.5 text-slate-400" />
+              Inventory
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search drug / code…"
+                className="w-full rounded-full border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
             </div>
           </div>
+        </div>
 
-          {loadingTxns ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading history…
-            </div>
-          ) : txnsError ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-800">
-              {txnsError}
-            </div>
-          ) : txns.length === 0 ? (
-            <div className="py-4 text-[11px] text-slate-500">
-              No stock transactions yet.
-            </div>
-          ) : (
-            <div className="max-h-[260px] overflow-y-auto">
-              <ul className="space-y-1 text-[11px]">
-                {txns.slice(0, 40).map((txn) => {
-                  const drug = txn.drug || {};
-                  const created = formatDateTime(txn.created_at);
-                  const q = Number(txn.qty) || 0;
-                  const isIn = q > 0;
-                  const isOut = q < 0;
-                  const badgeCls = isIn
-                    ? "bg-emerald-50 text-emerald-700"
-                    : isOut
-                    ? "bg-rose-50 text-rose-700"
-                    : "bg-slate-50 text-slate-700";
-                  const sign = q > 0 ? "+" : "";
-                  const user =
-                    txn.created_by?.full_name ||
-                    txn.created_by?.email ||
-                    "";
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="px-4 py-3 text-left">Drug</th>
+                <th className="px-4 py-3 text-left">Code</th>
+                <th className="px-4 py-3 text-right">Qty</th>
+                <th className="px-4 py-3 text-right">Unit price</th>
+                <th className="px-4 py-3 text-right">Value</th>
+                <th className="px-4 py-3 text-left">Updated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {stockRows.length ? (
+                stockRows.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-900">
+                        {r.name || "—"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {[r.strength, r.form].filter(Boolean).join(" • ") || " "}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{r.code || "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{r.qty}</td>
+                    <td className="px-4 py-3 text-right text-slate-700">
+                      {r.unitPrice ? r.unitPrice.toLocaleString() : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-700">
+                      {(r.qty * (r.unitPrice || 0)).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{formatDateTime(r.updatedAt)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="px-4 py-8 text-center text-slate-600" colSpan={6}>
+                    No stock items found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-                  return (
-                    <li
-                      key={txn.id}
-                      className="flex items-start justify-between rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5"
-                    >
-                      <div className="pr-2">
-                        <div className="text-[11px] font-medium text-slate-900">
-                          {drug.name || "Drug"}
-                          <span className="ml-1 font-mono text-[10px] text-slate-500">
-                            {drug.code ? `(${drug.code})` : ""}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-slate-500">
-                          {txn.note || "No note"}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-slate-400">
-                          {created}
-                          {user ? ` · ${user}` : ""}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span
-                          className={
-                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold " +
-                            badgeCls
-                          }
-                        >
-                          {sign}
-                          {q}
-                        </span>
-                        <span className="text-[9px] uppercase tracking-wide text-slate-400">
-                          {txn.txn_type || ""}
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+      {/* Recent txns */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-1.5 w-full bg-gradient-to-r from-slate-500 via-slate-600 to-slate-700" />
+        <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <History className="h-3.5 w-3.5 text-slate-400" />
+            Recent movements
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="px-4 py-3 text-left">When</th>
+                <th className="px-4 py-3 text-left">Drug</th>
+                <th className="px-4 py-3 text-right">Delta</th>
+                <th className="px-4 py-3 text-left">Reason</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {txns.length ? (
+                txns.slice(0, 50).map((t) => (
+                  <tr key={t.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-3 text-slate-600">{formatDateTime(t.created_at || t.timestamp)}</td>
+                    <td className="px-4 py-3 text-slate-900">
+                      {t.drug_name || t.drug?.name || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      {Number(t.delta || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{t.reason || "—"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="px-4 py-6 text-center text-slate-600" colSpan={4}>
+                    No transactions yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
     </main>
   );
 }
 
-function SummaryCard({ icon: Icon, label, value, hint }) {
+function StatCard({ label, value, icon: Icon }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="h-1.5 w-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500" />
@@ -484,12 +543,7 @@ function SummaryCard({ icon: Icon, label, value, hint }) {
           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             {label}
           </div>
-          <div className="mt-1 text-2xl font-semibold text-slate-900">
-            {value}
-          </div>
-          {hint && (
-            <div className="mt-1 text-[11px] text-slate-500">{hint}</div>
-          )}
+          <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
         </div>
         <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
           <Icon className="h-5 w-5 text-slate-700" />

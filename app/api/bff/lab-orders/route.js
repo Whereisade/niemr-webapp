@@ -49,19 +49,16 @@ export async function GET(req) {
       payload = { detail: text };
     }
 
-    // 5) Respond with JSON + debug info
-    return NextResponse.json(
-      {
-        ...(typeof payload === "object" && payload !== null
-          ? payload
-          : { detail: String(payload) }),
-        _debug_status_from_backend: backendRes.status,
-        _debug_had_access_token: Boolean(access),
-        _debug_auth_header_sent: headers.get("Authorization") || null,
-        _debug_backend_url: target,
-      },
-      { status: backendRes.status }
-    );
+    // 5) Respond with JSON (support arrays), move debug to headers
+    const body =
+      typeof payload === "object" && payload !== null
+        ? payload
+        : { detail: String(payload) };
+    const res = NextResponse.json(body, { status: backendRes.status });
+    res.headers.set("x-bff-backend-status", String(backendRes.status));
+    res.headers.set("x-bff-had-access-token", access ? "1" : "0");
+    res.headers.set("x-bff-backend-url", target);
+    return res;
   } catch (err) {
     return NextResponse.json(
       {

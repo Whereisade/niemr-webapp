@@ -480,11 +480,11 @@ export default async function ProviderPage() {
   const quickLinks = [
     { href: "/provider/patients", label: "Patients", icon: Users },
     { href: "/provider/notifications", label: "Notifications", icon: Bell },
-    {
-      href: "/provider/facility/apply",
-      label: "Apply to facility",
-      icon: Building2,
-    },
+    // {
+    //   href: "/provider/facility/apply",
+    //   label: "Apply to facility",
+    //   icon: Building2,
+    // },
   ];
 
   const displayName =

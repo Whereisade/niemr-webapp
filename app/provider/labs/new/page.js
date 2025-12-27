@@ -14,6 +14,10 @@ const PRIORITY_OPTIONS = [
 export default function ProviderNewLabOrderPage() {
   const router = useRouter();
 
+  // Independent LAB users shouldn't create lab orders (they receive/fulfil them).
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+
   const [patientId, setPatientId] = useState("");
   const [externalLabName, setExternalLabName] = useState("");
   const [outsourcedTo, setOutsourcedTo] = useState("");
@@ -28,6 +32,64 @@ export default function ProviderNewLabOrderPage() {
 
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMe() {
+      try {
+        const res = await apiFetch("/accounts/me/", { method: "GET" });
+        if (!cancelled) setMe(res);
+      } catch {
+        if (!cancelled) setMe(null);
+      } finally {
+        if (!cancelled) setMeLoading(false);
+      }
+    }
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const meRole = String(me?.role || "").toUpperCase();
+
+  // LAB users fulfil lab orders; they don't create them.
+  if (!meLoading && meRole === "LAB") {
+    return (
+      <main className="mx-auto max-w-3xl p-6 md:p-10">
+        <header className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+            New lab order
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Lab scientists don’t create lab orders. You’ll see orders assigned to you in your lab inbox.
+          </p>
+        </header>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-700">
+            Go to <span className="font-medium">Lab Orders</span> to collect samples and enter results.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/provider/labs")}
+              className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              Go to Lab Orders
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/provider")}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Back to dashboard
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +123,9 @@ export default function ProviderNewLabOrderPage() {
       setLabsError("");
 
       try {
-        const data = await apiFetch("/providers/?facility=none&type=LAB");
+        // Backend uses role name LAB for the user, but provider_type for filtering
+        // We keep facility=none (independent providers) and ask for lab scientists.
+        const data = await apiFetch("/providers/?facility=none&type=LAB_SCIENTIST");
         const list =
           Array.isArray(data)
             ? data
@@ -141,6 +205,45 @@ export default function ProviderNewLabOrderPage() {
       setIsSubmitting(false);
     }
   };
+
+  // If current user is an independent LAB, this page isn't applicable.
+  if (!meLoading && meRole === "LAB") {
+    return (
+      <main className="mx-auto max-w-3xl p-6 md:p-10">
+        <header className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+            New lab order
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Lab scientists don&apos;t create lab orders — you receive orders from
+            clinicians and enter results.
+          </p>
+        </header>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-700">
+            Go to your lab orders list to open an order and enter results.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/provider/labs")}
+              className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              View lab orders
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/provider/labs/catalog")}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+            >
+              Manage catalog
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl p-6 md:p-10">
