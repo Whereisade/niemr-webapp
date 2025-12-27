@@ -222,15 +222,13 @@ export default function ProviderLabOrdersPage() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {/* New order button */}
-          {meRole !== "LAB" ? (
-            <Link
-              href="/provider/labs/new"
-              className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-            >
-              New lab order
-            </Link>
-          ) : null}
+          {/* New order button - now available for all provider roles including LAB */}
+          <Link
+            href="/provider/labs/new"
+            className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            New lab order
+          </Link>
           {meRole === "LAB" ? (
             <Link
               href="/provider/labs/catalog"
@@ -239,7 +237,6 @@ export default function ProviderLabOrdersPage() {
               Lab catalog
             </Link>
           ) : null}
-
         </div>
       </header>
 
