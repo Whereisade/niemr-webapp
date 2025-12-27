@@ -13,8 +13,10 @@ import {
   Activity,
   ArrowLeft,
   ArrowRight,
+  Plus,
 } from "lucide-react";
 import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
+import { apiFetch } from "@/lib/api";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -63,6 +65,21 @@ function normalisePrescriptionsPayload(payload) {
   return { rows: [], total: 0 };
 }
 
+function normaliseList(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object") {
+    const numericKeys = Object.keys(payload).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      return numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => payload[k]);
+    }
+  }
+  return [];
+}
+
 export default function FacilityPharmacyPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -71,7 +88,6 @@ export default function FacilityPharmacyPage() {
   const page = Number(searchParams.get("page") || 1) || 1;
   const limit = Number(searchParams.get("limit") || 20) || 20;
   const status = searchParams.get("status") || "";
-  const patient = searchParams.get("patient") || "";
   const start = searchParams.get("start") || "";
   const end = searchParams.get("end") || "";
   const s = searchParams.get("s") || "";
@@ -83,7 +99,6 @@ export default function FacilityPharmacyPage() {
     page,
     limit,
     status,
-    patient,
     start,
     end,
     s,
@@ -93,6 +108,10 @@ export default function FacilityPharmacyPage() {
   // Fetch /accounts/me/ so we can adapt copy based on role
   const [me, setMe] = useState(null);
   const [meLoading, setMeLoading] = useState(true);
+
+  // Patients for name lookup
+  const [patients, setPatients] = useState([]);
+  const [patientsLoading, setPatientsLoading] = useState(true);
 
   // Modal state
   const [detailsId, setDetailsId] = useState(null);
@@ -135,11 +154,53 @@ export default function FacilityPharmacyPage() {
     };
   }, []);
 
+  // Load patients for name lookup
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPatients() {
+      try {
+        setPatientsLoading(true);
+        const res = await apiFetch("/patients/?page=1&limit=500");
+        if (cancelled) return;
+        setPatients(normaliseList(res));
+      } catch (err) {
+        console.error("Failed to load patients for name lookup:", err);
+        if (!cancelled) setPatients([]);
+      } finally {
+        if (!cancelled) setPatientsLoading(false);
+      }
+    }
+
+    loadPatients();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const meRole = (me?.role || "").toUpperCase();
   const canDispense =
     meRole === "PHARMACY" || meRole === "ADMIN" || meRole === "SUPER_ADMIN";
+  const canPrescribe =
+    meRole === "PHARMACY" || meRole === "ADMIN" || meRole === "SUPER_ADMIN" || meRole === "DOCTOR" || meRole === "NURSE";
 
   const { rows, total } = normalisePrescriptionsPayload(data);
+
+  // Build patient lookup map
+  const patientMap = useMemo(() => {
+    const map = new Map();
+    for (const p of patients) {
+      const name =
+        p.full_name ||
+        [p.first_name, p.last_name].filter(Boolean).join(" ") ||
+        null;
+      map.set(p.id, {
+        name: name || `Patient #${p.id}`,
+        phone: p.phone || "",
+      });
+    }
+    return map;
+  }, [patients]);
 
   const stats = useMemo(() => {
     let draft = 0;
@@ -183,7 +244,6 @@ export default function FacilityPharmacyPage() {
     // reset page when filters change (except page itself)
     if (
       "status" in patch ||
-      "patient" in patch ||
       "s" in patch ||
       "start" in patch ||
       "end" in patch ||
@@ -244,22 +304,30 @@ export default function FacilityPharmacyPage() {
           </p>
         </div>
 
-        {/* Right side: catalog button + stats */}
+        {/* Right side: action buttons + stats */}
         <div className="flex flex-col items-end gap-3">
           <div className="flex flex-wrap justify-end gap-2">
-          <Link
-            href="/facility/pharmacy/catalog"
-            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
-          >
-            Add / view catalog
-          </Link>
-          <Link
-            href="/facility/pharmacy/stock"
-            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
-          >
-            Stock
-          </Link>
-
+            {canPrescribe && (
+              <Link
+                href="/facility/pharmacy/prescribe"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-sky-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-sky-700"
+              >
+                <Plus className="h-4 w-4" />
+                New prescription
+              </Link>
+            )}
+            <Link
+              href="/facility/pharmacy/catalog"
+              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+            >
+              Catalog
+            </Link>
+            <Link
+              href="/facility/pharmacy/stock"
+              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+            >
+              Stock
+            </Link>
           </div>
 
           {/* High-level stats (for current page) */}
@@ -299,7 +367,7 @@ export default function FacilityPharmacyPage() {
               <div className="relative w-full sm:w-64">
                 <input
                   type="search"
-                  placeholder="Search drug / note / patient…"
+                  placeholder="Search patient, drug, note…"
                   defaultValue={s}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -310,19 +378,6 @@ export default function FacilityPharmacyPage() {
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
               </div>
-
-              <input
-                type="text"
-                placeholder="Patient ID…"
-                defaultValue={patient}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    updateQuery({ patient: e.currentTarget.value });
-                  }
-                }}
-                onBlur={(e) => updateQuery({ patient: e.target.value })}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-              />
 
               <select
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-44"
@@ -370,7 +425,7 @@ export default function FacilityPharmacyPage() {
             <thead className="bg-slate-50 text-slate-700">
               <tr>
                 <Th>Created</Th>
-                <Th>Patient</Th>
+                <Th>Patient Name</Th>
                 <Th>Items</Th>
                 <Th>Status</Th>
                 <Th>Note</Th>
@@ -382,8 +437,16 @@ export default function FacilityPharmacyPage() {
               {rows.length ? (
                 rows.map((rx) => {
                   const created = formatDateTime(rx.created_at);
-                  const patientLabel =
-                    rx.patient != null ? `Patient #${rx.patient}` : "—";
+                  
+                  // Get patient name from lookup map
+                  const patientInfo = patientMap.get(rx.patient);
+                  const patientLabel = patientsLoading
+                    ? "Loading…"
+                    : patientInfo
+                    ? patientInfo.name
+                    : rx.patient != null
+                    ? `Patient #${rx.patient}`
+                    : "—";
 
                   let itemsSummary = "—";
                   if (Array.isArray(rx.items) && rx.items.length) {
@@ -392,6 +455,7 @@ export default function FacilityPharmacyPage() {
                         (it) =>
                           it.drug?.name ||
                           it.drug?.code ||
+                          it.drug_name ||
                           it.dose ||
                           "Medication"
                       )
@@ -420,6 +484,11 @@ export default function FacilityPharmacyPage() {
                         <span className="text-xs font-medium text-slate-900">
                           {patientLabel}
                         </span>
+                        {patientInfo?.phone && (
+                          <span className="ml-1 text-[11px] text-slate-500">
+                            • {patientInfo.phone}
+                          </span>
+                        )}
                       </Td>
                       <Td>
                         <span className="text-xs text-slate-700">
