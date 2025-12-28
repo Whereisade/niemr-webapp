@@ -2,7 +2,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, UserPlus, Baby, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Users, UserPlus, Baby, Loader2, ChevronRight } from "lucide-react";
 import { fetchDependents, createDependent } from "@/lib/dependents";
 
 function formatName(dep) {
@@ -24,6 +25,7 @@ function formatDate(value) {
 }
 
 export default function PatientDependentsPage() {
+  const router = useRouter();
   const [dependents, setDependents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -138,6 +140,10 @@ export default function PatientDependentsPage() {
     }
   }
 
+  function handleRowClick(dependentId) {
+    router.push(`/patient/dependents/${dependentId}`);
+  }
+
   const total = dependents.length;
   const minors = dependents.filter((d) => {
     const date = d.dob || d.date_of_birth;
@@ -167,7 +173,7 @@ export default function PatientDependentsPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-600">
             Add children, parents, or other family members you manage care for.
-            You’ll be able to book appointments and track their care from here.
+            You'll be able to book appointments and track their care from here.
           </p>
         </div>
       </header>
@@ -374,9 +380,16 @@ export default function PatientDependentsPage() {
 
       {/* Dependents list */}
       <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Saved dependents
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Saved dependents
+          </h2>
+          {dependents.length > 0 && (
+            <p className="text-xs text-slate-500">
+              Click any row to view full profile
+            </p>
+          )}
+        </div>
 
         {loading && (
           <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
@@ -411,12 +424,19 @@ export default function PatientDependentsPage() {
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Phone
                   </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {dependents.map((dep) => (
-                  <tr key={dep.id} className="hover:bg-slate-50">
-                    <td className="p-3 text-sm text-slate-800">
+                  <tr
+                    key={dep.id}
+                    onClick={() => handleRowClick(dep.id)}
+                    className="group cursor-pointer transition-colors hover:bg-blue-50/50"
+                  >
+                    <td className="p-3 text-sm font-medium text-slate-900">
                       {formatName(dep)}
                     </td>
                     <td className="p-3 text-sm text-slate-800">
@@ -430,6 +450,9 @@ export default function PatientDependentsPage() {
                     </td>
                     <td className="p-3 text-sm text-slate-800">
                       {dep.phone || dep.phone_number || "—"}
+                    </td>
+                    <td className="p-3 text-right">
+                      <ChevronRight className="ml-auto h-4 w-4 text-slate-400 transition-colors group-hover:text-blue-600" />
                     </td>
                   </tr>
                 ))}
