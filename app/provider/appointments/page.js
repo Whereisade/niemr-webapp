@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
@@ -25,7 +27,16 @@ import {
   Building2,
 } from "lucide-react";
 
-export default function ProviderAppointmentsPage() {
+
+export default function ProviderAppointmentsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <ProviderAppointmentsPageInner {...props} />
+    </Suspense>
+  );
+}
+
+function ProviderAppointmentsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

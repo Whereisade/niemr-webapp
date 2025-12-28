@@ -1,7 +1,7 @@
 // components/notifications/NotificationsPage.js
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Bell,
@@ -26,6 +26,15 @@ import {
   TOPIC_LABELS,
 } from "@/lib/notifications";
 
+
+export default function NotificationsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <NotificationsPageInner {...props} />
+    </Suspense>
+  );
+}
+
 /**
  * Reusable notifications page component with filtering, batch actions, and pagination.
  *
@@ -38,7 +47,7 @@ import {
  *   - pollInterval: Polling interval in ms
  *   - defaultLimit: Items per page
  */
-export default function NotificationsPage({
+function NotificationsPageInner({
   title = "Notifications",
   subtitle = "Stay updated on important activities",
   showStats = true,

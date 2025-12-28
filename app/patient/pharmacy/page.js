@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { usePrescriptions } from "@/lib/usePrescriptions";
 import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
@@ -13,6 +13,15 @@ import {
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
+
+
+export default function PatientPharmacyPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientPharmacyPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -58,7 +67,7 @@ function normalisePrescriptionsPayload(payload) {
   return { rows: [], total: 0 };
 }
 
-export default function PatientPharmacyPage() {
+function PatientPharmacyPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

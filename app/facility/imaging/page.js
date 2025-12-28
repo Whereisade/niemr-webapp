@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useImagingRequests } from "@/lib/useImagingRequests";
@@ -24,6 +24,15 @@ import {
   getFacilityWorkspaceConfig,
 } from "@/lib/roleUiConfig";
 
+
+export default function FacilityImagingRequestsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityImagingRequestsPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -35,7 +44,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function FacilityImagingRequestsPage() {
+function FacilityImagingRequestsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

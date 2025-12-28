@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
@@ -22,6 +22,15 @@ import {
   ArrowRight,
   Activity,
 } from "lucide-react";
+
+
+export default function FacilityEncountersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityEncountersPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -48,7 +57,7 @@ function sortNewestFirst(items) {
   return arr;
 }
 
-export default function FacilityEncountersPage() {
+function FacilityEncountersPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

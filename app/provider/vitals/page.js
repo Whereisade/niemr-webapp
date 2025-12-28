@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useVitals } from "@/lib/useVitals";
 import {
@@ -17,6 +19,15 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+
+export default function ProviderVitalsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <ProviderVitalsPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -28,7 +39,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function ProviderVitalsPage() {
+function ProviderVitalsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
 import { downloadEncounterPdf } from "@/lib/reports";
@@ -18,6 +18,15 @@ import {
   ClipboardList,
 } from "lucide-react";
 
+
+export default function PatientEncountersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientEncountersPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -29,7 +38,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function PatientEncountersPage() {
+function PatientEncountersPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

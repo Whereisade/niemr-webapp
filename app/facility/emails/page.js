@@ -1,7 +1,7 @@
 // app/facility/emails/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fetchEmailOutbox, resendEmailOutbox } from "@/lib/emails";
 import {
@@ -15,6 +15,15 @@ import {
   ArrowRight,
   Mail,
 } from "lucide-react";
+
+
+export default function FacilityEmailOutboxPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityEmailOutboxPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -34,7 +43,7 @@ function deriveStatus(e) {
   return "PENDING";
 }
 
-export default function FacilityEmailOutboxPage() {
+function FacilityEmailOutboxPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

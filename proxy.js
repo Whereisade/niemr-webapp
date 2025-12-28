@@ -9,7 +9,7 @@ const PROTECTED = [
   { prefix: "/patient",  login: "/login/patient" },
 ];
 
-export function middleware(req) {
+export function proxy(req) {
   const url = req.nextUrl;
 
   // Public routes

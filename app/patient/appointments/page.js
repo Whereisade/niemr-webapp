@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
@@ -25,6 +25,15 @@ import {
 } from "@/lib/appointmentsActions";
 import { fetchDependents } from "@/lib/dependents";
 
+
+export default function PatientAppointmentsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientAppointmentsPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -41,7 +50,7 @@ function isTerminalStatus(status) {
   return (TERMINAL_STATUSES || ["COMPLETED", "CANCELLED", "NO_SHOW"]).includes(normalized);
 }
 
-export default function PatientAppointmentsPage() {
+function PatientAppointmentsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

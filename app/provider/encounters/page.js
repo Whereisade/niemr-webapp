@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
 import { downloadEncounterPdf } from "@/lib/reports";
@@ -20,6 +20,15 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+
+export default function ProviderEncountersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <ProviderEncountersPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -31,7 +40,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function ProviderEncountersPage() {
+function ProviderEncountersPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

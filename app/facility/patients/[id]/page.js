@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -12,6 +12,15 @@ import NurseWorkflow from "@/components/nurse/NurseWorkflow";
 import PatientEncounterListModal from "@/components/patient/PatientEncounterListModal";
 import { Activity, FileText, Stethoscope, AlertTriangle } from "lucide-react";
 
+
+export default function FacilityPatientDetailPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityPatientDetailPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDate(value) {
   if (!value) return "—";
   const d = new Date(value);
@@ -19,7 +28,7 @@ function formatDate(value) {
   return d.toLocaleString();
 }
 
-export default function FacilityPatientDetailPage() {
+function FacilityPatientDetailPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const openEncounters = searchParams.get('open_encounters');

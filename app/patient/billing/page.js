@@ -1,12 +1,21 @@
 // app/patient/billing/page.js
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCharges } from "@/lib/useCharges";
 import { useBillingLedger } from "@/lib/useBillingLedger";
 import { downloadBillingPdf } from "@/lib/reports";
 import { FileDown, Receipt, Loader2, AlertCircle } from "lucide-react";
+
+
+export default function PatientBillingPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientBillingPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -64,7 +73,7 @@ function getStatusLabel(status) {
   }
 }
 
-export default function PatientBillingPage() {
+function PatientBillingPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

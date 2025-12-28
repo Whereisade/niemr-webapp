@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
 import { downloadLabPdf } from "@/lib/reports";
@@ -23,6 +23,15 @@ import {
 } from "lucide-react";
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
+
+export default function ProviderLabOrdersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <ProviderLabOrdersPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -34,7 +43,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function ProviderLabOrdersPage() {
+function ProviderLabOrdersPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useLabOrders } from "@/lib/useLabOrders";
@@ -33,6 +33,15 @@ import {
 // 🔹 unified lab status UI helper
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
+
+export default function FacilityLabOrdersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityLabOrdersPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -46,7 +55,7 @@ function formatDateTime(value) {
 
 const normalizeStatus = (s) => String(s || "").toUpperCase();
 
-export default function FacilityLabOrdersPage() {
+function FacilityLabOrdersPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

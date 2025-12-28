@@ -1,7 +1,18 @@
 "use client";
 
+import { Suspense } from "react";
+
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { usePayments } from "@/lib/usePayments";
+
+
+export default function PatientPaymentsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientPaymentsPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -24,7 +35,7 @@ function formatMoney(v) {
   });
 }
 
-export default function PatientPaymentsPage() {
+function PatientPaymentsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

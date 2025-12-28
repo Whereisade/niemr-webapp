@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { usePrescriptions } from "@/lib/usePrescriptions";
 import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
@@ -15,6 +15,15 @@ import {
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
+
+
+export default function ProviderPharmacyPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <ProviderPharmacyPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -78,7 +87,7 @@ function getOutsourcedToId(rx) {
   return v;
 }
 
-export default function ProviderPharmacyPage() {
+function ProviderPharmacyPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

@@ -1,7 +1,7 @@
 // app/facility/admins/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -22,6 +22,15 @@ import {
   Power,
   PowerOff,
 } from "lucide-react";
+
+
+export default function FacilityAdminsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityAdminsPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function StatusBadge({ isActive }) {
   if (isActive) {
@@ -84,7 +93,7 @@ function RoleBadge({ role }) {
   );
 }
 
-export default function FacilityAdminsPage() {
+function FacilityAdminsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

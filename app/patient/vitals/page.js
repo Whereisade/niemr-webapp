@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useVitals } from "@/lib/useVitals";
 import {
@@ -14,6 +16,15 @@ import {
   Activity,
 } from "lucide-react";
 
+
+export default function PatientVitalsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientVitalsPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -25,7 +36,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function PatientVitalsPage() {
+function PatientVitalsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

@@ -1,10 +1,19 @@
 // app/patient/imaging/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+
+
+export default function PatientImagingRequestsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientImagingRequestsPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -59,7 +68,7 @@ function buildStatusPillClasses(status) {
   }
 }
 
-export default function PatientImagingRequestsPage() {
+function PatientImagingRequestsPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
@@ -26,6 +26,15 @@ import {
   canStartEncounter,
   TERMINAL_STATUSES,
 } from "@/lib/appointmentsActions";
+
+
+export default function FacilityAppointmentsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityAppointmentsPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -68,7 +77,7 @@ function encounterWorkflowHref(encounterId, stage) {
   return `/facility/encounters/${id}`;
 }
 
-export default function FacilityAppointmentsPage() {
+function FacilityAppointmentsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

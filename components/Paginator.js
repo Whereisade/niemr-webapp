@@ -1,9 +1,18 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
 
-export default function Paginator({ page = 1, total = 0, perPage = 10 }) {
+
+export default function Paginator(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PaginatorInner {...props} />
+    </Suspense>
+  );
+}
+
+function PaginatorInner({ page = 1, total = 0, perPage = 10 }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();

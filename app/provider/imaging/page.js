@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useImagingRequests } from "@/lib/useImagingRequests";
@@ -20,6 +20,15 @@ import {
   Download,
 } from "lucide-react";
 
+
+export default function ProviderImagingRequestsPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <ProviderImagingRequestsPageInner {...props} />
+    </Suspense>
+  );
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   try {
@@ -31,7 +40,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function ProviderImagingRequestsPage() {
+function ProviderImagingRequestsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

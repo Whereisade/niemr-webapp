@@ -1,7 +1,7 @@
 // app/facility/providers/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -20,6 +20,15 @@ import {
   Undo2,
   Trash2,
 } from "lucide-react";
+
+
+export default function FacilityProvidersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityProvidersPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatName(p) {
   const first = (p.first_name || "").trim();
@@ -88,7 +97,7 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function FacilityProvidersPage() {
+function FacilityProvidersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

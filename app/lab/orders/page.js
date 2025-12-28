@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -18,6 +18,15 @@ import {
   CheckCircle2,
   Building2,
 } from "lucide-react";
+
+
+export default function IndependentLabOrdersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <IndependentLabOrdersPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -45,7 +54,7 @@ function normalizeList(body) {
   return [];
 }
 
-export default function IndependentLabOrdersPage() {
+function IndependentLabOrdersPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

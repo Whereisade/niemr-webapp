@@ -1,11 +1,20 @@
 // app/patient/labs/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
+
+
+export default function PatientLabOrdersPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <PatientLabOrdersPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -44,7 +53,7 @@ function normalizeLabOrdersPayload(body) {
   return [];
 }
 
-export default function PatientLabOrdersPage() {
+function PatientLabOrdersPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 

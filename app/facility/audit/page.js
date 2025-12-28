@@ -1,7 +1,7 @@
 // app/facility/audit/page.js
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fetchAuditLogs } from "@/lib/audit";
 import {
@@ -18,6 +18,15 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+
+
+export default function FacilityAuditPage(props) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+      <FacilityAuditPageInner {...props} />
+    </Suspense>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -45,7 +54,7 @@ function normalizeAuditResponse(res) {
   return [];
 }
 
-export default function FacilityAuditPage() {
+function FacilityAuditPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
