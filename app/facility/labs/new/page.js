@@ -77,7 +77,7 @@ export default function FacilityNewLabOrderPage() {
     async function fetchProviders() {
       try {
         setLoadingProviders(true);
-        const res = await apiFetch("/providers/?facility=current&page=1&limit=50");
+        const res = await apiFetch("/providers/?facility=current&type=LAB_SCIENTIST&limit=100");
         if (cancelled) return;
         const items = normalizeList(res);
         setProviders(items);

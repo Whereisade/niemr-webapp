@@ -62,9 +62,9 @@ export default function FacilityWardsPage() {
       const me = await apiFetch("/accounts/me/");
       const facilityId = me?.facility?.id;
       const role = me?.role; // ✅ Extract user role
-      
+
       setUserRole(role); // ✅ Store user role
-      
+
       if (!facilityId) {
         throw new Error(
           "Your account is not linked to any facility. Please contact an administrator."
@@ -75,9 +75,7 @@ export default function FacilityWardsPage() {
       const detail = await apiFetch(`/facilities/${facilityId}/`);
 
       // 3. Ward summary (capacity + counts)
-      const summary = await apiFetch(
-        `/facilities/${facilityId}/ward-summary/`
-      );
+      const summary = await apiFetch(`/facilities/${facilityId}/ward-summary/`);
 
       // 4. Facility patients (for bed assignment)
       let patientsList = [];
@@ -359,9 +357,7 @@ export default function FacilityWardsPage() {
     setLoadingHistory(true);
 
     try {
-      const res = await apiFetch(
-        `/facilities/bed-assignments/?bed=${bed.id}`
-      );
+      const res = await apiFetch(`/facilities/bed-assignments/?bed=${bed.id}`);
       const items = Array.isArray(res) ? res : res?.results || [];
       setBedHistory(items);
     } catch (err) {
@@ -534,7 +530,13 @@ export default function FacilityWardsPage() {
         </div>
 
         {/* Top grid: create ward + overview */}
-        <div className={`grid gap-6 ${canCreateWard ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)]" : ""}`}>
+        <div
+          className={`grid gap-6 ${
+            canCreateWard
+              ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)]"
+              : ""
+          }`}
+        >
           {/* ✅ Only show New Ward Form to SUPER_ADMIN and ADMIN */}
           {canCreateWard && (
             <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
@@ -662,7 +664,7 @@ export default function FacilityWardsPage() {
 
               {wardSummary.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500">
-                  {canCreateWard 
+                  {canCreateWard
                     ? "No wards have been configured yet. Create your first ward on the left to get started."
                     : "No wards have been configured yet. Please contact an administrator to create wards."}
                 </p>
@@ -768,13 +770,10 @@ export default function FacilityWardsPage() {
 
                   const availableBedsForAssign = beds.filter(
                     (b) =>
-                      b.status === "AVAILABLE" &&
-                      b.is_operational !== false
+                      b.status === "AVAILABLE" && b.is_operational !== false
                   );
                   const occupiedBedsForDischarge = beds.filter(
-                    (b) =>
-                      b.status === "OCCUPIED" &&
-                      b.current_assignment
+                    (b) => b.status === "OCCUPIED" && b.current_assignment
                   );
 
                   return (
@@ -815,9 +814,7 @@ export default function FacilityWardsPage() {
                           <span>
                             Type:{" "}
                             <span className="font-medium">
-                              {ward.ward_type_display ||
-                                ward.ward_type ||
-                                "—"}
+                              {ward.ward_type_display || ward.ward_type || "—"}
                             </span>
                           </span>
                           <span className="text-slate-300">•</span>
@@ -944,8 +941,7 @@ export default function FacilityWardsPage() {
                             Bed numbers will continue from existing beds, e.g.{" "}
                             <span className="font-mono">
                               {bedCfg.prefix || "1"}
-                              {bedCfg.prefix ? "1" : ""},{" "}
-                              {bedCfg.prefix || "2"}
+                              {bedCfg.prefix ? "1" : ""}, {bedCfg.prefix || "2"}
                               {bedCfg.prefix ? "2" : ""}, …
                             </span>
                             .
@@ -1012,10 +1008,7 @@ export default function FacilityWardsPage() {
                                       p.phone ||
                                       `Patient #${p.id}`;
                                     return (
-                                      <option
-                                        key={p.id}
-                                        value={String(p.id)}
-                                      >
+                                      <option key={p.id} value={String(p.id)}>
                                         {displayName}
                                       </option>
                                     );
@@ -1033,13 +1026,8 @@ export default function FacilityWardsPage() {
                               </div>
                               <p className="mt-1 text-[11px] text-slate-500">
                                 Assigned beds automatically move from{" "}
-                                <span className="font-medium">
-                                  Available
-                                </span>{" "}
-                                to{" "}
-                                <span className="font-medium">
-                                  Occupied
-                                </span>
+                                <span className="font-medium">Available</span>{" "}
+                                to <span className="font-medium">Occupied</span>
                                 .
                               </p>
                             </>
@@ -1069,22 +1057,15 @@ export default function FacilityWardsPage() {
                                     )
                                   }
                                 >
-                                  <option value="">
-                                    Select occupied bed
-                                  </option>
+                                  <option value="">Select occupied bed</option>
                                   {occupiedBedsForDischarge.map((b) => {
                                     const displayName =
                                       b.current_assignment?.patient
                                         ?.display_name || "";
                                     return (
-                                      <option
-                                        key={b.id}
-                                        value={String(b.id)}
-                                      >
+                                      <option key={b.id} value={String(b.id)}>
                                         {b.number}
-                                        {displayName
-                                          ? ` – ${displayName}`
-                                          : ""}
+                                        {displayName ? ` – ${displayName}` : ""}
                                       </option>
                                     );
                                   })}
@@ -1102,9 +1083,7 @@ export default function FacilityWardsPage() {
                               </div>
                               <p className="mt-1 text-[11px] text-slate-500">
                                 Discharging frees the bed and marks it as{" "}
-                                <span className="font-medium">
-                                  Available
-                                </span>{" "}
+                                <span className="font-medium">Available</span>{" "}
                                 again.
                               </p>
                             </>
@@ -1153,82 +1132,87 @@ export default function FacilityWardsPage() {
                 </div>
               )}
 
-              {!loadingHistory &&
-                !historyError &&
-                bedHistory.length === 0 && (
-                  <p className="text-slate-500">
-                    No past assignments recorded for this bed.
-                  </p>
-                )}
+              {!loadingHistory && !historyError && bedHistory.length === 0 && (
+                <p className="text-slate-500">
+                  No past assignments recorded for this bed.
+                </p>
+              )}
 
-              {!loadingHistory &&
-                !historyError &&
-                bedHistory.length > 0 && (
-                  <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-100">
-                    <table className="min-w-full text-[11px]">
-                      <thead className="border-b border-slate-100 bg-slate-50 text-slate-600">
-                        <tr>
-                          <th className="px-2 py-1 text-left text-[11px] font-semibold">
-                            Patient
-                          </th>
-                          <th className="px-2 py-1 text-left text-[11px] font-semibold">
-                            Encounter
-                          </th>
-                          <th className="px-2 py-1 text-left text-[11px] font-semibold">
-                            Status
-                          </th>
-                          <th className="px-2 py-1 text-left text-[11px] font-semibold">
-                            Assigned
-                          </th>
-                          <th className="px-2 py-1 text-left text-[11px] font-semibold">
-                            Discharged
-                          </th>
+              {!loadingHistory && !historyError && bedHistory.length > 0 && (
+                <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-100">
+                  <table className="min-w-full text-[11px]">
+                    <thead className="border-b border-slate-100 bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="px-2 py-1 text-left text-[11px] font-semibold">
+                          Patient
+                        </th>
+                        <th className="px-2 py-1 text-left text-[11px] font-semibold">
+                          Encounter
+                        </th>
+                        <th className="px-2 py-1 text-left text-[11px] font-semibold">
+                          Status
+                        </th>
+                        <th className="px-2 py-1 text-left text-[11px] font-semibold">
+                          Assigned
+                        </th>
+                        <th className="px-2 py-1 text-left text-[11px] font-semibold">
+                          Admitted By
+                        </th>
+                        <th className="px-2 py-1 text-left text-[11px] font-semibold">
+                          Discharged
+                        </th>
+                        <th className="px-2 py-1 text-left text-[11px] font-semibold">
+                          Discharged By
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {bedHistory.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-2 py-1">
+                            {item.patient_display ||
+                              item.patient ||
+                              `#${item.patient}`}
+                          </td>
+                          <td className="px-2 py-1">
+                            {item.encounter ? `#${item.encounter}` : "—"}
+                          </td>
+                          <td className="px-2 py-1">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ${
+                                item.status === "ACTIVE"
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-slate-50 text-slate-600"
+                              }`}
+                            >
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1 text-[10px] text-slate-600">
+                            {item.assigned_at
+                              ? new Date(item.assigned_at).toLocaleString()
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-1 text-[10px] text-slate-600">
+                            {item.assigned_by_name || "—"}
+                          </td>
+                          <td className="px-2 py-1 text-[10px] text-slate-600">
+                            {item.discharged_at
+                              ? new Date(item.discharged_at).toLocaleString()
+                              : item.status === "ACTIVE"
+                              ? "Active"
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-1 text-[10px] text-slate-600">
+                            {item.discharged_by_name ||
+                              (item.status === "ACTIVE" ? "—" : "Unknown")}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {bedHistory.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-2 py-1">
-                              {item.patient_display ||
-                                item.patient ||
-                                `#${item.patient}`}
-                            </td>
-                            <td className="px-2 py-1">
-                              {item.encounter ? `#${item.encounter}` : "—"}
-                            </td>
-                            <td className="px-2 py-1">
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ${
-                                  item.status === "ACTIVE"
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : "bg-slate-50 text-slate-600"
-                                }`}
-                              >
-                                {item.status}
-                              </span>
-                            </td>
-                            <td className="px-2 py-1 text-[10px] text-slate-600">
-                              {item.assigned_at
-                                ? new Date(
-                                    item.assigned_at
-                                  ).toLocaleString()
-                                : "—"}
-                            </td>
-                            <td className="px-2 py-1 text-[10px] text-slate-600">
-                              {item.discharged_at
-                                ? new Date(
-                                    item.discharged_at
-                                  ).toLocaleString()
-                                : item.status === "ACTIVE"
-                                ? "Active"
-                                : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

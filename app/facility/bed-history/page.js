@@ -233,7 +233,7 @@ export default function BedHistoryPage() {
                 </h2>
                 <p className="mt-1 text-xs text-slate-500">
                   {mode === "PATIENT"
-                    ? "Load a patient’s full bed assignment trail."
+                    ? "Load a patient's full bed assignment trail."
                     : "Load all assignments that happened inside a ward (across all beds and patients)."}
                 </p>
               </div>
@@ -377,7 +377,9 @@ export default function BedHistoryPage() {
                           <th className="px-3 py-2 text-left text-[11px] font-semibold">Ward</th>
                           <th className="px-3 py-2 text-left text-[11px] font-semibold">Status</th>
                           <th className="px-3 py-2 text-left text-[11px] font-semibold">Assigned</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold">Admitted By</th>
                           <th className="px-3 py-2 text-left text-[11px] font-semibold">Discharged</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold">Discharged By</th>
                           <th className="px-3 py-2 text-left text-[11px] font-semibold">Encounter</th>
                         </tr>
                       </thead>
@@ -407,11 +409,17 @@ export default function BedHistoryPage() {
                               {a.assigned_at ? new Date(a.assigned_at).toLocaleString() : "—"}
                             </td>
                             <td className="px-3 py-2 text-[10px] text-slate-600">
+                              {a.assigned_by_name || "—"}
+                            </td>
+                            <td className="px-3 py-2 text-[10px] text-slate-600">
                               {a.discharged_at
                                 ? new Date(a.discharged_at).toLocaleString()
                                 : a.status === "ACTIVE"
                                 ? "Active"
                                 : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-[10px] text-slate-600">
+                              {a.discharged_by_name || (a.status === "ACTIVE" ? "—" : "Unknown")}
                             </td>
                             <td className="px-3 py-2 text-[10px] text-slate-600">
                               {a.encounter ? `Encounter #${a.encounter}` : "—"}

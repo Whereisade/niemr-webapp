@@ -21,10 +21,11 @@ import {
   Trash2,
 } from "lucide-react";
 
-
 export default function FacilityProvidersPage(props) {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+    <Suspense
+      fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}
+    >
       <FacilityProvidersPageInner {...props} />
     </Suspense>
   );
@@ -129,9 +130,7 @@ function FacilityProvidersPageInner() {
   const myRole = String(me?.role || "").toUpperCase();
   const canManageProviders = myRole === "ADMIN" || myRole === "SUPER_ADMIN";
 
-  const [searchInput, setSearchInput] = useState(
-    searchParams.get("q") || ""
-  );
+  const [searchInput, setSearchInput] = useState(searchParams.get("q") || "");
   const [statusFilterInput, setStatusFilterInput] = useState(
     searchParams.get("status") || ""
   );
@@ -169,9 +168,7 @@ function FacilityProvidersPageInner() {
         } else if (Array.isArray(res)) {
           items = res;
         } else if (res && typeof res === "object") {
-          const numericKeys = Object.keys(res).filter((k) =>
-            /^\d+$/.test(k)
-          );
+          const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
           if (numericKeys.length) {
             items = numericKeys
               .sort((a, b) => Number(a) - Number(b))
@@ -184,8 +181,7 @@ function FacilityProvidersPageInner() {
         console.error("Failed to load providers", err);
         if (!cancelled) {
           setError(
-            err?.message ||
-              "Failed to load providers. Please try again."
+            err?.message || "Failed to load providers. Please try again."
           );
           setRows([]);
         }
@@ -299,12 +295,9 @@ function FacilityProvidersPageInner() {
 
     try {
       // Use dedicated approve/reject actions on the backend
-      await apiFetch(
-        `/providers/${providerId}/${nextStatus.toLowerCase()}/`,
-        {
-          method: "POST",
-        }
-      );
+      await apiFetch(`/providers/${providerId}/${nextStatus.toLowerCase()}/`, {
+        method: "POST",
+      });
 
       // Optimistic update instead of full reload
       setRows((prev) =>
@@ -321,8 +314,7 @@ function FacilityProvidersPageInner() {
     } catch (err) {
       console.error("Failed to update provider status", err);
       alert(
-        err?.message ||
-          "Failed to update provider status. Please try again."
+        err?.message || "Failed to update provider status. Please try again."
       );
     }
   }
@@ -351,9 +343,7 @@ function FacilityProvidersPageInner() {
         } else if (Array.isArray(res)) {
           items = res;
         } else if (res && typeof res === "object") {
-          const numericKeys = Object.keys(res).filter((k) =>
-            /^\d+$/.test(k)
-          );
+          const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
           if (numericKeys.length) {
             items = numericKeys
               .sort((a, b) => Number(a) - Number(b))
@@ -370,16 +360,15 @@ function FacilityProvidersPageInner() {
       await loadApplications();
     } catch (err) {
       console.error("Failed to update application", err);
-      alert(
-        err?.message ||
-          "Failed to update application. Please try again."
-      );
+      alert(err?.message || "Failed to update application. Please try again.");
     }
   }
 
   async function handleSuspend(providerId) {
     if (!providerId) return;
-    const ok = window.confirm("Suspend this provider? They will be unable to log in.");
+    const ok = window.confirm(
+      "Suspend this provider? They will be unable to log in."
+    );
     if (!ok) return;
 
     try {
@@ -440,19 +429,21 @@ function FacilityProvidersPageInner() {
               Providers &amp; Staff
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Manage doctors, nurses, and other providers associated with
-              this facility.
+              Manage doctors, nurses, and other providers associated with this
+              facility.
             </p>
           </div>
         </div>
 
-        <Link
-          href="/facility/providers/new"
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
-        >
-          <UserPlus className="h-4 w-4" />
-          Add Provider
-        </Link>
+        {canManageProviders && (
+          <Link
+            href="/facility/providers/new"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Provider
+          </Link>
+        )}
       </header>
 
       {/* Filters */}
@@ -570,10 +561,7 @@ function FacilityProvidersPageInner() {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleStatusChange(
-                                    p.id,
-                                    "APPROVED"
-                                  )
+                                  handleStatusChange(p.id, "APPROVED")
                                 }
                                 className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
                               >
@@ -583,10 +571,7 @@ function FacilityProvidersPageInner() {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleStatusChange(
-                                    p.id,
-                                    "REJECTED"
-                                  )
+                                  handleStatusChange(p.id, "REJECTED")
                                 }
                                 className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
                               >
@@ -595,7 +580,7 @@ function FacilityProvidersPageInner() {
                               </button>
                             </>
                           )}
-                        
+
                           {canManageProviders && (
                             <>
                               {p.is_active ? (
@@ -635,7 +620,7 @@ function FacilityProvidersPageInner() {
                               </button>
                             </>
                           )}
-</div>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -643,10 +628,7 @@ function FacilityProvidersPageInner() {
 
               {!loading && !rows.length && !error && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="p-10 text-center"
-                  >
+                  <td colSpan={6} className="p-10 text-center">
                     <div className="mx-auto max-w-sm">
                       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
                         <Users2 className="h-7 w-7 text-slate-400" />
@@ -704,6 +686,7 @@ function FacilityProvidersPageInner() {
       </section>
 
       {/* Pending provider applications */}
+      {canManageProviders && (
       <section className="mt-8">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-slate-900">
@@ -802,6 +785,7 @@ function FacilityProvidersPageInner() {
           </div>
         )}
       </section>
+      )}
     </main>
   );
 }
