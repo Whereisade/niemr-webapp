@@ -300,9 +300,12 @@ export default function FacilityEncounterDetailPage() {
     if (!id) return;
     const statusUpper = String(encounter?.status || "").toUpperCase();
     const base = `/facility/encounters/${id}/workflow`;
-    
+    const roleUpper = String(me?.role || "").toUpperCase();
+
     if (statusUpper === "WAITING_LABS") {
       router.push(`${base}/waiting-labs`);
+    } else if (roleUpper === "DOCTOR") {
+      router.push(`${base}/clinical`);
     } else {
       router.push(`${base}/nurse`);
     }
@@ -435,7 +438,7 @@ export default function FacilityEncounterDetailPage() {
 
   const canOpenWorkflow = useMemo(() => {
     const role = String(me?.role || "").toUpperCase();
-    return ["DOCTOR", "NURSE", "ADMIN", "SUPER_ADMIN"].includes(role);
+    return ["DOCTOR", "NURSE"].includes(role);
   }, [me]);
 
   const role = String(me?.role || "").toUpperCase();

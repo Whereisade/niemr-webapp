@@ -13,6 +13,7 @@ import {
 import { listAttachments, uploadAttachments } from "@/lib/attachments";
 import VersionedSoapSection from "@/components/encounters/VersionedSoapSection";
 import PatientAllergies from "@/components/patient/Patientallergies";
+import PatientVitals from "@/components/patient/PatientVitals";
 import {
   ArrowLeft,
   Loader2,
@@ -30,6 +31,8 @@ import {
   ChevronUp,
   ExternalLink,
   Beaker,
+  Activity,
+  Pill,
 } from "lucide-react";
 
 function fmtDateTime(v) {
@@ -765,6 +768,16 @@ export default function FacilityEncounterClinicalPage() {
           </button>
 
           <button
+            onClick={() => router.push(`/facility/encounters/${encounterId}/workflow/prescription`)}
+            disabled={finalizing}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            title="Go to prescription page"
+          >
+            <Pill className="h-4 w-4" />
+            Prescription
+          </button>
+
+          <button
             onClick={handleSave}
             disabled={saving || readOnly}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
@@ -860,6 +873,19 @@ export default function FacilityEncounterClinicalPage() {
               loading={patientLoading}
               error={patientError}
             />
+          </CollapsibleSection>
+
+          {/* Vitals - NEW */}
+          <CollapsibleSection 
+            title="Vitals" 
+            icon={Activity} 
+            defaultOpen={true}
+          >
+            {patientId ? (
+              <PatientVitals patientId={patientId} />
+            ) : (
+              <div className="text-xs text-slate-500">No patient linked.</div>
+            )}
           </CollapsibleSection>
 
           {/* Allergies */}
