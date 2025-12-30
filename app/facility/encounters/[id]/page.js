@@ -55,6 +55,58 @@ function formatDate(value) {
   }
 }
 
+function calculateEncounterDuration(encounter) {
+  if (!encounter) return null;
+  
+  const startTime = new Date(encounter.occurred_at || encounter.created_at);
+  if (isNaN(startTime.getTime())) return null;
+  
+  // End time is when clinical documentation was finalized, or now if still ongoing
+  let endTime;
+  if (encounter.clinical_finalized_at) {
+    endTime = new Date(encounter.clinical_finalized_at);
+  } else {
+    endTime = new Date(); // Current time for ongoing encounters
+  }
+  
+  if (isNaN(endTime.getTime())) return null;
+  
+  // Calculate total duration in minutes
+  let totalMinutes = Math.floor((endTime - startTime) / (1000 * 60));
+  
+  // Subtract paused time if applicable
+  if (encounter.paused_at && encounter.resumed_at) {
+    const pausedStart = new Date(encounter.paused_at);
+    const pausedEnd = new Date(encounter.resumed_at);
+    if (!isNaN(pausedStart.getTime()) && !isNaN(pausedEnd.getTime())) {
+      const pausedMinutes = Math.floor((pausedEnd - pausedStart) / (1000 * 60));
+      totalMinutes -= pausedMinutes;
+    }
+  } else if (encounter.paused_at && !encounter.resumed_at) {
+    // Still paused - don't count time from pause to now
+    const pausedStart = new Date(encounter.paused_at);
+    if (!isNaN(pausedStart.getTime())) {
+      const pausedMinutes = Math.floor((endTime - pausedStart) / (1000 * 60));
+      totalMinutes -= pausedMinutes;
+    }
+  }
+  
+  // Format the duration nicely
+  if (totalMinutes < 0) totalMinutes = 0;
+  
+  if (totalMinutes < 60) {
+    return `${totalMinutes} min`;
+  } else if (totalMinutes < 1440) { // Less than 24 hours
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  } else {
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+  }
+}
+
 function normalizeAttachmentsPayload(body) {
   if (!body) return [];
   if (Array.isArray(body.results)) return body.results;
@@ -65,6 +117,19 @@ function normalizeAttachmentsPayload(body) {
       return numericKeys
         .sort((a, b) => Number(a) - Number(b))
         .map((k) => body[k]);
+    }
+  }
+  return [];
+}
+
+function normalizeList(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (data?.results && Array.isArray(data.results)) return data.results;
+  if (typeof data === "object") {
+    const keys = Object.keys(data).filter((k) => String(Number(k)) === k);
+    if (keys.length) {
+      return keys.sort((a, b) => Number(a) - Number(b)).map((k) => data[k]);
     }
   }
   return [];
@@ -259,8 +324,21 @@ export default function FacilityEncounterDetailPage() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState("");
 
+  // Lab orders state
+  const [labOrders, setLabOrders] = useState([]);
+  const [labOrdersLoading, setLabOrdersLoading] = useState(false);
+  const [labOrdersError, setLabOrdersError] = useState("");
+
+  // Prescriptions state
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [prescriptionsLoading, setPrescriptionsLoading] = useState(false);
+  const [prescriptionsError, setPrescriptionsError] = useState("");
+
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusUpdateError, setStatusUpdateError] = useState("");
+
+  // Live duration update for ongoing encounters
+  const [, setDurationTick] = useState(0);
 
   async function refreshEncounter() {
     if (!id) return;
@@ -403,6 +481,98 @@ export default function FacilityEncounterDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  // Load lab orders
+  useEffect(() => {
+    if (!id) return;
+
+    let cancelled = false;
+
+    async function loadLabOrders() {
+      try {
+        setLabOrdersLoading(true);
+        setLabOrdersError("");
+
+        const body = await apiFetch(`/labs/orders/?encounter=${id}`, {
+          method: "GET",
+        });
+
+        if (cancelled) return;
+
+        const items = normalizeList(body);
+        setLabOrders(items);
+      } catch (err) {
+        console.error("Failed to load lab orders", err);
+        if (!cancelled) {
+          setLabOrdersError(
+            err?.message || "Lab orders could not be loaded."
+          );
+          setLabOrders([]);
+        }
+      } finally {
+        if (!cancelled) setLabOrdersLoading(false);
+      }
+    }
+
+    loadLabOrders();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  // Load prescriptions
+  useEffect(() => {
+    if (!id) return;
+
+    let cancelled = false;
+
+    async function loadPrescriptions() {
+      try {
+        setPrescriptionsLoading(true);
+        setPrescriptionsError("");
+
+        const body = await apiFetch(`/pharmacy/prescriptions/?encounter=${id}`, {
+          method: "GET",
+        });
+
+        if (cancelled) return;
+
+        const items = normalizeList(body);
+        setPrescriptions(items);
+      } catch (err) {
+        console.error("Failed to load prescriptions", err);
+        if (!cancelled) {
+          setPrescriptionsError(
+            err?.message || "Prescriptions could not be loaded."
+          );
+          setPrescriptions([]);
+        }
+      } finally {
+        if (!cancelled) setPrescriptionsLoading(false);
+      }
+    }
+
+    loadPrescriptions();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  // Update duration display every minute for ongoing encounters
+  useEffect(() => {
+    const isOngoing = encounter && 
+                      !encounter.clinical_finalized_at && 
+                      encounter.status !== "COMPLETED" && 
+                      encounter.status !== "CROSSED_OUT";
+    
+    if (!isOngoing) return;
+
+    const interval = setInterval(() => {
+      setDurationTick(prev => prev + 1);
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [encounter]);
 
   if (!id) {
     return (
@@ -662,9 +832,17 @@ export default function FacilityEncounterDetailPage() {
                 icon={Clock}
                 label="Duration"
                 value={
-                  encounter?.duration_value && encounter?.duration_unit
+                  calculateEncounterDuration(encounter) || 
+                  (encounter?.duration_value && encounter?.duration_unit
                     ? `${encounter.duration_value} ${encounter.duration_unit}`
-                    : "—"
+                    : "—")
+                }
+                subValue={
+                  !encounter?.clinical_finalized_at && encounter?.status !== "COMPLETED" && encounter?.status !== "CROSSED_OUT"
+                    ? "⏱️ Ongoing"
+                    : encounter?.clinical_finalized_at
+                    ? "✓ Completed"
+                    : null
                 }
                 color="text-purple-600"
               />
@@ -774,81 +952,241 @@ export default function FacilityEncounterDetailPage() {
               )}
           </div>
 
-          {/* Timeline */}
-          {(encounter?.paused_at ||
-            encounter?.resumed_at ||
-            encounter?.labs_skipped_at ||
-            encounter?.clinical_finalized_at) && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
-                <Clock className="h-5 w-5 text-slate-400" />
-                Encounter Timeline
-              </h2>
-
-              <div className="space-y-0 border-l-2 border-slate-200 pl-4">
-                <TimelineEvent
-                  icon={Activity}
-                  title="Encounter Started"
-                  timestamp={encounter?.occurred_at || encounter?.created_at}
-                  detail={createdByName ? `By ${createdByName}` : undefined}
-                  color="text-emerald-600"
-                />
-
-                {encounter?.paused_at && (
-                  <TimelineEvent
-                    icon={Pause}
-                    title="Paused (Waiting for Labs)"
-                    timestamp={encounter.paused_at}
-                    detail={encounter?.paused_by ? `By ${encounter.paused_by}` : undefined}
-                    color="text-amber-600"
-                  />
-                )}
-
-                {encounter?.resumed_at && (
-                  <TimelineEvent
-                    icon={Play}
-                    title="Resumed"
-                    timestamp={encounter.resumed_at}
-                    detail={encounter?.resumed_by ? `By ${encounter.resumed_by}` : undefined}
-                    color="text-blue-600"
-                  />
-                )}
-
-                {encounter?.labs_skipped_at && (
-                  <TimelineEvent
-                    icon={Beaker}
-                    title="Labs Skipped"
-                    timestamp={encounter.labs_skipped_at}
-                    detail={encounter?.labs_skipped_by ? `By ${encounter.labs_skipped_by}` : undefined}
-                    color="text-orange-600"
-                  />
-                )}
-
-                {encounter?.clinical_finalized_at && (
-                  <TimelineEvent
-                    icon={CheckCircle2}
-                    title="Clinical Documentation Finalized"
-                    timestamp={encounter.clinical_finalized_at}
-                    detail={encounter?.clinical_finalized_by ? `By ${encounter.clinical_finalized_by}` : "Lock countdown started"}
-                    color="text-purple-600"
-                  />
-                )}
-
-                {encounter?.locked_at && (
-                  <TimelineEvent
-                    icon={Lock}
-                    title="Note Locked"
-                    timestamp={encounter.locked_at}
-                    detail="Clinical documentation is now immutable"
-                    color="text-slate-600"
-                  />
-                )}
-              </div>
+          {/* Lab Orders Details */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <Beaker className="h-5 w-5 text-cyan-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Lab Orders</h2>
             </div>
-          )}
 
-          {/* Related Orders & Prescriptions */}
-          <EncounterRelatedData encounter={encounter} context="facility" />
+            {labOrdersLoading && (
+              <p className="text-sm text-slate-500">Loading lab orders…</p>
+            )}
+
+            {labOrdersError && (
+              <p className="text-sm text-red-600">{labOrdersError}</p>
+            )}
+
+            {!labOrdersLoading && !labOrdersError && labOrders.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                <Beaker className="mx-auto h-12 w-12 text-slate-300" />
+                <p className="mt-3 text-sm text-slate-600">
+                  No lab orders for this encounter yet
+                </p>
+              </div>
+            )}
+
+            {!labOrdersLoading && labOrders.length > 0 && (
+              <div className="space-y-4">
+                {labOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                  >
+                    <div className="mb-3 flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900">
+                            Lab Order #{order.id}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            order.status === "COMPLETED"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : order.status === "PENDING"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-slate-100 text-slate-700"
+                          }`}>
+                            {order.status || "Unknown"}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-3 text-xs text-slate-600">
+                          {order.priority && (
+                            <>
+                              <span>Priority: {order.priority}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          {order.ordered_by_name && (
+                            <>
+                              <span>Ordered by: {order.ordered_by_name}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          <span>{formatDateTime(order.created_at)}</span>
+                        </div>
+                      </div>
+                      <Link
+                        href={`/facility/labs/${order.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View Details
+                      </Link>
+                    </div>
+
+                    {order.items && order.items.length > 0 && (
+                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
+                            <tr>
+                              <th className="px-3 py-2">Test Name</th>
+                              <th className="px-3 py-2">Result</th>
+                              <th className="px-3 py-2">Unit</th>
+                              <th className="px-3 py-2">Flag</th>
+                              <th className="px-3 py-2">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {order.items.map((item, idx) => (
+                              <tr key={item.id || idx} className="hover:bg-slate-50">
+                                <td className="px-3 py-2 font-medium text-slate-900">
+                                  {item.display_name || item.requested_name || item.test?.name || "—"}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {item.result_value != null
+                                    ? item.result_value
+                                    : item.result_text || "—"}
+                                </td>
+                                <td className="px-3 py-2 text-slate-600">
+                                  {item.result_unit || item.test?.unit || "—"}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {item.flag ? (
+                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                      item.flag === "HIGH" || item.flag === "H"
+                                        ? "bg-red-100 text-red-700"
+                                        : item.flag === "LOW" || item.flag === "L"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : "bg-slate-100 text-slate-700"
+                                    }`}>
+                                      {item.flag}
+                                    </span>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-slate-600">
+                                  {item.status || "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Prescriptions Details */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <Pill className="h-5 w-5 text-emerald-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Prescriptions</h2>
+            </div>
+
+            {prescriptionsLoading && (
+              <p className="text-sm text-slate-500">Loading prescriptions…</p>
+            )}
+
+            {prescriptionsError && (
+              <p className="text-sm text-red-600">{prescriptionsError}</p>
+            )}
+
+            {!prescriptionsLoading && !prescriptionsError && prescriptions.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                <Pill className="mx-auto h-12 w-12 text-slate-300" />
+                <p className="mt-3 text-sm text-slate-600">
+                  No prescriptions for this encounter yet
+                </p>
+              </div>
+            )}
+
+            {!prescriptionsLoading && prescriptions.length > 0 && (
+              <div className="space-y-4">
+                {prescriptions.map((prescription) => (
+                  <div
+                    key={prescription.id}
+                    className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                  >
+                    <div className="mb-3 flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900">
+                            Prescription #{prescription.id}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            prescription.status === "COMPLETED"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : prescription.status === "PENDING"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-slate-100 text-slate-700"
+                          }`}>
+                            {prescription.status || "Unknown"}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-3 text-xs text-slate-600">
+                          {prescription.prescriber_name && (
+                            <>
+                              <span>Prescribed by: {prescription.prescriber_name}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          <span>{formatDateTime(prescription.created_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {prescription.items && prescription.items.length > 0 && (
+                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
+                            <tr>
+                              <th className="px-3 py-2">Medication</th>
+                              <th className="px-3 py-2">Dose</th>
+                              <th className="px-3 py-2">Frequency</th>
+                              <th className="px-3 py-2">Duration</th>
+                              <th className="px-3 py-2">Instructions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {prescription.items.map((item, idx) => (
+                              <tr key={item.id || idx} className="hover:bg-slate-50">
+                                <td className="px-3 py-2 font-medium text-slate-900">
+                                  {item.drug_name || item.drug?.name || "—"}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {item.dose || "—"}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {item.frequency || "—"}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {item.duration_days ? `${item.duration_days} days` : "—"}
+                                </td>
+                                <td className="px-3 py-2 text-slate-600">
+                                  {item.instruction || item.instructions || "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {prescription.note && (
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-medium text-slate-500">Notes</p>
+                        <p className="mt-1 text-sm text-slate-700">{prescription.note}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Attachments */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -922,6 +1260,79 @@ export default function FacilityEncounterDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Timeline - MOVED TO BOTTOM */}
+          {(encounter?.paused_at ||
+            encounter?.resumed_at ||
+            encounter?.labs_skipped_at ||
+            encounter?.clinical_finalized_at) && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
+                <Clock className="h-5 w-5 text-slate-400" />
+                Encounter Timeline
+              </h2>
+
+              <div className="space-y-0 border-l-2 border-slate-200 pl-4">
+                <TimelineEvent
+                  icon={Activity}
+                  title="Encounter Started"
+                  timestamp={encounter?.occurred_at || encounter?.created_at}
+                  detail={createdByName ? `By ${createdByName}` : undefined}
+                  color="text-emerald-600"
+                />
+
+                {encounter?.paused_at && (
+                  <TimelineEvent
+                    icon={Pause}
+                    title="Paused (Waiting for Labs)"
+                    timestamp={encounter.paused_at}
+                    detail={encounter?.paused_by_name ? `By ${encounter.paused_by_name}` : undefined}
+                    color="text-amber-600"
+                  />
+                )}
+
+                {encounter?.resumed_at && (
+                  <TimelineEvent
+                    icon={Play}
+                    title="Resumed"
+                    timestamp={encounter.resumed_at}
+                    detail={encounter?.resumed_by_name ? `By ${encounter.resumed_by_name}` : undefined}
+                    color="text-blue-600"
+                  />
+                )}
+
+                {encounter?.labs_skipped_at && (
+                  <TimelineEvent
+                    icon={Beaker}
+                    title="Labs Skipped"
+                    timestamp={encounter.labs_skipped_at}
+                    detail={encounter?.labs_skipped_by_name ? `By ${encounter.labs_skipped_by_name}` : undefined}
+                    color="text-orange-600"
+                  />
+                )}
+
+                {encounter?.clinical_finalized_at && (
+                  <TimelineEvent
+                    icon={CheckCircle2}
+                    title="Clinical Documentation Finalized"
+                    timestamp={encounter.clinical_finalized_at}
+                    detail={encounter?.clinical_finalized_by_name ? `By ${encounter.clinical_finalized_by_name}` : "Lock countdown started"}
+                    color="text-purple-600"
+                  />
+                )}
+
+                {encounter?.locked_at && (
+                  <TimelineEvent
+                    icon={Lock}
+                    title="Note Locked"
+                    timestamp={encounter.locked_at}
+                    detail="Clinical documentation is now immutable"
+                    color="text-slate-600"
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
     </main>
