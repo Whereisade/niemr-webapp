@@ -3,7 +3,18 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import { Beaker, Plus, RefreshCw, ArrowLeft } from "lucide-react";
+import { 
+  Beaker, 
+  Plus, 
+  RefreshCw, 
+  ArrowLeft, 
+  Upload,
+  FileSpreadsheet,
+  FileText,
+  Info,
+  CheckCircle2,
+  AlertCircle
+} from "lucide-react";
 
 function normalizeTests(body) {
   if (!body) return [];
@@ -19,6 +30,12 @@ export default function FacilityLabCatalogPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [search, setSearch] = useState("");
+
+  // Import state
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importError, setImportError] = useState("");
 
   const [form, setForm] = useState({
     code: "",
@@ -63,7 +80,6 @@ export default function FacilityLabCatalogPage() {
       code: form.code.trim(),
       name: form.name.trim(),
       unit: form.unit.trim(),
-      // DRF DecimalField can accept string values
       ref_low: form.refLow.trim() || null,
       ref_high: form.refHigh.trim() || null,
       price: form.price.trim() || "0",
@@ -79,10 +95,8 @@ export default function FacilityLabCatalogPage() {
         body: JSON.stringify(payload),
       });
 
-      // Prepend new test to list
       setTests((prev) => [created, ...prev]);
 
-      // Reset form
       setForm({
         code: "",
         name: "",
@@ -100,6 +114,47 @@ export default function FacilityLabCatalogPage() {
     }
   }
 
+  async function handleImport(e) {
+    e.preventDefault();
+    if (!importFile) {
+      setImportError("Please select a file to import.");
+      return;
+    }
+
+    setImportError("");
+    setImportResult(null);
+    setImporting(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+
+      const res = await fetch("/api/proxy/labs/catalog/import_file/", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        let msg = `Import failed (${res.status})`;
+        try {
+          const err = await res.json();
+          if (err && err.detail) msg = err.detail;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const result = await res.json();
+      setImportResult(result);
+      await loadTests();
+      setImportFile(null);
+    } catch (err) {
+      console.error("Failed to import file", err);
+      setImportError(err?.message || "Failed to import file");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const filteredTests = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return tests;
@@ -112,9 +167,12 @@ export default function FacilityLabCatalogPage() {
     });
   }, [tests, search]);
 
+  const fileExtension = importFile ? importFile.name.split('.').pop().toLowerCase() : '';
+  const isValidFile = ['csv', 'xlsx', 'xls'].includes(fileExtension);
+
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6">
         {/* Header */}
         <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
@@ -136,8 +194,7 @@ export default function FacilityLabCatalogPage() {
                 Lab Tests Catalog
               </h1>
               <p className="mt-1 text-xs text-slate-500">
-                Manage the global list of lab tests (code, name, reference
-                ranges, price). These tests are used when creating lab orders.
+                Manage your facility's lab test catalog. Import from CSV/Excel or add tests individually.
               </p>
             </div>
           </div>
@@ -157,167 +214,325 @@ export default function FacilityLabCatalogPage() {
               href="/facility/labs"
               className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-medium text-slate-100 shadow-sm hover:bg-slate-800"
             >
-              Go to Lab Orders
+              Lab Orders
             </Link>
           </div>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.6fr)]">
-          {/* New test form */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-900">
-                Add New Lab Test
-              </h2>
-              <Plus className="h-4 w-4 text-slate-400" />
+        {/* Column Requirements Info */}
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-100">
+              <Info className="h-4 w-4 text-blue-700" />
             </div>
-
-            <form onSubmit={handleCreate} className="space-y-3 text-xs">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Code<span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.code}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, code: e.target.value }))
-                    }
-                    placeholder="e.g. FBC_HB"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Name<span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, name: e.target.value }))
-                    }
-                    placeholder="e.g. Full Blood Count (Hb)"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Unit
-                  </label>
-                  <input
-                    type="text"
-                    value={form.unit}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, unit: e.target.value }))
-                    }
-                    placeholder="e.g. g/dL"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Ref Low
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={form.refLow}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, refLow: e.target.value }))
-                    }
-                    placeholder="e.g. 11.5"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Ref High
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={form.refHigh}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, refHigh: e.target.value }))
-                    }
-                    placeholder="e.g. 15.0"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                    Price
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, price: e.target.value }))
-                    }
-                    placeholder="e.g. 3500"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 pt-5">
-                  <input
-                    id="isActive"
-                    type="checkbox"
-                    checked={form.isActive}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, isActive: e.target.checked }))
-                    }
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                  />
-                  <label
-                    htmlFor="isActive"
-                    className="text-[11px] font-medium text-slate-700"
-                  >
-                    Active (available for ordering)
-                  </label>
-                </div>
-              </div>
-
-              {createError && (
-                <p className="text-[11px] text-rose-600">{createError}</p>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Plus className="h-3 w-3" />
-                  {creating ? "Creating…" : "Create Test"}
-                </button>
-              </div>
-
-              <p className="mt-1 text-[10px] text-slate-400">
-                Only staff with catalog permissions can create lab tests. Other
-                users will receive a “Forbidden” error from the API.
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-blue-900">File Format Requirements</h3>
+              <p className="mt-1 text-xs text-blue-800">
+                Your CSV or Excel file must contain the following columns (case-insensitive):
               </p>
-            </form>
-          </section>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-blue-200 bg-white px-3 py-2">
+                  <div className="text-xs font-semibold text-blue-900">Required Columns:</div>
+                  <ul className="mt-1 space-y-0.5 text-xs text-blue-700">
+                    <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">code</code> - Test code (e.g., FBC_HB)</li>
+                    <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">name</code> - Test name (e.g., Full Blood Count)</li>
+                  </ul>
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-white px-3 py-2">
+                  <div className="text-xs font-semibold text-blue-900">Optional Columns:</div>
+                  <ul className="mt-1 space-y-0.5 text-xs text-blue-700">
+                    <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">unit</code> - Unit of measurement (e.g., g/dL)</li>
+                    <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">ref_low</code> - Reference range low (e.g., 11.5)</li>
+                    <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">ref_high</code> - Reference range high (e.g., 15.0)</li>
+                    <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">price</code> - Test price (e.g., 3500)</li>
+                  </ul>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-blue-700">
+                <strong>Supported formats:</strong> CSV (.csv), Excel (.xlsx, .xls)
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.6fr)]">
+          {/* Left column: Import + Create */}
+          <div className="space-y-4">
+            {/* File Import */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50">
+                  <Upload className="h-4 w-4 text-emerald-700" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Import from File
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    Upload CSV or Excel file to import multiple tests
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleImport} className="space-y-3 text-xs">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                    Select File
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="relative flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs transition hover:border-emerald-500 hover:bg-emerald-50">
+                      <input
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        onChange={(e) => {
+                          setImportFile(e.target.files?.[0] || null);
+                          setImportError("");
+                          setImportResult(null);
+                        }}
+                        className="sr-only"
+                      />
+                      {importFile ? (
+                        <div className="flex items-center gap-2">
+                          {fileExtension === 'csv' ? (
+                            <FileText className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                          )}
+                          <span className="truncate text-slate-700">{importFile.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-500">Choose CSV or Excel file…</span>
+                      )}
+                    </label>
+                    {importFile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImportFile(null);
+                          setImportError("");
+                          setImportResult(null);
+                        }}
+                        className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {importFile && !isValidFile && (
+                    <p className="mt-1 text-[11px] text-amber-600">
+                      Warning: File type may not be supported. Use .csv, .xlsx, or .xls
+                    </p>
+                  )}
+                </div>
+
+                {importError && (
+                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                    <p className="text-[11px] text-rose-800">{importError}</p>
+                  </div>
+                )}
+
+                {importResult && (
+                  <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      <div className="flex-1">
+                        <p className="text-[11px] font-medium text-emerald-900">
+                          {importResult.message || 'Import successful'}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-emerald-700">
+                          Created: {importResult.created}, Updated: {importResult.updated}
+                        </p>
+                        {importResult.errors && importResult.errors.length > 0 && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-[11px] font-medium text-emerald-800">
+                              View {importResult.error_count} error(s)
+                            </summary>
+                            <ul className="mt-1 space-y-0.5 text-[10px] text-emerald-700">
+                              {importResult.errors.map((err, idx) => (
+                                <li key={idx}>• {err}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={importing || !importFile}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Upload className="h-3 w-3" />
+                    {importing ? "Importing…" : "Import File"}
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            {/* Create single test */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-sky-50">
+                    <Plus className="h-4 w-4 text-sky-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      Add Single Test
+                    </h2>
+                    <p className="text-[11px] text-slate-500">
+                      Create one test at a time
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleCreate} className="space-y-3 text-xs">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Code<span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={form.code}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, code: e.target.value }))
+                      }
+                      placeholder="e.g. FBC_HB"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Name<span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                      placeholder="e.g. Hemoglobin"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Unit
+                    </label>
+                    <input
+                      type="text"
+                      value={form.unit}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, unit: e.target.value }))
+                      }
+                      placeholder="e.g. g/dL"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Ref Low
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={form.refLow}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, refLow: e.target.value }))
+                      }
+                      placeholder="e.g. 11.5"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Ref High
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={form.refHigh}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, refHigh: e.target.value }))
+                      }
+                      placeholder="e.g. 15.0"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      Price
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={form.price}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, price: e.target.value }))
+                      }
+                      placeholder="e.g. 3500"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none ring-0 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-5">
+                    <input
+                      id="isActive"
+                      type="checkbox"
+                      checked={form.isActive}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, isActive: e.target.checked }))
+                      }
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <label
+                      htmlFor="isActive"
+                      className="text-[11px] font-medium text-slate-700"
+                    >
+                      Active (available for ordering)
+                    </label>
+                  </div>
+                </div>
+
+                {createError && (
+                  <p className="text-[11px] text-rose-600">{createError}</p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {creating ? "Creating…" : "Add Test"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
 
           {/* Catalog table */}
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">
-                  Existing Lab Tests
+                  Lab Tests Catalog
                 </h2>
                 {loadingError ? (
                   <p className="mt-0.5 text-[11px] text-rose-600">
@@ -327,7 +542,7 @@ export default function FacilityLabCatalogPage() {
                   <p className="mt-0.5 text-[11px] text-slate-500">
                     {loading
                       ? "Loading lab tests…"
-                      : `${filteredTests.length} test(s)`}
+                      : `${filteredTests.length} test(s) in catalog`}
                   </p>
                 )}
               </div>
@@ -369,8 +584,7 @@ export default function FacilityLabCatalogPage() {
                         colSpan={7}
                         className="px-3 py-6 text-center text-[11px] text-slate-500"
                       >
-                        No lab tests found. Create your first test using the
-                        form on the left.
+                        No lab tests found. Import from file or add tests manually.
                       </td>
                     </tr>
                   ) : (

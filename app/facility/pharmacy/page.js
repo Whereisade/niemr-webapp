@@ -325,18 +325,22 @@ function FacilityPharmacyPageInner() {
                 New prescription
               </Link>
             )}
-            <Link
-              href="/facility/pharmacy/catalog"
-              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
-            >
-              Catalog
-            </Link>
-            <Link
-              href="/facility/pharmacy/stock"
-              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
-            >
-              Stock
-            </Link>
+            {(meRole === "PHARMACY" || meRole === "ADMIN" || meRole === "SUPER_ADMIN") && (
+              <>
+                <Link
+                  href="/facility/pharmacy/catalog"
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+                >
+                  Catalog
+                </Link>
+                <Link
+                  href="/facility/pharmacy/stock"
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+                >
+                  Stock
+                </Link>
+              </>
+            )}
           </div>
 
           {/* High-level stats (for current page) */}

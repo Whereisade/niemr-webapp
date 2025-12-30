@@ -67,6 +67,46 @@ function FacilityEncountersPageInner() {
   const search = searchParams.get("s") || "";
   const mine = searchParams.get("mine") === "1";
 
+  // 🔹 Fetch current user for role-based header
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/proxy/accounts/me/", {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        if (!res.ok) {
+          throw new Error("Failed to load current user");
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setMe(json);
+        }
+      } catch (err) {
+        console.error("Failed to fetch /accounts/me/ in encounters page:", err);
+        if (!cancelled) {
+          setMe(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setMeLoading(false);
+        }
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const { data, loading, error } = useEncounters({
     page,
     status: status || undefined,
@@ -111,6 +151,19 @@ function FacilityEncountersPageInner() {
     (e) => e.status === "OPEN" || e.status === "IN_PROGRESS"
   ).length;
   const closedCount = rows.filter((e) => e.status === "CLOSED").length;
+
+  // 🔹 Determine header text based on role
+  const meRole = (me?.role || "").toUpperCase();
+  const headerTitle = meRole === "DOCTOR"
+    ? "My Encounters"
+    : meRole === "NURSE"
+      ? "Nurse Encounters"
+      : "Facility Encounters";
+  const headerSubtitle = meRole === "DOCTOR"
+    ? "Your completed and ongoing clinical encounters."
+    : meRole === "NURSE"
+      ? "View and assign all clinical encounters."
+      : "View all encounters created under this facility, across all providers.";
 
   function setQuery(next) {
     const sp = new URLSearchParams(searchParams.toString());
@@ -163,19 +216,18 @@ function FacilityEncountersPageInner() {
             <Stethoscope className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">
-              Facility Encounters
+            <h1 className="text-2xl font-semibold text-slate-900">
+              {headerTitle}
             </h1>
             <p className="text-xs text-slate-500">
-              View all encounters created under this facility, across all
-              providers.
+              {headerSubtitle}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Building2 className="mr-1 h-4 w-4" />
-          Facility-wide view
+          {meRole === "DOCTOR" ? "Personal view" : meRole === "NURSE" ? "Clinical view" : "Facility-wide view"}
         </div>
       </header>
 

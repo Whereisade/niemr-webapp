@@ -248,8 +248,8 @@ function FacilityLabOrdersPageInner() {
         </div>
 
         <div className="space-x-2">
-          {/* 🔐 Only facility OWNER/ADMIN should see this */}
-          {isOwner && (
+          {/* 🔐 Only facility OWNER or LAB should see this */}
+          {(isOwner || meRole === "LAB") && (
             <Link
               href="/facility/labs/catalog/"
               className="inline-flex items-center rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"

@@ -70,7 +70,7 @@ function normalizeList(data) {
   return [];
 }
 
-function PatientProfileCard({ patient, loading, error }) {
+function PatientProfileCard({ patient, loading, error, patientId, encounterId }) {
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -126,7 +126,14 @@ function PatientProfileCard({ patient, loading, error }) {
         {patient.gender && (
           <div className="flex items-center gap-2 text-slate-600">
             <User className="h-3.5 w-3.5 text-slate-400" />
-            <span>Gender: {patient.gender === "M" ? "Male" : patient.gender === "F" ? "Female" : patient.gender}</span>
+            <span>
+              Gender:{" "}
+              {patient.gender === "M"
+                ? "Male"
+                : patient.gender === "F"
+                ? "Female"
+                : patient.gender}
+            </span>
           </div>
         )}
         {patient.phone && (
@@ -144,13 +151,20 @@ function PatientProfileCard({ patient, loading, error }) {
       </div>
 
       {/* Link to full patient record */}
-      <Link
-        href={`/facility/patients/${patient.id}`}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
-      >
-        View full patient record
-        <ExternalLink className="h-3 w-3" />
-      </Link>
+      {(() => {
+        const resolvedPatientId = patientId || patient?.id;
+        const resolvedEncounterId = encounterId || "";
+        return resolvedPatientId ? (
+          <Link
+            href={`/facility/patients/${resolvedPatientId}?hide_actions=true&from_encounter=${resolvedEncounterId}`}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+            title="View patient details"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Patient Details
+          </Link>
+        ) : null;
+      })()}
     </div>
   );
 }
@@ -872,6 +886,8 @@ export default function FacilityEncounterClinicalPage() {
               patient={patient}
               loading={patientLoading}
               error={patientError}
+              patientId={patientId}
+              encounterId={encounterId}
             />
           </CollapsibleSection>
 

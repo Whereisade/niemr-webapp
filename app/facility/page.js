@@ -864,7 +864,7 @@ export default async function FacilityDashboard() {
                   />
                 )}
 
-                {role === "LAB" && (
+                {(isOwner || role === "LAB") && (
                   <QuickLink
                     href="/facility/labs?status=PENDING"
                     icon={FlaskConical}

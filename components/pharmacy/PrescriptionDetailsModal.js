@@ -260,17 +260,21 @@ export default function PrescriptionDetailsModal({
                     </strong>
                   </div>
                   <div className="text-xs text-slate-600">
-                    Patient ID:{" "}
-                    <span className="font-medium">{rx.patient ?? "—"}</span>
+                    Patient:{" "}
+                    <span className="font-medium">
+                      {rx.patient_name || `Patient #${rx.patient}` || "—"}
+                    </span>
                   </div>
                   <div className="text-xs text-slate-600">
-                    Facility ID:{" "}
-                    <span className="font-medium">{rx.facility ?? "—"}</span>
+                    Facility:{" "}
+                    <span className="font-medium">
+                      {rx.facility_name || (rx.facility ? `Facility #${rx.facility}` : "—")}
+                    </span>
                   </div>
                   <div className="text-xs text-slate-600">
                     Prescribed by:{" "}
                     <span className="font-medium">
-                      {rx.prescribed_by ?? "—"}
+                      {rx.prescribed_by_name || (rx.prescribed_by ? `User #${rx.prescribed_by}` : "—")}
                     </span>
                   </div>
                   <div className="text-xs text-slate-600">

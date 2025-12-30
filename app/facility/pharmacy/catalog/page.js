@@ -10,6 +10,11 @@ import {
   Search,
   Loader2,
   ArrowLeft,
+  FileSpreadsheet,
+  FileText,
+  Info,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 const STAFF_ROLES = ["SUPER_ADMIN", "ADMIN", "PHARMACY"];
@@ -27,7 +32,8 @@ export default function FacilityPharmacyCatalogPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
 
-  const [csvFile, setCsvFile] = useState(null);
+  // Import state
+  const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState(null);
@@ -158,24 +164,24 @@ export default function FacilityPharmacyCatalogPage() {
 
   async function handleImport(e) {
     e.preventDefault();
-    if (!csvFile) {
-      setImportError("Select a CSV file first.");
+    if (!importFile) {
+      setImportError("Please select a file to import.");
       return;
     }
+
     setImportError(null);
     setImportResult(null);
     setImporting(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", csvFile);
 
-      const res = await fetch(
-        "/api/proxy/pharmacy/catalog/import_csv/",
-        {
-          method: "POST",
-          body: fd,
-        }
-      );
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+
+      const res = await fetch("/api/proxy/pharmacy/catalog/import_file/", {
+        method: "POST",
+        body: formData,
+      });
+
       if (!res.ok) {
         let msg = `Import failed (${res.status})`;
         try {
@@ -184,12 +190,14 @@ export default function FacilityPharmacyCatalogPage() {
         } catch {}
         throw new Error(msg);
       }
-      const json = await res.json();
-      setImportResult(json);
+
+      const result = await res.json();
+      setImportResult(result);
       await loadDrugs();
-      setCsvFile(null);
+      setImportFile(null);
     } catch (err) {
-      setImportError(err.message || "Failed to import CSV.");
+      console.error("Failed to import file", err);
+      setImportError(err?.message || "Failed to import file");
     } finally {
       setImporting(false);
     }
@@ -226,8 +234,11 @@ export default function FacilityPharmacyCatalogPage() {
     );
   }
 
+  const fileExtension = importFile ? importFile.name.split('.').pop().toLowerCase() : '';
+  const isValidFile = ['csv', 'xlsx', 'xls'].includes(fileExtension);
+
   return (
-    <main className="relative mx-auto max-w-6xl space-y-6 p-6 md:p-10">
+    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
       {/* soft background glows */}
       <div className="pointer-events-none absolute -top-24 -left-24 h-56 w-56 rounded-full bg-sky-100/60 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-56 w-56 rounded-full bg-emerald-100/60 blur-3xl" />
@@ -240,10 +251,10 @@ export default function FacilityPharmacyCatalogPage() {
             Facility Pharmacy · Catalog
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Drug catalog
+            Drug Catalog
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Manage the list of drugs available for prescribing and dispensing.
+            Manage your facility's drug catalog. Import from CSV/Excel or add drugs individually.
           </p>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -256,13 +267,50 @@ export default function FacilityPharmacyCatalogPage() {
         </div>
       </header>
 
-      {/* Top row: search + import + create form */}
+      {/* Column Requirements Info */}
+      <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
+        <div className="flex items-start gap-3">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-100">
+            <Info className="h-4 w-4 text-blue-700" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-blue-900">File Format Requirements</h3>
+            <p className="mt-1 text-xs text-blue-800">
+              Your CSV or Excel file must contain the following columns (case-insensitive):
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-blue-200 bg-white px-3 py-2">
+                <div className="text-xs font-semibold text-blue-900">Required Columns:</div>
+                <ul className="mt-1 space-y-0.5 text-xs text-blue-700">
+                  <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">code</code> - Drug code (e.g., PARA_500_TAB)</li>
+                  <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">name</code> - Drug name (e.g., Paracetamol)</li>
+                </ul>
+              </div>
+              <div className="rounded-lg border border-blue-200 bg-white px-3 py-2">
+                <div className="text-xs font-semibold text-blue-900">Optional Columns:</div>
+                <ul className="mt-1 space-y-0.5 text-xs text-blue-700">
+                  <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">strength</code> - Drug strength (e.g., 500mg)</li>
+                  <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">form</code> - Drug form (e.g., Tablet, Syrup)</li>
+                  <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">route</code> - Route (e.g., Oral, IV, IM)</li>
+                  <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">qty_per_unit</code> - Qty per unit (e.g., 10)</li>
+                  <li>• <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">unit_price</code> - Unit price (e.g., 250)</li>
+                </ul>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-blue-700">
+              <strong>Supported formats:</strong> CSV (.csv), Excel (.xlsx, .xls)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Top row: Import + Create + Catalog */}
       <section className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)]">
-        {/* Search + list meta */}
+        {/* Catalog table */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Catalog
+              Drug Catalog
             </div>
             <div className="text-xs text-slate-500">
               Total:{" "}
@@ -293,9 +341,9 @@ export default function FacilityPharmacyCatalogPage() {
               {errorDrugs}
             </div>
           ) : (
-            <div className="max-h-[360px] overflow-y-auto rounded-lg border border-slate-100">
+            <div className="max-h-[480px] overflow-y-auto rounded-lg border border-slate-100">
               <table className="min-w-full divide-y divide-slate-100 text-xs">
-                <thead className="bg-slate-50 text-slate-700">
+                <thead className="sticky top-0 bg-slate-50 text-slate-700">
                   <tr>
                     <th className="px-3 py-2 text-left font-semibold">
                       Code
@@ -345,7 +393,7 @@ export default function FacilityPharmacyCatalogPage() {
                         colSpan={5}
                         className="px-3 py-6 text-center text-xs text-slate-500"
                       >
-                        No drugs found. Add a drug or import from CSV.
+                        No drugs found. Import from file or add drugs manually.
                       </td>
                     </tr>
                   )}
@@ -355,52 +403,117 @@ export default function FacilityPharmacyCatalogPage() {
           )}
         </div>
 
-        {/* Right column: CSV import + create */}
+        {/* Right column: import + create */}
         <div className="space-y-4">
-          {/* CSV Import */}
+          {/* Import from File */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50">
-                <Upload className="h-4 w-4 text-slate-700" />
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50">
+                <Upload className="h-4 w-4 text-emerald-700" />
               </div>
               <div>
                 <div className="text-sm font-semibold text-slate-900">
-                  Import from CSV
+                  Import from File
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Columns: code,name,strength,form,route,qty_per_unit,unit_price
+                  Upload CSV or Excel file to import multiple drugs
                 </div>
               </div>
             </div>
             <form onSubmit={handleImport} className="space-y-2 text-xs">
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => {
-                  setCsvFile(e.target.files?.[0] || null);
-                  setImportError(null);
-                  setImportResult(null);
-                }}
-                className="w-full text-xs text-slate-700"
-              />
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                  Select File
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="relative flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs transition hover:border-emerald-500 hover:bg-emerald-50">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => {
+                        setImportFile(e.target.files?.[0] || null);
+                        setImportError(null);
+                        setImportResult(null);
+                      }}
+                      className="sr-only"
+                    />
+                    {importFile ? (
+                      <div className="flex items-center gap-2">
+                        {fileExtension === 'csv' ? (
+                          <FileText className="h-4 w-4 text-emerald-600" />
+                        ) : (
+                          <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                        )}
+                        <span className="truncate text-slate-700">{importFile.name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">Choose CSV or Excel file…</span>
+                    )}
+                  </label>
+                  {importFile && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImportFile(null);
+                        setImportError(null);
+                        setImportResult(null);
+                      }}
+                      className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {importFile && !isValidFile && (
+                  <p className="mt-1 text-[11px] text-amber-600">
+                    Warning: File type may not be supported. Use .csv, .xlsx, or .xls
+                  </p>
+                )}
+              </div>
+
               {importError && (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-800">
-                  {importError}
+                <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                  <p className="text-[11px] text-rose-800">{importError}</p>
                 </div>
               )}
+
               {importResult && (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800">
-                  Imported: {importResult.created} created,{" "}
-                  {importResult.updated} updated.
+                <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    <div className="flex-1">
+                      <p className="text-[11px] font-medium text-emerald-900">
+                        {importResult.message || 'Import successful'}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-emerald-700">
+                        Created: {importResult.created}, Updated: {importResult.updated}
+                      </p>
+                      {importResult.errors && importResult.errors.length > 0 && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[11px] font-medium text-emerald-800">
+                            View {importResult.error_count} error(s)
+                          </summary>
+                          <ul className="mt-1 space-y-0.5 text-[10px] text-emerald-700">
+                            {importResult.errors.map((err, idx) => (
+                              <li key={idx}>• {err}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
+
               <div className="flex justify-end pt-1">
                 <button
                   type="submit"
-                  disabled={importing}
-                  className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                  disabled={importing || !importFile}
+                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {importing ? "Importing…" : "Import CSV"}
+                  <Upload className="h-3 w-3" />
+                  {importing ? "Importing…" : "Import File"}
                 </button>
               </div>
             </form>
@@ -409,15 +522,15 @@ export default function FacilityPharmacyCatalogPage() {
           {/* Create single drug */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50">
-                <Plus className="h-4 w-4 text-slate-700" />
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-sky-50">
+                <Plus className="h-4 w-4 text-sky-700" />
               </div>
               <div>
                 <div className="text-sm font-semibold text-slate-900">
-                  Add drug
+                  Add Single Drug
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Create a single catalog entry.
+                  Create one drug at a time
                 </div>
               </div>
             </div>
@@ -425,7 +538,7 @@ export default function FacilityPharmacyCatalogPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="mb-0.5 block font-medium text-slate-700">
-                    Code
+                    Code<span className="text-rose-500">*</span>
                   </label>
                   <input
                     required
@@ -433,12 +546,13 @@ export default function FacilityPharmacyCatalogPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, code: e.target.value }))
                     }
+                    placeholder="e.g. PARA_500"
                     className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
                 <div>
                   <label className="mb-0.5 block font-medium text-slate-700">
-                    Name
+                    Name<span className="text-rose-500">*</span>
                   </label>
                   <input
                     required
@@ -446,6 +560,7 @@ export default function FacilityPharmacyCatalogPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, name: e.target.value }))
                     }
+                    placeholder="e.g. Paracetamol"
                     className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -523,6 +638,7 @@ export default function FacilityPharmacyCatalogPage() {
                         unit_price: e.target.value,
                       }))
                     }
+                    placeholder="250"
                     className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -540,7 +656,8 @@ export default function FacilityPharmacyCatalogPage() {
                   disabled={creating}
                   className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60"
                 >
-                  {creating ? "Saving…" : "Add drug"}
+                  <Plus className="h-3 w-3" />
+                  {creating ? "Saving…" : "Add Drug"}
                 </button>
               </div>
             </form>

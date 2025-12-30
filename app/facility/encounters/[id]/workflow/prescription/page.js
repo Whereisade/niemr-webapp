@@ -223,8 +223,7 @@ export default function FacilityEncounterPrescriptionPage() {
           drug_name: "",
           dose: "",
           frequency: "",
-          duration_days: 1,
-          qty_prescribed: 0,
+          duration_days: "", // Empty by default - let doctor input
           instruction: "",
         },
       ];
@@ -242,8 +241,7 @@ export default function FacilityEncounterPrescriptionPage() {
         drug_name: v,
         dose: "",
         frequency: "",
-        duration_days: 1,
-        qty_prescribed: 0,
+        duration_days: "", // Empty by default - let doctor input
         instruction: "",
       },
     ]);
@@ -292,8 +290,8 @@ export default function FacilityEncounterPrescriptionPage() {
         ...(drug_code ? {} : { drug_name }),
         dose: it?.dose || "",
         frequency: it?.frequency || "",
-        duration_days: Number(it?.duration_days || 1),
-        qty_prescribed: Number(it?.qty_prescribed || 0),
+        duration_days: it?.duration_days ? Number(it?.duration_days) : null,
+        qty_prescribed: 0, // Set to 0 - pharmacist will handle this
         instruction: it?.instruction || "",
       };
     });
@@ -699,7 +697,7 @@ export default function FacilityEncounterPrescriptionPage() {
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
                       />
                       <input
-                        value={String(it?.duration_days ?? 1)}
+                        value={String(it?.duration_days ?? "")}
                         onChange={(e) =>
                           updateItem(idx, { duration_days: e.target.value })
                         }
@@ -709,26 +707,15 @@ export default function FacilityEncounterPrescriptionPage() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        value={String(it?.qty_prescribed ?? 0)}
-                        onChange={(e) =>
-                          updateItem(idx, { qty_prescribed: e.target.value })
-                        }
-                        placeholder="Qty prescribed"
-                        disabled={readOnly}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                      />
-                      <input
-                        value={it?.instruction || ""}
-                        onChange={(e) =>
-                          updateItem(idx, { instruction: e.target.value })
-                        }
-                        placeholder="Instruction (optional)"
-                        disabled={readOnly}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                      />
-                    </div>
+                    <input
+                      value={it?.instruction || ""}
+                      onChange={(e) =>
+                        updateItem(idx, { instruction: e.target.value })
+                      }
+                      placeholder="Instruction (e.g., After meals)"
+                      disabled={readOnly}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                    />
                   </div>
                 </div>
               ))

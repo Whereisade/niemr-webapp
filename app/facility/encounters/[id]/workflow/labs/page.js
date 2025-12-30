@@ -310,7 +310,7 @@ export default function FacilityEncounterLabsPage() {
           </p>
         </div>
 
-        <button
+        {/* <button
           onClick={handleSkipLabs}
           disabled={submitting}
           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
@@ -318,7 +318,7 @@ export default function FacilityEncounterLabsPage() {
         >
           <AlertTriangle className="h-4 w-4" />
           Skip Labs
-        </button>
+        </button> */}
       </div>
 
       {error ? (
@@ -586,7 +586,7 @@ export default function FacilityEncounterLabsPage() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Beaker className="h-4 w-4" />}
-              Order Labs (Pause Encounter)
+              Order Labs
             </button>
 
             <button
@@ -595,7 +595,7 @@ export default function FacilityEncounterLabsPage() {
               disabled={submitting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
             >
-              Skip Labs → Prescription
+              Prescription
             </button>
           </div>
         </div>
