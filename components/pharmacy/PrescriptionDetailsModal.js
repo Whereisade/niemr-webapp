@@ -1,7 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Pill, X, Clock } from "lucide-react";
+import {
+  Pill,
+  X,
+  Clock,
+  User,
+  Building2,
+  Stethoscope,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  Package,
+  TrendingDown,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -15,7 +30,7 @@ function formatDateTime(value) {
 }
 
 /**
- * Shared prescription details modal.
+ * Enhanced prescription details modal with better UX and stock integration.
  *
  * Props:
  * - open: boolean
@@ -35,14 +50,18 @@ export default function PrescriptionDetailsModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // dispense form state
-  const [selectedItemId, setSelectedItemId] = useState(null);
-  const [qty, setQty] = useState("");
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
-  const [submitSuccess, setSubmitSuccess] = useState("");
+  // Stock data
+  const [stock, setStock] = useState([]);
+  const [stockLoading, setStockLoading] = useState(false);
 
+  // Dispense UI state
+  const [expandedItemId, setExpandedItemId] = useState(null);
+  const [dispenseForms, setDispenseForms] = useState({});
+  const [submitting, setSubmitting] = useState(null);
+  const [submitErrors, setSubmitErrors] = useState({});
+  const [submitSuccess, setSubmitSuccess] = useState({});
+
+  // Load prescription
   useEffect(() => {
     if (!open || !id) return;
 
@@ -52,14 +71,14 @@ export default function PrescriptionDetailsModal({
       setLoading(true);
       setError(null);
       setRx(null);
-      setSubmitError(null);
-      setSubmitSuccess("");
+      setSubmitErrors({});
+      setSubmitSuccess({});
+      setExpandedItemId(null);
+
       try {
         const res = await fetch(`/api/proxy/pharmacy/prescriptions/${id}/`, {
           method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
+          headers: { Accept: "application/json" },
         });
         if (!res.ok) {
           throw new Error(`Failed to load prescription (${res.status})`);
@@ -67,6 +86,14 @@ export default function PrescriptionDetailsModal({
         const json = await res.json();
         if (!cancelled) {
           setRx(json);
+          // Initialize dispense forms
+          const forms = {};
+          if (json.items) {
+            json.items.forEach((item) => {
+              forms[item.id] = { qty: "", note: "" };
+            });
+          }
+          setDispenseForms(forms);
         }
       } catch (err) {
         console.error("Failed to load prescription details:", err);
@@ -86,7 +113,55 @@ export default function PrescriptionDetailsModal({
     };
   }, [open, id]);
 
-  // pick items that still have remaining quantity
+  // Load stock when modal opens and user can dispense
+  useEffect(() => {
+    if (!open || !allowDispense) return;
+
+    let cancelled = false;
+
+    async function loadStock() {
+      setStockLoading(true);
+      try {
+        const res = await fetch("/api/proxy/pharmacy/stock/", {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Failed to load stock");
+        const json = await res.json();
+        if (!cancelled) {
+          const stockList = Array.isArray(json)
+            ? json
+            : Array.isArray(json.results)
+            ? json.results
+            : [];
+          setStock(stockList);
+        }
+      } catch (err) {
+        console.error("Failed to load stock:", err);
+        if (!cancelled) setStock([]);
+      } finally {
+        if (!cancelled) setStockLoading(false);
+      }
+    }
+
+    loadStock();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, allowDispense]);
+
+  // Stock lookup map
+  const stockByDrugId = useMemo(() => {
+    const m = new Map();
+    for (const s of stock) {
+      const drug = s.drug || {};
+      if (drug.id != null) {
+        m.set(drug.id, s.current_qty ?? 0);
+      }
+    }
+    return m;
+  }, [stock]);
+
+  // Items with remaining quantity
   const itemsWithRemaining = useMemo(() => {
     if (!rx || !Array.isArray(rx.items)) return [];
     return rx.items
@@ -94,66 +169,52 @@ export default function PrescriptionDetailsModal({
         const prescribed = item.qty_prescribed ?? 0;
         const dispensed = item.qty_dispensed ?? 0;
         const remaining = Math.max(0, prescribed - dispensed);
-        return { ...item, _remaining: remaining };
+        const stockQty = item.drug?.id
+          ? stockByDrugId.get(item.drug.id) ?? null
+          : null;
+
+        return { ...item, _remaining: remaining, _stockQty: stockQty };
       })
       .filter((item) => item._remaining > 0);
-  }, [rx]);
+  }, [rx, stockByDrugId]);
 
-  const status = String(rx?.status || "").toUpperCase();
-  const createdAt = rx ? formatDateTime(rx.created_at) : "—";
+  async function handleDispenseSubmit(itemId) {
+    setSubmitErrors((prev) => ({ ...prev, [itemId]: null }));
+    setSubmitSuccess((prev) => ({ ...prev, [itemId]: "" }));
 
-  // initialise selected item when data loads
-  useEffect(() => {
-    if (!allowDispense) return;
-    if (!rx || !Array.isArray(rx.items) || !rx.items.length) return;
+    if (!allowDispense || !rx || !id) return;
 
-    const firstWithRemaining = itemsWithRemaining[0];
-    if (firstWithRemaining) {
-      setSelectedItemId(firstWithRemaining.id);
-    } else {
-      setSelectedItemId(null);
-    }
-    setQty("");
-    setNote("");
-    setSubmitError(null);
-    setSubmitSuccess("");
-  }, [rx, allowDispense, itemsWithRemaining]);
+    const form = dispenseForms[itemId];
+    if (!form) return;
 
-  async function handleDispenseSubmit(e) {
-    e.preventDefault();
-    setSubmitError(null);
-    setSubmitSuccess("");
-
-    if (!allowDispense) return;
-    if (!rx || !id) return;
-
-    const itemId = selectedItemId;
-    if (!itemId) {
-      setSubmitError("Select a medication to dispense.");
-      return;
-    }
-
-    const numericQty = Number(qty);
+    const numericQty = Number(form.qty);
     if (!Number.isFinite(numericQty) || numericQty <= 0) {
-      setSubmitError("Enter a valid quantity to dispense.");
+      setSubmitErrors((prev) => ({
+        ...prev,
+        [itemId]: "Enter a valid quantity to dispense.",
+      }));
       return;
     }
 
     const targetItem = itemsWithRemaining.find((it) => it.id === itemId);
     if (!targetItem) {
-      setSubmitError("Selected medication is no longer available for dispense.");
+      setSubmitErrors((prev) => ({
+        ...prev,
+        [itemId]: "Item is no longer available for dispense.",
+      }));
       return;
     }
 
     if (numericQty > targetItem._remaining) {
-      setSubmitError(
-        `Cannot dispense more than remaining (${targetItem._remaining}).`
-      );
+      setSubmitErrors((prev) => ({
+        ...prev,
+        [itemId]: `Cannot dispense more than remaining (${targetItem._remaining}).`,
+      }));
       return;
     }
 
     try {
-      setSubmitting(true);
+      setSubmitting(itemId);
       const res = await fetch(
         `/api/proxy/pharmacy/prescriptions/${id}/dispense/`,
         {
@@ -165,7 +226,7 @@ export default function PrescriptionDetailsModal({
           body: JSON.stringify({
             item_id: itemId,
             qty: numericQty,
-            note: note || "",
+            note: form.note || "",
           }),
         }
       );
@@ -185,313 +246,555 @@ export default function PrescriptionDetailsModal({
 
       const updated = await res.json();
       setRx(updated);
-      setQty("");
-      setNote("");
-      setSubmitSuccess("Dispense recorded successfully.");
+
+      // Reset form
+      setDispenseForms((prev) => ({
+        ...prev,
+        [itemId]: { qty: "", note: "" },
+      }));
+
+      setSubmitSuccess((prev) => ({
+        ...prev,
+        [itemId]: `Successfully dispensed ${numericQty} unit${
+          numericQty > 1 ? "s" : ""
+        }.`,
+      }));
+
+      // Collapse the item after successful dispense
+      setTimeout(() => {
+        setExpandedItemId(null);
+        setSubmitSuccess((prev) => ({ ...prev, [itemId]: "" }));
+      }, 2000);
 
       if (typeof onUpdated === "function") {
         onUpdated();
       }
     } catch (err) {
       console.error("Dispense failed:", err);
-      setSubmitError(err.message || "Failed to record dispense.");
+      setSubmitErrors((prev) => ({
+        ...prev,
+        [itemId]: err.message || "Failed to record dispense.",
+      }));
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
     }
+  }
+
+  function updateDispenseForm(itemId, updates) {
+    setDispenseForms((prev) => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], ...updates },
+    }));
   }
 
   if (!open || !id) return null;
 
+  const status = String(rx?.status || "").toUpperCase();
+  const createdAt = rx ? formatDateTime(rx.created_at) : "—";
+  const canDispense =
+    allowDispense &&
+    (status === "PRESCRIBED" || status === "PARTIALLY_DISPENSED");
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4 py-6">
-      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-        {/* header bar */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-xl bg-sky-50">
-              <Pill className="h-4 w-4 text-sky-600" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6">
+      <div className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-sky-50 to-indigo-50 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-sky-600">
+              <Pill className="h-5 w-5 text-white" />
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Prescription details
+                Prescription Details
               </div>
-              <div className="text-sm font-medium text-slate-900">#{id}</div>
+              <div className="text-lg font-bold text-slate-900">#{id}</div>
             </div>
+            <StatusBadge value={status} />
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* content */}
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-4 text-sm text-slate-800">
+        {/* Content */}
+        <div className="max-h-[calc(90vh-180px)] overflow-y-auto">
           {loading && (
-            <div className="py-6 text-sm text-slate-500">
-              Loading prescription…
+            <div className="flex items-center gap-2 p-8 text-sm text-slate-500">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Loading prescription details…
             </div>
           )}
 
           {error && !loading && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            <div className="m-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
               {error}
             </div>
           )}
 
           {!loading && !error && rx && (
-            <>
-              {/* Top meta */}
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Overview
-                  </div>
-                  <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
-                    <Clock className="h-3.5 w-3.5 text-slate-400" />
-                    {createdAt}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-600">
-                    Status:{" "}
-                    <strong className="font-semibold">
-                      {status || "Unknown"}
-                    </strong>
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    Patient:{" "}
-                    <span className="font-medium">
-                      {rx.patient_name || `Patient #${rx.patient}` || "—"}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    Facility:{" "}
-                    <span className="font-medium">
-                      {rx.facility_name || (rx.facility ? `Facility #${rx.facility}` : "—")}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    Prescribed by:{" "}
-                    <span className="font-medium">
-                      {rx.prescribed_by_name || (rx.prescribed_by ? `User #${rx.prescribed_by}` : "—")}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    Encounter ID:{" "}
-                    <span className="font-medium">
-                      {rx.encounter_id ?? "—"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Notes
-                  </div>
-                  {rx.note ? (
-                    <p className="text-xs text-slate-700 whitespace-pre-wrap">
-                      {rx.note}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-400">
-                      No additional note recorded.
-                    </p>
-                  )}
-                </div>
+            <div className="space-y-6 p-6">
+              {/* Overview Grid */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <InfoCard
+                  icon={Clock}
+                  label="Created"
+                  value={createdAt}
+                  iconBg="bg-slate-50"
+                  iconColor="text-slate-600"
+                />
+                <InfoCard
+                  icon={User}
+                  label="Patient"
+                  value={
+                    rx.patient_name || `Patient #${rx.patient}` || "Unknown"
+                  }
+                  iconBg="bg-blue-50"
+                  iconColor="text-blue-600"
+                />
+                <InfoCard
+                  icon={Building2}
+                  label="Facility"
+                  value={
+                    rx.facility_name ||
+                    (rx.facility ? `Facility #${rx.facility}` : "—")
+                  }
+                  iconBg="bg-purple-50"
+                  iconColor="text-purple-600"
+                />
+                <InfoCard
+                  icon={Stethoscope}
+                  label="Prescribed by"
+                  value={
+                    rx.prescribed_by_name ||
+                    (rx.prescribed_by ? `User #${rx.prescribed_by}` : "—")
+                  }
+                  iconBg="bg-emerald-50"
+                  iconColor="text-emerald-600"
+                />
+                <InfoCard
+                  icon={FileText}
+                  label="Encounter ID"
+                  value={rx.encounter_id ? `#${rx.encounter_id}` : "—"}
+                  iconBg="bg-amber-50"
+                  iconColor="text-amber-600"
+                />
               </div>
 
-              {/* Items */}
-              <div className="mt-2 space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Medications
+              {/* Clinical Notes */}
+              {rx.note && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-slate-600" />
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Clinical Notes
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                    {rx.note}
+                  </p>
                 </div>
+              )}
+
+              {/* Medications */}
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-900">
+                    Medications{" "}
+                    <span className="text-slate-500">
+                      ({rx.items?.length || 0})
+                    </span>
+                  </div>
+                  {stockLoading && (
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Loading stock…
+                    </div>
+                  )}
+                </div>
+
                 {Array.isArray(rx.items) && rx.items.length ? (
-                  <ul className="space-y-2">
+                  <div className="space-y-3">
                     {rx.items.map((item) => {
                       const drug = item.drug || {};
                       const name =
-                        drug.name || drug.code || item.dose || "Medication";
+                        drug.name ||
+                        drug.code ||
+                        item.drug_name ||
+                        item.dose ||
+                        "Medication";
 
                       const prescribed = item.qty_prescribed ?? 0;
                       const dispensed = item.qty_dispensed ?? 0;
                       const remaining = Math.max(0, prescribed - dispensed);
+                      const stockQty = drug.id
+                        ? stockByDrugId.get(drug.id)
+                        : null;
 
-                      const dose = item.dose || "";
-                      const freq = item.frequency || "";
-                      const duration = item.duration_days
-                        ? `${item.duration_days} days`
-                        : "";
+                      const isFullyDispensed = remaining === 0;
+                      const isExpanded = expandedItemId === item.id;
+                      const hasStockIssue =
+                        stockQty !== null &&
+                        remaining > 0 &&
+                        stockQty < remaining;
+                      const isOutOfStock =
+                        stockQty !== null && stockQty === 0 && remaining > 0;
 
                       return (
-                        <li
+                        <div
                           key={item.id}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                          className={`overflow-hidden rounded-xl border ${
+                            isFullyDispensed
+                              ? "border-emerald-200 bg-emerald-50/30"
+                              : isOutOfStock
+                              ? "border-rose-200 bg-rose-50/30"
+                              : hasStockIssue
+                              ? "border-amber-200 bg-amber-50/30"
+                              : "border-slate-200 bg-white"
+                          } shadow-sm transition`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-slate-900">
-                              {name}
-                              {drug.strength && (
-                                <span className="ml-1 text-xs font-normal text-slate-600">
-                                  ({drug.strength})
-                                </span>
+                          {/* Item Header */}
+                          <div className="flex items-start justify-between gap-3 p-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-semibold text-slate-900">
+                                  {name}
+                                </div>
+                                {drug.strength && (
+                                  <span className="text-xs text-slate-500">
+                                    {drug.strength}
+                                  </span>
+                                )}
+                                {drug.form && (
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                    {drug.form}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Dosage info */}
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+                                {item.dose && <span>• {item.dose}</span>}
+                                {item.frequency && (
+                                  <span>• {item.frequency}</span>
+                                )}
+                                {item.duration_days && (
+                                  <span>• {item.duration_days} days</span>
+                                )}
+                              </div>
+
+                              {item.instruction && (
+                                <div className="mt-2 text-xs text-slate-700">
+                                  <span className="font-medium">
+                                    Instructions:
+                                  </span>{" "}
+                                  {item.instruction}
+                                </div>
+                              )}
+
+                              {/* Quantity info */}
+                              <div className="mt-2 flex flex-wrap items-center gap-3">
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="text-slate-500">
+                                    Prescribed:
+                                  </span>
+                                  <span className="font-semibold text-slate-900">
+                                    {prescribed}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="text-slate-500">
+                                    Dispensed:
+                                  </span>
+                                  <span className="font-semibold text-emerald-700">
+                                    {dispensed}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="text-slate-500">
+                                    Remaining:
+                                  </span>
+                                  <span
+                                    className={`font-semibold ${
+                                      remaining === 0
+                                        ? "text-emerald-700"
+                                        : "text-amber-700"
+                                    }`}
+                                  >
+                                    {remaining}
+                                  </span>
+                                </div>
+                                {stockQty !== null && (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <Package className="h-3.5 w-3.5 text-slate-400" />
+                                    <span className="text-slate-500">
+                                      In stock:
+                                    </span>
+                                    <span
+                                      className={`font-semibold ${
+                                        stockQty === 0
+                                          ? "text-rose-700"
+                                          : stockQty < remaining
+                                          ? "text-amber-700"
+                                          : "text-emerald-700"
+                                      }`}
+                                    >
+                                      {stockQty}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Stock warnings */}
+                              {isOutOfStock && (
+                                <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-rose-100 px-2 py-1 text-xs font-medium text-rose-800">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  Out of stock - cannot dispense
+                                </div>
+                              )}
+                              {hasStockIssue && !isOutOfStock && (
+                                <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                                  <TrendingDown className="h-3.5 w-3.5" />
+                                  Insufficient stock for full dispense
+                                </div>
+                              )}
+                              {isFullyDispensed && (
+                                <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Fully dispensed
+                                </div>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-500">
-                              Rx item #{item.id}
+
+                            {/* Dispense button */}
+                            {canDispense && !isFullyDispensed && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedItemId(
+                                    isExpanded ? null : item.id
+                                  )
+                                }
+                                disabled={isOutOfStock}
+                                className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                                  isOutOfStock
+                                    ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                                    : isExpanded
+                                    ? "border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                    : "border border-sky-200 bg-sky-600 text-white hover:bg-sky-700"
+                                }`}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp className="h-4 w-4" />
+                                    Cancel
+                                  </>
+                                ) : (
+                                  <>
+                                    Dispense
+                                    <ChevronDown className="h-4 w-4" />
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Dispense Form */}
+                          {canDispense && isExpanded && !isFullyDispensed && (
+                            <div className="border-t border-slate-200 bg-slate-50 p-4">
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  handleDispenseSubmit(item.id);
+                                }}
+                                className="space-y-3"
+                              >
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                                      Quantity to dispense{" "}
+                                      <span className="text-rose-600">*</span>
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={
+                                        stockQty !== null
+                                          ? Math.min(stockQty, remaining)
+                                          : remaining
+                                      }
+                                      step={1}
+                                      value={
+                                        dispenseForms[item.id]?.qty || ""
+                                      }
+                                      onChange={(e) =>
+                                        updateDispenseForm(item.id, {
+                                          qty: e.target.value,
+                                        })
+                                      }
+                                      placeholder={`Max: ${
+                                        stockQty !== null
+                                          ? Math.min(stockQty, remaining)
+                                          : remaining
+                                      }`}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                                      Note (optional)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={
+                                        dispenseForms[item.id]?.note || ""
+                                      }
+                                      onChange={(e) =>
+                                        updateDispenseForm(item.id, {
+                                          note: e.target.value,
+                                        })
+                                      }
+                                      placeholder="e.g. Issued for 5 days"
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                    />
+                                  </div>
+                                </div>
+
+                                {submitErrors[item.id] && (
+                                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{submitErrors[item.id]}</span>
+                                  </div>
+                                )}
+
+                                {submitSuccess[item.id] && (
+                                  <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{submitSuccess[item.id]}</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-end gap-2 pt-1">
+                                  <button
+                                    type="submit"
+                                    disabled={submitting === item.id}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-60"
+                                  >
+                                    {submitting === item.id ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Recording…
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Record dispense
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </form>
                             </div>
-                          </div>
-
-                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600">
-                            {dose && <span>• {dose}</span>}
-                            {freq && <span>• {freq}</span>}
-                            {duration && <span>• {duration}</span>}
-                            <span>
-                              • Qty dispensed:{" "}
-                              <span className="font-medium">
-                                {dispensed} / {prescribed}
-                              </span>
-                            </span>
-                            <span>• Remaining: {remaining}</span>
-                          </div>
-
-                          {item.instruction && (
-                            <p className="mt-1 text-[11px] text-slate-700">
-                              Instruction: {item.instruction}
-                            </p>
                           )}
-                        </li>
+                        </div>
                       );
                     })}
-                  </ul>
+                  </div>
                 ) : (
-                  <p className="text-xs text-slate-500">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                     No medication items on this prescription.
-                  </p>
+                  </div>
                 )}
               </div>
 
-              {/* Dispense panel (facility pharmacists only) */}
-              {allowDispense && (
-                <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Record dispense
-                  </div>
-
-                  {status === "CANCELLED" || status === "DRAFT" ? (
-                    <div className="text-[11px] text-slate-500">
-                      This prescription is not active. Only prescriptions with
-                      status <strong>PRESCRIBED</strong> or{" "}
-                      <strong>PARTIALLY_DISPENSED</strong> can be dispensed.
-                    </div>
-                  ) : itemsWithRemaining.length === 0 ? (
-                    <div className="text-[11px] text-slate-500">
-                      All items on this prescription appear fully dispensed.
-                    </div>
-                  ) : (
-                    <form
-                      onSubmit={handleDispenseSubmit}
-                      className="space-y-2 text-[11px]"
-                    >
-                      <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-medium text-slate-700">
-                            Medication
-                          </label>
-                          <select
-                            value={selectedItemId ?? ""}
-                            onChange={(e) =>
-                              setSelectedItemId(
-                                e.target.value ? Number(e.target.value) : null
-                              )
-                            }
-                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                          >
-                            <option value="">
-                              Select an item to dispense…
-                            </option>
-                            {itemsWithRemaining.map((it) => {
-                              const drug = it.drug || {};
-                              const name =
-                                drug.name ||
-                                drug.code ||
-                                it.dose ||
-                                "Medication";
-                              return (
-                                <option key={it.id} value={it.id}>
-                                  {name} · Remaining {it._remaining}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-medium text-slate-700">
-                            Quantity to dispense
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={qty}
-                            onChange={(e) => setQty(e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-medium text-slate-700">
-                          Note (optional)
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={note}
-                          onChange={(e) => setNote(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                          placeholder="e.g. Issued 10 tablets for 5 days supply"
-                        />
-                      </div>
-
-                      {submitError && (
-                        <div className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-800">
-                          {submitError}
-                        </div>
-                      )}
-                      {submitSuccess && (
-                        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800">
-                          {submitSuccess}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-end gap-2 pt-1">
-                        <button
-                          type="submit"
-                          disabled={submitting}
-                          className="inline-flex items-center rounded-lg bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60"
-                        >
-                          {submitting ? "Saving…" : "Record dispense"}
-                        </button>
-                      </div>
-                    </form>
-                  )}
+              {/* Dispense info for non-pharmacy users */}
+              {!canDispense && allowDispense && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  This prescription can only be dispensed when status is{" "}
+                  <strong>PRESCRIBED</strong> or{" "}
+                  <strong>PARTIALLY_DISPENSED</strong>.
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        {/* footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-4">
+          <div className="text-xs text-slate-500">
+            Prescription #{id} • {status || "Unknown status"}
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Close
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+/* ─────────────── UI Components ─────────────── */
+
+function InfoCard({ icon: Icon, label, value, iconBg, iconColor }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className={`grid h-9 w-9 place-items-center rounded-lg ${iconBg}`}>
+          <Icon className={`h-4 w-4 ${iconColor}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {label}
+          </div>
+          <div className="truncate text-sm font-medium text-slate-900">
+            {value}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ value }) {
+  const v = String(value || "").toUpperCase();
+  const label =
+    v === "PARTIALLY_DISPENSED"
+      ? "Partially dispensed"
+      : v === "PRESCRIBED"
+      ? "Prescribed"
+      : v === "DISPENSED"
+      ? "Dispensed"
+      : v === "DRAFT"
+      ? "Draft"
+      : v === "CANCELLED"
+      ? "Cancelled"
+      : v || "Unknown";
+
+  let cls = "bg-slate-100 text-slate-700";
+  if (v === "PRESCRIBED") {
+    cls = "bg-sky-100 text-sky-800";
+  } else if (v === "PARTIALLY_DISPENSED") {
+    cls = "bg-amber-100 text-amber-800";
+  } else if (v === "DISPENSED") {
+    cls = "bg-emerald-100 text-emerald-800";
+  } else if (v === "CANCELLED") {
+    cls = "bg-rose-100 text-rose-800";
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${cls}`}
+    >
+      {label}
+    </span>
   );
 }
