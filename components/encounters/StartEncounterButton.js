@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Play } from "lucide-react";
 
-export default function StartEncounterButton({ scope, appointment }) {
+export default function StartEncounterButton({ scope, appointment, size = "sm", onSuccess }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [me, setMe] = useState(null);
@@ -43,12 +43,23 @@ export default function StartEncounterButton({ scope, appointment }) {
         const encounterId = res.id;
         const role = String(me?.role || "").toUpperCase();
         
+        // Call onSuccess callback if provided
+        if (onSuccess) {
+          onSuccess(res);
+        }
+        
+        // Route based on scope (facility vs provider workspace)
+        const workspacePath = scope === "facility" ? "/facility" : "/provider";
+        
         // Doctors go directly to clinical workflow
         // Nurses go to nurse assessment workflow
         if (role === "DOCTOR") {
-          router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
+          router.push(`${workspacePath}/encounters/${encounterId}/workflow/clinical`);
+        } else if (role === "NURSE") {
+          router.push(`${workspacePath}/encounters/${encounterId}/workflow/nurse`);
         } else {
-          router.push(`/facility/encounters/${encounterId}/workflow/nurse`);
+          // Fallback for other roles (LAB, PHARMACY, etc.)
+          router.push(`${workspacePath}/encounters/${encounterId}`);
         }
       }
     } catch (err) {
@@ -59,11 +70,17 @@ export default function StartEncounterButton({ scope, appointment }) {
     }
   };
 
+  const sizeClasses = {
+    sm: "px-3 py-1.5 text-xs",
+    md: "px-4 py-2 text-sm",
+    lg: "px-5 py-2.5 text-base",
+  };
+
   return (
     <button
       onClick={handleStart}
       disabled={loading}
-      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+      className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-600 ${sizeClasses[size]} font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-colors`}
     >
       <Play className="h-3.5 w-3.5" />
       {loading ? "Starting..." : "Start Encounter"}

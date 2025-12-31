@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useAppointments } from "@/lib/useAppointments";
 import StartEncounterButton from "@/components/encounters/StartEncounterButton";
+import { apiFetch } from "@/lib/api";
 import {
   postAppointmentAction,
   getAvailableActions,
@@ -41,6 +42,9 @@ function ProviderAppointmentsPageInner() {
   const router = useRouter();
   const pathname = usePathname();
 
+  const [me, setMe] = useState(null);
+  const [loadingMe, setLoadingMe] = useState(true);
+
   const page = Number(sp.get("page") || 1);
   const limit = Number(sp.get("limit") || 10);
   const status = sp.get("status") || "";
@@ -55,6 +59,30 @@ function ProviderAppointmentsPageInner() {
     q,
     mine: "true",
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    
+    async function fetchMe() {
+      try {
+        setLoadingMe(true);
+        const meData = await apiFetch("/accounts/me/");
+        if (!cancelled) {
+          setMe(meData);
+        }
+      } catch (err) {
+        console.error("Failed to load user", err);
+      } finally {
+        if (!cancelled) setLoadingMe(false);
+      }
+    }
+
+    fetchMe();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const rowsRaw = data?.results ?? (Array.isArray(data) ? data : []);
   const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
@@ -95,6 +123,9 @@ function ProviderAppointmentsPageInner() {
   const dateLabel = dateLabelMap[date] || "Custom";
 
   const hasActiveFilters = Boolean(status || q || date !== "today");
+
+  // Check if user has facility (to show/hide facility column)
+  const userHasFacility = Boolean(me?.facility);
 
   return (
     <main className="relative mx-auto max-w-7xl p-6 md:p-10 space-y-6">
@@ -222,7 +253,7 @@ function ProviderAppointmentsPageInner() {
           title="My Appointments"
           subtitle={`${dateLabel} · ${total} total`}
         />
-        {isLoading ? (
+        {isLoading || loadingMe ? (
           <div className="p-6 text-sm text-slate-600">
             Loading appointments…
           </div>
@@ -236,6 +267,7 @@ function ProviderAppointmentsPageInner() {
               <thead className="bg-slate-50 text-slate-700">
                 <tr>
                   <Th>Patient</Th>
+                  {userHasFacility && <Th>Facility</Th>}
                   <Th>Reason</Th>
                   <Th>Time</Th>
                   <Th>Status</Th>
@@ -280,15 +312,21 @@ function ProviderAppointmentsPageInner() {
                               <div className="font-medium text-slate-900">
                                 {a.patient_name || a.patient || "—"}
                               </div>
-                              {a.facility_name ? (
-                                <div className="flex items-center gap-1 text-xs text-slate-500">
-                                  <Building2 className="h-3 w-3" />
-                                  {a.facility_name}
-                                </div>
-                              ) : null}
                             </div>
                           </div>
                         </Td>
+                        {userHasFacility && (
+                          <Td>
+                            {a.facility_name ? (
+                              <div className="flex items-center gap-1 text-xs text-slate-600">
+                                <Building2 className="h-3 w-3 text-slate-400" />
+                                {a.facility_name}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </Td>
+                        )}
                         <Td className="text-slate-600">
                           <span className="line-clamp-2">
                             {a.reason || "Consultation"}
@@ -328,6 +366,7 @@ function ProviderAppointmentsPageInner() {
                               <StartEncounterButton
                                 scope="provider"
                                 appointment={a}
+                                onSuccess={() => mutate()}
                               />
                             )}
 
@@ -369,7 +408,7 @@ function ProviderAppointmentsPageInner() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={userHasFacility ? 7 : 6}>
                       <EmptyState
                         title="No appointments"
                         subtitle="When you're booked, visits will appear here automatically."
