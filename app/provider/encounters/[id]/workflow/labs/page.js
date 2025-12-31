@@ -1,3 +1,5 @@
+// app/provider/encounters/[id]/workflow/labs/page.js - UPDATED VERSION
+// ✨ Shows outsourced lab scientist's catalog when selected
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -15,6 +17,8 @@ import {
   AlertTriangle,
   ChevronRight,
   Building2,
+  Info,
+  UserRound,
 } from "lucide-react";
 
 const PRIORITY_OPTIONS = [
@@ -80,6 +84,8 @@ export default function ProviderEncounterLabsPage() {
     return labsProviders.find((p) => String(p?.user) === String(outsourcedToUserId)) || null;
   }, [outsourcedToUserId, labsProviders]);
 
+  const isIndependentProvider = me && !me.facility_id;
+
   async function loadMe() {
     try {
       const data = await apiFetch("/accounts/me/", { method: "GET" });
@@ -104,11 +110,22 @@ export default function ProviderEncounterLabsPage() {
     }
   }
 
+  // ✨ UPDATED: Load catalog from outsourced lab if selected
   async function loadCatalog(search = "") {
     setCatalogError("");
     setCatalogLoading(true);
     try {
-      const qs = search?.trim() ? `?s=${encodeURIComponent(search.trim())}` : "";
+      const params = new URLSearchParams();
+      if (search?.trim()) {
+        params.set("s", search.trim());
+      }
+      
+      // ✨ NEW: If outsourced lab is selected, fetch their catalog
+      if (outsourcedToUserId) {
+        params.set("created_by", outsourcedToUserId);
+      }
+      
+      const qs = params.toString() ? `?${params.toString()}` : "";
       const res = await apiFetch(`/labs/catalog/${qs}`, { method: "GET" });
       setCatalog(normalizeList(res));
     } catch (err) {
@@ -138,10 +155,17 @@ export default function ProviderEncounterLabsPage() {
   useEffect(() => {
     loadMe();
     loadEncounter();
-    loadCatalog("");
     loadIndependentLabs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
+
+  // ✨ UPDATED: Reload catalog when outsourced lab changes
+  useEffect(() => {
+    loadCatalog(q);
+    // Clear selections when switching catalogs
+    setSelectedCodes(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outsourcedToUserId]);
 
   useEffect(() => {
     const t = setTimeout(() => loadCatalog(q), 350);
@@ -222,6 +246,12 @@ export default function ProviderEncounterLabsPage() {
       return;
     }
 
+    // ✨ Validate outsourcing for independent providers
+    if (isIndependentProvider && !outsourcedToUserId && selectedCodes.size > 0) {
+      setError("Independent providers should outsource lab orders to a lab scientist.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await createLabOrder({
@@ -275,6 +305,7 @@ export default function ProviderEncounterLabsPage() {
   }
 
   const patientLabel = `Patient #${encounter?.patient || "—"}`;
+  const isIndependentEncounter = !encounter?.facility_id;
 
   return (
     <div className="p-6">
@@ -292,7 +323,15 @@ export default function ProviderEncounterLabsPage() {
             <span className="font-medium text-slate-800">Labs</span>
           </div>
 
-          <h1 className="mt-2 text-xl font-semibold text-slate-900">Order Labs</h1>
+          <div className="mt-2 flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-slate-900">Order Labs</h1>
+            {isIndependentEncounter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                <UserRound className="h-3 w-3" />
+                Independent
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-sm text-slate-600">
             {patientLabel} • Encounter #{encounterId}
           </p>
@@ -308,6 +347,24 @@ export default function ProviderEncounterLabsPage() {
           Skip Labs
         </button>
       </div>
+
+      {/* ✨ NEW: Independent provider hint banner */}
+      {isIndependentProvider && (
+        <div className="mb-4 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
+              <Info className="h-4 w-4 text-blue-700" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-blue-900">Independent Provider Tip</h3>
+              <p className="mt-1 text-sm text-blue-800">
+                Select a lab scientist below to see their test catalog and outsource lab work. 
+                This ensures proper sample collection and result reporting.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error ? (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
@@ -327,7 +384,9 @@ export default function ProviderEncounterLabsPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Beaker className="h-5 w-5 text-slate-700" />
-              <h2 className="text-sm font-semibold text-slate-900">Test Catalog</h2>
+              <h2 className="text-sm font-semibold text-slate-900">
+                {selectedProvider ? `${fullName(selectedProvider)}'s Test Catalog` : "Test Catalog"}
+              </h2>
             </div>
 
             <div className="relative w-full max-w-md">
@@ -340,6 +399,25 @@ export default function ProviderEncounterLabsPage() {
               />
             </div>
           </div>
+
+          {/* ✨ NEW: Catalog source indicator */}
+          {selectedProvider && (
+            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              <div className="flex items-center gap-2">
+                <Info className="h-3.5 w-3.5" />
+                Showing tests from <strong>{fullName(selectedProvider)}</strong>'s catalog
+              </div>
+            </div>
+          )}
+
+          {!selectedProvider && isIndependentProvider && catalog.length === 0 && !catalogLoading && (
+            <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Select a lab scientist below to see their test catalog
+              </div>
+            </div>
+          )}
 
           {catalogError ? (
             <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
@@ -390,8 +468,12 @@ export default function ProviderEncounterLabsPage() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-3 py-4 text-slate-600">
-                        No tests found.
+                      <td colSpan={4} className="px-3 py-4 text-center text-slate-600">
+                        {selectedProvider 
+                          ? `${fullName(selectedProvider)} has no tests in their catalog yet.`
+                          : isIndependentProvider
+                          ? "Select a lab scientist to see their test catalog."
+                          : "No tests found."}
                       </td>
                     </tr>
                   )}
@@ -411,7 +493,7 @@ export default function ProviderEncounterLabsPage() {
               <input
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
-                placeholder='Type a test (e.g., “Folate”, “D-dimer”, “HbA1c”)'
+                placeholder='Type a test (e.g., "Folate", "D-dimer", "HbA1c")'
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
               <button
@@ -449,6 +531,51 @@ export default function ProviderEncounterLabsPage() {
           <h2 className="text-sm font-semibold text-slate-900">Order Details</h2>
 
           <div className="mt-3 grid gap-3">
+            {/* ✨ UPDATED: Outsource section moved to top with emphasis */}
+            <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+                  <Building2 className="h-4 w-4" />
+                  Outsource to Lab Scientist
+                </div>
+                {isIndependentProvider && (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                    Recommended
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-blue-800">
+                {isIndependentProvider 
+                  ? "Select a lab scientist from your network to handle sample collection and testing."
+                  : "Optional. Recommended for independent providers (so labs are routed to a lab scientist)."}
+              </p>
+
+              <div className="mt-2">
+                <select
+                  value={outsourcedToUserId}
+                  onChange={(e) => setOutsourcedToUserId(e.target.value)}
+                  disabled={labsProvidersLoading}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
+                >
+                  <option value="">— Select lab scientist —</option>
+                  {labsProviders.map((p) => (
+                    <option key={String(p?.user)} value={String(p?.user)}>
+                      {fullName(p)} (User #{p?.user})
+                    </option>
+                  ))}
+                </select>
+
+                {selectedProvider ? (
+                  <div className="mt-2 text-xs text-slate-600">
+                    Selected:{" "}
+                    <span className="font-medium text-slate-800">
+                      {fullName(selectedProvider)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
             <label className="grid gap-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Priority
@@ -478,41 +605,6 @@ export default function ProviderEncounterLabsPage() {
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
             </label>
-
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <Building2 className="h-4 w-4" />
-                Outsource to Independent Lab
-              </div>
-              <p className="mt-1 text-xs text-slate-600">
-                Optional. Recommended for independent providers (so labs are routed to a lab scientist).
-              </p>
-
-              <div className="mt-2">
-                <select
-                  value={outsourcedToUserId}
-                  onChange={(e) => setOutsourcedToUserId(e.target.value)}
-                  disabled={labsProvidersLoading}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
-                >
-                  <option value="">— Do not outsource —</option>
-                  {labsProviders.map((p) => (
-                    <option key={String(p?.user)} value={String(p?.user)}>
-                      {fullName(p)} (User #{p?.user})
-                    </option>
-                  ))}
-                </select>
-
-                {selectedProvider ? (
-                  <div className="mt-2 text-xs text-slate-600">
-                    Selected:{" "}
-                    <span className="font-medium text-slate-800">
-                      {fullName(selectedProvider)}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            </div>
 
             <button
               type="submit"

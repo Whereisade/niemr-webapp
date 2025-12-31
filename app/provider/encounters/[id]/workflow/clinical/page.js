@@ -1,3 +1,5 @@
+// app/provider/encounters/[id]/workflow/clinical/page.js - COMPLETE UPDATED VERSION
+// ✨ Full parity with facility clinical page: Vitals, Attachments, Prescription button
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -29,6 +31,15 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Building2,
+  UserRound,
+  Info,
+  Activity,
+  HeartPulse,
+  Thermometer,
+  Droplets,
+  Pill,
+  Paperclip,
 } from "lucide-react";
 
 function fmtDateTime(v) {
@@ -64,6 +75,288 @@ function normalizeList(data) {
     }
   }
   return [];
+}
+
+// ✨ NEW: Vitals display component
+function VitalsDisplay({ patientId }) {
+  const [vitals, setVitals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!patientId) return;
+
+    let cancelled = false;
+
+    async function loadVitals() {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await apiFetch(`/vitals/?patient=${patientId}&limit=5`);
+        if (cancelled) return;
+        setVitals(normalizeList(data));
+      } catch (err) {
+        if (!cancelled) {
+          setError("Unable to load vitals.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadVitals();
+    return () => {
+      cancelled = true;
+    };
+  }, [patientId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Loading vitals…
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-xs text-rose-600">{error}</div>;
+  }
+
+  if (vitals.length === 0) {
+    return (
+      <div className="text-xs text-slate-500">No vitals recorded yet.</div>
+    );
+  }
+
+  const latest = vitals[0];
+
+  return (
+    <div className="space-y-3">
+      {/* Latest vitals */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Latest Vitals
+          </p>
+          <p className="text-[10px] text-slate-400">
+            {fmtDateTime(latest.measured_at)}
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          {/* Blood Pressure */}
+          {latest.systolic && latest.diastolic && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-xs font-medium text-slate-600">BP</span>
+              </div>
+              <span className="text-sm font-semibold text-slate-900">
+                {latest.systolic}/{latest.diastolic}
+                <span className="ml-1 text-xs font-normal text-slate-500">mmHg</span>
+              </span>
+            </div>
+          )}
+
+          {/* Heart Rate */}
+          {latest.heart_rate && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-3.5 w-3.5 text-rose-400" />
+                <span className="text-xs font-medium text-slate-600">Heart Rate</span>
+              </div>
+              <span className="text-sm font-semibold text-slate-900">
+                {latest.heart_rate}
+                <span className="ml-1 text-xs font-normal text-slate-500">bpm</span>
+              </span>
+            </div>
+          )}
+
+          {/* Temperature */}
+          {latest.temp_c && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Thermometer className="h-3.5 w-3.5 text-amber-400" />
+                <span className="text-xs font-medium text-slate-600">Temperature</span>
+              </div>
+              <span className="text-sm font-semibold text-slate-900">
+                {latest.temp_c}
+                <span className="ml-1 text-xs font-normal text-slate-500">°C</span>
+              </span>
+            </div>
+          )}
+
+          {/* SpO2 */}
+          {latest.spo2 && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Droplets className="h-3.5 w-3.5 text-blue-400" />
+                <span className="text-xs font-medium text-slate-600">SpO₂</span>
+              </div>
+              <span className="text-sm font-semibold text-slate-900">
+                {latest.spo2}
+                <span className="ml-1 text-xs font-normal text-slate-500">%</span>
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* View all vitals link */}
+      {vitals.length > 1 && (
+        <Link
+          href={`/provider/patients/${patientId}?tab=vitals`}
+          className="block text-center text-xs text-blue-600 hover:underline"
+        >
+          View all vitals ({vitals.length} records)
+        </Link>
+      )}
+    </div>
+  );
+}
+
+// ✨ NEW: SOAP Attachments component
+function SoapAttachments({ encounterId, section, label }) {
+  const [attachments, setAttachments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadAttachments() {
+    if (!encounterId) return;
+    setLoading(true);
+    setError("");
+    
+    try {
+      const qs = new URLSearchParams();
+      qs.set("owner_type", "encounter");
+      qs.set("owner_id", String(encounterId));
+      qs.set("tag", section); // Filter by SOAP section tag
+      
+      const data = await apiFetch(`/attachments/?${qs.toString()}`);
+      setAttachments(normalizeList(data));
+    } catch (err) {
+      setError("Failed to load attachments.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAttachments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [encounterId, section]);
+
+  async function handleFileUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    setUploading(true);
+    setError("");
+
+    try {
+      await uploadAttachments({
+        refType: "ENCOUNTER",
+        refId: encounterId,
+        files,
+        tag: section, // Tag with SOAP section
+      });
+      await loadAttachments();
+    } catch (err) {
+      setError(err?.message || "Failed to upload attachments.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+          <Paperclip className="h-3.5 w-3.5" />
+          Attachments for {label}
+        </div>
+        <label className="cursor-pointer">
+          <input
+            type="file"
+            multiple
+            onChange={handleFileUpload}
+            className="hidden"
+            disabled={uploading}
+          />
+          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60">
+            {uploading ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Paperclip className="h-3 w-3" />
+                Upload
+              </>
+            )}
+          </span>
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-2 text-xs text-rose-600">{error}</div>
+      )}
+
+      {loading ? (
+        <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Loading attachments...
+        </div>
+      ) : attachments.length > 0 ? (
+        <div className="mt-2 space-y-2">
+          {attachments.map((att) => {
+            const fileUrl = att.file || att.url || att.download_url || "#";
+            const nameFromPath =
+              typeof att.file === "string"
+                ? att.file.split("/").slice(-1)[0]
+                : null;
+            const label =
+              att.filename || att.name || nameFromPath || `File #${att.id}`;
+
+            return (
+              <div
+                key={att.id}
+                className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-3 py-2"
+              >
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-slate-900 truncate max-w-[200px]">
+                    {label}
+                  </span>
+                  {att.description && (
+                    <span className="text-[10px] text-slate-500">
+                      {att.description}
+                    </span>
+                  )}
+                </div>
+                {fileUrl && fileUrl !== "#" && (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    Open
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-2 text-xs text-slate-500">
+          No attachments for this section yet.
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PatientProfileCard({ patient, loading, error }) {
@@ -305,6 +598,11 @@ export default function ProviderEncounterClinicalPage() {
   const [diagnoses, setDiagnoses] = useState("");
   const [plan, setPlan] = useState("");
 
+  // Ward admission request state
+  const [requestingAdmission, setRequestingAdmission] = useState(false);
+  const [admissionError, setAdmissionError] = useState("");
+  const [admissionSuccess, setAdmissionSuccess] = useState("");
+
   async function loadMe() {
     try {
       const data = await apiFetch("/accounts/me/", { method: "GET" });
@@ -377,6 +675,10 @@ export default function ProviderEncounterClinicalPage() {
   const canEdit = useMemo(() => {
     return ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role);
   }, [role]);
+
+  // Determine encounter context
+  const isIndependentEncounter = !encounter?.facility_id;
+  const isIndependentProvider = me && !me.facility_id;
 
   const isWaitingLabs =
     String(encounter?.status || "").toUpperCase() === "WAITING_LABS";
@@ -511,7 +813,34 @@ export default function ProviderEncounterClinicalPage() {
     }
   }
 
-  async function handleCreateCorrection({ section, reason, content, files }) {
+  // ✨ NEW: Navigate to prescription page
+  function goToPrescription() {
+    router.push(`/provider/encounters/${encounterId}/workflow/prescription`);
+  }
+
+  // Ward admission request handler
+  async function handleRequestAdmission() {
+    if (!encounterId) return;
+    setAdmissionError("");
+    setAdmissionSuccess("");
+    setRequestingAdmission(true);
+    
+    try {
+      const response = await apiFetch(`/encounters/${encounterId}/request_admission/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      
+      setAdmissionSuccess(response?.detail || "Ward admission request sent successfully.");
+      setTimeout(() => setAdmissionSuccess(""), 5000);
+    } catch (err) {
+      setAdmissionError(err?.message || "Failed to request ward admission.");
+    } finally {
+      setRequestingAdmission(false);
+    }
+  }
+
+  async function handleCreateCorrection({ section, reason, content, files, amendment_type }) {
     if (!encounterId) throw new Error("encounterId is required");
 
     // Backend enforces lock before accepting corrections.
@@ -519,6 +848,7 @@ export default function ProviderEncounterClinicalPage() {
       section,
       reason,
       content,
+      amendment_type
     });
 
     const createdId = created?.id;
@@ -602,9 +932,23 @@ export default function ProviderEncounterClinicalPage() {
             <span className="font-medium text-slate-800">SOAP Note</span>
           </div>
 
-          <h1 className="mt-2 text-xl font-semibold text-slate-900">
-            Diagnosis & SOAP Note
-          </h1>
+          {/* Context badge */}
+          <div className="mt-2 flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-slate-900">
+              Diagnosis & SOAP Note
+            </h1>
+            {isIndependentEncounter ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                <UserRound className="h-3 w-3" />
+                Independent
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                <Building2 className="h-3 w-3" />
+                Facility
+              </span>
+            )}
+          </div>
 
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
             <span>Encounter #{encounterId}</span>
@@ -637,6 +981,33 @@ export default function ProviderEncounterClinicalPage() {
             Labs
           </Link>
 
+          {/* ✨ NEW: Prescription button at top */}
+          <button
+            onClick={goToPrescription}
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+            title="Go to prescription workflow"
+          >
+            <Pill className="h-4 w-4" />
+            Prescription
+          </button>
+
+          {/* Ward admission only for facility encounters */}
+          {!isIndependentEncounter && canEdit && (
+            <button
+              onClick={handleRequestAdmission}
+              disabled={requestingAdmission}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+              title="Request ward admission for this patient"
+            >
+              {requestingAdmission ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Building2 className="h-4 w-4" />
+              )}
+              Ward Admission
+            </button>
+          )}
+
           <button
             onClick={handleSave}
             disabled={saving || readOnly}
@@ -662,6 +1033,36 @@ export default function ProviderEncounterClinicalPage() {
           </button>
         </div>
       </div>
+
+      {/* Independent encounter context banner */}
+      {isIndependentEncounter && (
+        <div className="mb-4 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
+              <Info className="h-4 w-4 text-blue-700" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-blue-900">Independent Encounter</h3>
+              <p className="mt-1 text-sm text-blue-800">
+                This is an independent provider encounter. Ward admission is not available, but you can complete the full SOAP documentation and outsource labs/prescriptions as needed.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ward admission messages */}
+      {admissionSuccess && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {admissionSuccess}
+        </div>
+      )}
+
+      {admissionError && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {admissionError}
+        </div>
+      )}
 
       {/* Error messages */}
       {saveError ? (
@@ -733,6 +1134,15 @@ export default function ProviderEncounterClinicalPage() {
               loading={patientLoading}
               error={patientError}
             />
+          </CollapsibleSection>
+
+          {/* ✨ NEW: Vitals Section */}
+          <CollapsibleSection title="Vitals" icon={Activity} defaultOpen={true}>
+            {patientId ? (
+              <VitalsDisplay patientId={patientId} />
+            ) : (
+              <div className="text-xs text-slate-500">No patient linked.</div>
+            )}
           </CollapsibleSection>
 
           {/* Allergies */}
@@ -846,6 +1256,15 @@ export default function ProviderEncounterClinicalPage() {
                   />
                 </label>
 
+                {/* ✨ NEW: Attachments for Chief Complaint */}
+                {encounterId && (
+                  <SoapAttachments
+                    encounterId={encounterId}
+                    section="CHIEF_COMPLAINT"
+                    label="Chief Complaint"
+                  />
+                )}
+
                 <label className="mt-3 grid gap-1">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     HPI
@@ -859,6 +1278,15 @@ export default function ProviderEncounterClinicalPage() {
                   />
                 </label>
 
+                {/* ✨ NEW: Attachments for HPI */}
+                {encounterId && (
+                  <SoapAttachments
+                    encounterId={encounterId}
+                    section="HPI"
+                    label="HPI"
+                  />
+                )}
+
                 <label className="mt-3 grid gap-1">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     ROS
@@ -871,6 +1299,15 @@ export default function ProviderEncounterClinicalPage() {
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
                   />
                 </label>
+
+                {/* ✨ NEW: Attachments for ROS */}
+                {encounterId && (
+                  <SoapAttachments
+                    encounterId={encounterId}
+                    section="ROS"
+                    label="ROS"
+                  />
+                )}
               </div>
 
               <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -887,6 +1324,15 @@ export default function ProviderEncounterClinicalPage() {
                   />
                 </label>
 
+                {/* ✨ NEW: Attachments for Physical Exam */}
+                {encounterId && (
+                  <SoapAttachments
+                    encounterId={encounterId}
+                    section="PHYSICAL_EXAM"
+                    label="Physical Exam"
+                  />
+                )}
+
                 <label className="mt-3 grid gap-1">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Diagnoses
@@ -900,6 +1346,15 @@ export default function ProviderEncounterClinicalPage() {
                   />
                 </label>
 
+                {/* ✨ NEW: Attachments for Diagnoses */}
+                {encounterId && (
+                  <SoapAttachments
+                    encounterId={encounterId}
+                    section="DIAGNOSES"
+                    label="Diagnoses"
+                  />
+                )}
+
                 <label className="mt-3 grid gap-1">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Plan
@@ -912,6 +1367,15 @@ export default function ProviderEncounterClinicalPage() {
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
                   />
                 </label>
+
+                {/* ✨ NEW: Attachments for Plan */}
+                {encounterId && (
+                  <SoapAttachments
+                    encounterId={encounterId}
+                    section="PLAN"
+                    label="Plan"
+                  />
+                )}
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button

@@ -1,3 +1,5 @@
+// app/provider/encounters/[id]/workflow/prescription/page.js - UPDATED VERSION
+// ✨ Shows outsourced pharmacist's drug catalog when selected
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,6 +16,9 @@ import {
   Building2,
   ChevronRight,
   CheckCircle2,
+  Info,
+  UserRound,
+  AlertTriangle,
 } from "lucide-react";
 
 function normalizeList(body) {
@@ -68,6 +73,13 @@ export default function ProviderEncounterPrescriptionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState("");
 
+  const selectedProvider = useMemo(() => {
+    if (!outsourcedToUserId) return null;
+    return pharmProviders.find((p) => String(p?.user) === String(outsourcedToUserId)) || null;
+  }, [outsourcedToUserId, pharmProviders]);
+
+  const isIndependentProvider = me && !me.facility_id;
+
   async function loadMe() {
     try {
       const data = await apiFetch("/accounts/me/", { method: "GET" });
@@ -83,11 +95,22 @@ export default function ProviderEncounterPrescriptionPage() {
     setEncounter(data);
   }
 
+  // ✨ UPDATED: Load catalog from outsourced pharmacist if selected
   async function loadCatalog(search = "") {
     setCatalogError("");
     setCatalogLoading(true);
     try {
-      const qs = search?.trim() ? `?s=${encodeURIComponent(search.trim())}` : "";
+      const params = new URLSearchParams();
+      if (search?.trim()) {
+        params.set("s", search.trim());
+      }
+      
+      // ✨ NEW: If outsourced pharmacist is selected, fetch their catalog
+      if (outsourcedToUserId) {
+        params.set("created_by", outsourcedToUserId);
+      }
+      
+      const qs = params.toString() ? `?${params.toString()}` : "";
       const res = await apiFetch(`/pharmacy/catalog/${qs}`, { method: "GET" });
       setCatalog(normalizeList(res));
     } catch (err) {
@@ -123,7 +146,7 @@ export default function ProviderEncounterPrescriptionPage() {
       try {
         await Promise.all([loadMe(), loadEncounter()]);
         if (!cancelled) {
-          await Promise.all([loadCatalog(""), loadIndependentPharmacy()]);
+          await Promise.all([loadIndependentPharmacy()]);
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || "Failed to load prescription workflow.");
@@ -138,6 +161,12 @@ export default function ProviderEncounterPrescriptionPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
+
+  // ✨ UPDATED: Reload catalog when outsourced pharmacist changes
+  useEffect(() => {
+    loadCatalog(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outsourcedToUserId]);
 
   useEffect(() => {
     const t = setTimeout(() => loadCatalog(q), 350);
@@ -226,6 +255,12 @@ export default function ProviderEncounterPrescriptionPage() {
       return;
     }
 
+    // ✨ Validate outsourcing for independent providers
+    if (isIndependentProvider && !outsourcedToUserId && items.some(it => it.drug_code)) {
+      setError("Independent providers should outsource prescriptions to a pharmacist when using catalog drugs.");
+      return;
+    }
+
     const payloadItems = items.map((it) => {
       const drug_code = (it?.drug_code || "").trim();
       const drug_name = (it?.drug_name || "").trim();
@@ -302,6 +337,8 @@ export default function ProviderEncounterPrescriptionPage() {
     );
   }
 
+  const isIndependentEncounter = !encounter?.facility_id;
+
   return (
     <div className="p-6">
       <div className="mb-4 flex items-start justify-between gap-4">
@@ -318,7 +355,15 @@ export default function ProviderEncounterPrescriptionPage() {
             <span className="font-medium text-slate-800">Prescription</span>
           </div>
 
-          <h1 className="mt-2 text-xl font-semibold text-slate-900">Prescription</h1>
+          <div className="mt-2 flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-slate-900">Prescription</h1>
+            {isIndependentEncounter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                <UserRound className="h-3 w-3" />
+                Independent
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-sm text-slate-600">
             Encounter #{encounterId} • Patient #{encounter?.patient || "—"}
           </p>
@@ -333,6 +378,24 @@ export default function ProviderEncounterPrescriptionPage() {
           Create Prescription
         </button>
       </div>
+
+      {/* ✨ NEW: Independent provider hint banner */}
+      {isIndependentProvider && (
+        <div className="mb-4 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
+              <Info className="h-4 w-4 text-blue-700" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-blue-900">Independent Provider Tip</h3>
+              <p className="mt-1 text-sm text-blue-800">
+                Select a pharmacist below to see their drug catalog and outsource medication dispensing. 
+                They'll handle dispensing and patient counseling.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {success ? (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
@@ -367,7 +430,9 @@ export default function ProviderEncounterPrescriptionPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Pill className="h-5 w-5 text-slate-700" />
-              <h2 className="text-sm font-semibold text-slate-900">Drug Catalog</h2>
+              <h2 className="text-sm font-semibold text-slate-900">
+                {selectedProvider ? `${fullName(selectedProvider)}'s Drug Catalog` : "Drug Catalog"}
+              </h2>
             </div>
 
             <div className="relative w-full max-w-md">
@@ -380,6 +445,25 @@ export default function ProviderEncounterPrescriptionPage() {
               />
             </div>
           </div>
+
+          {/* ✨ NEW: Catalog source indicator */}
+          {selectedProvider && (
+            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              <div className="flex items-center gap-2">
+                <Info className="h-3.5 w-3.5" />
+                Showing drugs from <strong>{fullName(selectedProvider)}</strong>'s catalog
+              </div>
+            </div>
+          )}
+
+          {!selectedProvider && isIndependentProvider && catalog.length === 0 && !catalogLoading && (
+            <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Select a pharmacist below to see their drug catalog
+              </div>
+            </div>
+          )}
 
           {catalogError ? (
             <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
@@ -436,8 +520,12 @@ export default function ProviderEncounterPrescriptionPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-3 py-4 text-slate-600">
-                        No drugs found.
+                      <td colSpan={4} className="px-3 py-4 text-center text-slate-600">
+                        {selectedProvider 
+                          ? `${fullName(selectedProvider)} has no drugs in their catalog yet.`
+                          : isIndependentProvider
+                          ? "Select a pharmacist to see their drug catalog."
+                          : "No drugs found."}
                       </td>
                     </tr>
                   )}
@@ -459,7 +547,7 @@ export default function ProviderEncounterPrescriptionPage() {
               <input
                 value={freeTextName}
                 onChange={(e) => setFreeTextName(e.target.value)}
-                placeholder='Type a medication name (e.g., “Coartem 20/120”)'
+                placeholder='Type a medication name (e.g., "Coartem 20/120")'
                 disabled={readOnly}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
               />
@@ -480,142 +568,163 @@ export default function ProviderEncounterPrescriptionPage() {
         <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">Prescription Builder</h2>
 
-          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Building2 className="h-4 w-4" />
-              Outsource to Independent Pharmacy
-            </div>
-            <p className="mt-1 text-xs text-slate-600">
-              Optional. One pharmacy gets the entire prescription.
-            </p>
-
-            <div className="mt-2">
-              <select
-                value={outsourcedToUserId}
-                onChange={(e) => setOutsourcedToUserId(e.target.value)}
-                disabled={pharmLoading || readOnly}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
-              >
-                <option value="">— Do not outsource —</option>
-                {pharmProviders.map((p) => (
-                  <option key={String(p?.user)} value={String(p?.user)}>
-                    {fullName(p)} (User #{p?.user})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <label className="mt-3 grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Note
-            </span>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              disabled={readOnly}
-              placeholder="Optional instruction to pharmacy…"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-            />
-          </label>
-
-          <div className="mt-4 space-y-3">
-            {items.length ? (
-              items.map((it, idx) => (
-                <div key={idx} className="rounded-2xl border border-slate-100 bg-white p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">
-                        {it?.drug_code ? (
-                          <span className="font-mono text-xs">{it.drug_code}</span>
-                        ) : (
-                          it?.drug_name || "Free-text"
-                        )}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-600">
-                        {it?.drug_code ? "Catalog drug" : "Free-text entry"}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => removeItem(idx)}
-                      disabled={readOnly}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-                      title="Remove item"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="mt-3 grid gap-2">
-                    <input
-                      value={it?.dose || ""}
-                      onChange={(e) => updateItem(idx, { dose: e.target.value })}
-                      placeholder="Dose (e.g., 500mg, 10mL)"
-                      disabled={readOnly}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                    />
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        value={it?.frequency || ""}
-                        onChange={(e) => updateItem(idx, { frequency: e.target.value })}
-                        placeholder="Frequency (e.g., bd, tds)"
-                        disabled={readOnly}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                      />
-                      <input
-                        value={String(it?.duration_days ?? 1)}
-                        onChange={(e) => updateItem(idx, { duration_days: e.target.value })}
-                        placeholder="Duration (days)"
-                        disabled={readOnly}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        value={String(it?.qty_prescribed ?? 0)}
-                        onChange={(e) => updateItem(idx, { qty_prescribed: e.target.value })}
-                        placeholder="Qty prescribed"
-                        disabled={readOnly}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                      />
-                      <input
-                        value={it?.instruction || ""}
-                        onChange={(e) => updateItem(idx, { instruction: e.target.value })}
-                        placeholder="Instruction (optional)"
-                        disabled={readOnly}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                      />
-                    </div>
-                  </div>
+          <div className="mt-3 grid gap-3">
+            {/* ✨ UPDATED: Outsource section moved to top with emphasis */}
+            <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+                  <Building2 className="h-4 w-4" />
+                  Outsource to Pharmacist
                 </div>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                No items yet. Add drugs from the catalog or via free-text.
+                {isIndependentProvider && (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                    Recommended
+                  </span>
+                )}
               </div>
-            )}
+              <p className="mt-1 text-xs text-blue-800">
+                {isIndependentProvider 
+                  ? "Select a pharmacist from your network to handle medication dispensing and counseling."
+                  : "Optional. One pharmacy gets the entire prescription."}
+              </p>
+
+              <div className="mt-2">
+                <select
+                  value={outsourcedToUserId}
+                  onChange={(e) => setOutsourcedToUserId(e.target.value)}
+                  disabled={pharmLoading || readOnly}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
+                >
+                  <option value="">— Select pharmacist —</option>
+                  {pharmProviders.map((p) => (
+                    <option key={String(p?.user)} value={String(p?.user)}>
+                      {fullName(p)} (User #{p?.user})
+                    </option>
+                  ))}
+                </select>
+
+                {selectedProvider ? (
+                  <div className="mt-2 text-xs text-slate-600">
+                    Selected:{" "}
+                    <span className="font-medium text-slate-800">
+                      {fullName(selectedProvider)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Note
+              </span>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={3}
+                disabled={readOnly}
+                placeholder="Optional instruction to pharmacy…"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              />
+            </label>
+
+            <div className="space-y-3">
+              {items.length ? (
+                items.map((it, idx) => (
+                  <div key={idx} className="rounded-2xl border border-slate-100 bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {it?.drug_code ? (
+                            <span className="font-mono text-xs">{it.drug_code}</span>
+                          ) : (
+                            it?.drug_name || "Free-text"
+                          )}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-600">
+                          {it?.drug_code ? "Catalog drug" : "Free-text entry"}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeItem(idx)}
+                        disabled={readOnly}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+                        title="Remove item"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid gap-2">
+                      <input
+                        value={it?.dose || ""}
+                        onChange={(e) => updateItem(idx, { dose: e.target.value })}
+                        placeholder="Dose (e.g., 500mg, 10mL)"
+                        disabled={readOnly}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                      />
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={it?.frequency || ""}
+                          onChange={(e) => updateItem(idx, { frequency: e.target.value })}
+                          placeholder="Frequency (e.g., bd, tds)"
+                          disabled={readOnly}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                        />
+                        <input
+                          value={String(it?.duration_days ?? 1)}
+                          onChange={(e) => updateItem(idx, { duration_days: e.target.value })}
+                          placeholder="Duration (days)"
+                          disabled={readOnly}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={String(it?.qty_prescribed ?? 0)}
+                          onChange={(e) => updateItem(idx, { qty_prescribed: e.target.value })}
+                          placeholder="Qty prescribed"
+                          disabled={readOnly}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                        />
+                        <input
+                          value={it?.instruction || ""}
+                          onChange={(e) => updateItem(idx, { instruction: e.target.value })}
+                          placeholder="Instruction (optional)"
+                          disabled={readOnly}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                  No items yet. Add drugs from the catalog or via free-text.
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || readOnly}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pill className="h-4 w-4" />}
+              Create Prescription
+            </button>
+
+            <Link
+              href={`/provider/encounters/${encounterId}`}
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+            >
+              Back to Encounter
+            </Link>
           </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || readOnly}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-          >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pill className="h-4 w-4" />}
-            Create Prescription
-          </button>
-
-          <Link
-            href={`/provider/encounters/${encounterId}`}
-            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Back to Encounter
-          </Link>
         </div>
       </div>
     </div>

@@ -1,13 +1,14 @@
+// app/provider/encounters/page.js - UPDATED VERSION
+// ✨ ENHANCED for independent provider parity with facility encounters
 "use client";
 
 import Link from "next/link";
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEncounters } from "@/lib/useEncounters";
 import { downloadEncounterPdf } from "@/lib/reports";
-import {
-  closeEncounter,
-} from "@/lib/encounterActions";
+import { closeEncounter } from "@/lib/encounterActions";
+import { apiFetch } from "@/lib/api";
 import AttachmentList from "@/components/attachments/AttachmentList";
 import {
   Stethoscope,
@@ -18,8 +19,10 @@ import {
   UserRound,
   ArrowLeft,
   ArrowRight,
+  Building2,
+  Info,
+  ExternalLink,
 } from "lucide-react";
-
 
 export default function ProviderEncountersPage(props) {
   return (
@@ -52,6 +55,26 @@ function ProviderEncountersPageInner() {
 
   const { data, error, isLoading } = useEncounters({ page, limit, status, s });
 
+  // ✨ NEW: Load current user to determine if independent provider
+  const [me, setMe] = useState(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMe() {
+      try {
+        const userData = await apiFetch("/accounts/me/", { method: "GET" });
+        if (!cancelled) setMe(userData || null);
+      } catch {
+        if (!cancelled) setMe(null);
+      } finally {
+        if (!cancelled) setMeLoading(false);
+      }
+    }
+    loadMe();
+    return () => { cancelled = true; };
+  }, []);
+
   const rows = Array.isArray(data?.results)
     ? data.results
     : Array.isArray(data)
@@ -63,6 +86,11 @@ function ProviderEncountersPageInner() {
   const [downloadingId, setDownloadingId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   const [updateError, setUpdateError] = useState("");
+
+  // ✨ NEW: Determine if user is independent provider
+  const isIndependentProvider = me && !me.facility_id;
+  const facilityCount = rows.filter(r => r.facility_id || r.facility).length;
+  const independentCount = rows.length - facilityCount;
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -102,13 +130,11 @@ function ProviderEncountersPageInner() {
   }
 
   const openCount = rows.filter(
-    (r) => (r.status || "").toUpperCase() === "OPEN"
+    (r) => (r.status || "").toUpperCase() === "OPEN" || (r.status || "").toUpperCase() === "IN_PROGRESS"
   ).length;
   const closedCount = rows.filter(
     (r) => (r.status || "").toUpperCase() === "CLOSED"
   ).length;
-  // Cross-out is no longer supported in the product. We keep legacy statuses
-  // display-only, but do not surface actions/filters.
 
   async function handleDownload(enc) {
     if (!enc?.id) return;
@@ -129,13 +155,15 @@ function ProviderEncountersPageInner() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
             <Stethoscope className="h-3.5 w-3.5" />
-            Provider Workspace
+            {isIndependentProvider ? "Independent Provider" : "Provider Workspace"}
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
             Encounters
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Clinical encounters recorded for patients in this facility.
+            {isIndependentProvider 
+              ? "Clinical encounters you've conducted as an independent provider." 
+              : "Clinical encounters recorded for patients in this facility."}
           </p>
         </div>
 
@@ -160,6 +188,8 @@ function ProviderEncountersPageInner() {
             >
               <option value="">All statuses</option>
               <option value="OPEN">Open</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="WAITING_LABS">Waiting Labs</option>
               <option value="CLOSED">Closed</option>
             </select>
             <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -167,17 +197,53 @@ function ProviderEncountersPageInner() {
         </div>
       </header>
 
+      {/* ✨ NEW: Independent Provider Info Banner */}
+      {isIndependentProvider && !meLoading && (
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
+              <Info className="h-4 w-4 text-blue-700" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-blue-900">
+                Independent Provider Workflow
+              </h3>
+              <p className="mt-1 text-sm text-blue-800">
+                As an independent provider, you can create encounters for walk-in patients or from appointments. 
+                Labs and prescriptions can be outsourced to lab scientists and pharmacists in your network.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href="/provider/patients"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  <UserRound className="h-3.5 w-3.5" />
+                  Manage Patients
+                </Link>
+                <Link
+                  href="/provider/appointments"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                >
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  View Appointments
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stats row */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           icon={FileText}
-          label="Encounters on page"
+          label="Total Encounters"
           value={rows.length}
           gradient="from-blue-600 via-indigo-600 to-violet-600"
         />
         <StatTile
           icon={CalendarClock}
-          label="Open"
+          label="Active"
           value={openCount}
           gradient="from-emerald-600 via-teal-600 to-cyan-600"
         />
@@ -185,8 +251,17 @@ function ProviderEncountersPageInner() {
           icon={CalendarClock}
           label="Closed"
           value={closedCount}
-          gradient="from-amber-600 via-orange-600 to-red-600"
+          gradient="from-slate-600 via-slate-700 to-slate-800"
         />
+        {/* ✨ NEW: Show facility vs independent split for independent providers */}
+        {isIndependentProvider && (
+          <StatTile
+            icon={Building2}
+            label="Independent"
+            value={independentCount}
+            gradient="from-amber-600 via-orange-600 to-red-600"
+          />
+        )}
       </section>
 
       {updateError && (
@@ -202,6 +277,8 @@ function ProviderEncountersPageInner() {
           <thead className="bg-slate-50">
             <tr>
               <Th>Patient</Th>
+              {/* ✨ NEW: Show context (facility/independent) */}
+              <Th>Context</Th>
               <Th>Type</Th>
               <Th>Status</Th>
               <Th>Started</Th>
@@ -220,8 +297,8 @@ function ProviderEncountersPageInner() {
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((enc) => {
               const patientName = enc.patient_name || enc.patient || "Patient";
-              const typeLabel =
-                enc.encounter_type || enc.type || "Encounter";
+              const typeLabel = enc.encounter_type || enc.type || "Encounter";
+              const hasFacility = enc.facility_id || enc.facility;
 
               return (
                 <tr key={enc.id} className="hover:bg-slate-50">
@@ -235,14 +312,27 @@ function ProviderEncountersPageInner() {
                     </Link>
                   </td>
 
+                  {/* ✨ NEW: Context column */}
+                  <Td>
+                    {hasFacility ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                        <Building2 className="h-3 w-3" />
+                        Facility
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                        <UserRound className="h-3 w-3" />
+                        Independent
+                      </span>
+                    )}
+                  </Td>
+
                   <Td>{typeLabel}</Td>
                   <Td>
                     <StatusPill value={enc.status} />
                   </Td>
                   <Td>
-                    {formatDateTime(
-                      enc.started_at || enc.created_at || "—"
-                    )}
+                    {formatDateTime(enc.started_at || enc.created_at || "—")}
                   </Td>
 
                   <td className="p-3 text-right text-sm">
@@ -274,30 +364,39 @@ function ProviderEncountersPageInner() {
                   {/* Actions */}
                   <td className="p-3 text-xs text-slate-800 text-right">
                     <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          setUpdateError("");
-                          setUpdatingId(enc.id);
-                          try {
-                            await closeEncounter(enc.id);
-                            router.refresh();
-                          } catch (err) {
-                            console.error("Close encounter failed", err);
-                            setUpdateError(
-                              err?.message ||
-                                "Failed to close encounter. Please try again."
-                            );
-                          } finally {
-                            setUpdatingId(null);
-                          }
-                        }}
-                        disabled={updatingId === enc.id}
-                        className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      <Link
+                        href={`/provider/encounters/${enc.id}`}
+                        className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
                       >
-                        {updatingId === enc.id ? "Closing…" : "Close"}
-                      </button>
-
+                        <ExternalLink className="h-3 w-3" />
+                        View
+                      </Link>
+                      
+                      {enc.status !== "CLOSED" && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setUpdateError("");
+                            setUpdatingId(enc.id);
+                            try {
+                              await closeEncounter(enc.id);
+                              router.refresh();
+                            } catch (err) {
+                              console.error("Close encounter failed", err);
+                              setUpdateError(
+                                err?.message ||
+                                  "Failed to close encounter. Please try again."
+                              );
+                            } finally {
+                              setUpdatingId(null);
+                            }
+                          }}
+                          disabled={updatingId === enc.id}
+                          className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {updatingId === enc.id ? "Closing…" : "Close"}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -306,7 +405,7 @@ function ProviderEncountersPageInner() {
 
             {!rows.length && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center">
+                <td colSpan={8} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>
@@ -314,8 +413,28 @@ function ProviderEncountersPageInner() {
                     No encounters found
                   </div>
                   <div className="mt-1 text-sm text-slate-500">
-                    Try adjusting search or status.
+                    {isIndependentProvider 
+                      ? "Start your first encounter from a patient or appointment."
+                      : "Try adjusting search or status filters."}
                   </div>
+                  {isIndependentProvider && (
+                    <div className="mt-4 flex justify-center gap-2">
+                      <Link
+                        href="/provider/patients"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                      >
+                        <UserRound className="h-3.5 w-3.5" />
+                        Go to Patients
+                      </Link>
+                      <Link
+                        href="/provider/appointments"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        Go to Appointments
+                      </Link>
+                    </div>
+                  )}
                 </td>
               </tr>
             )}
@@ -409,10 +528,12 @@ function StatusPill({ value }) {
   const v = String(value || "").toUpperCase();
   const map = {
     OPEN: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    IN_PROGRESS: "bg-blue-50 text-blue-700 ring-blue-200",
+    WAITING_LABS: "bg-amber-50 text-amber-700 ring-amber-200",
     CLOSED: "bg-slate-50 text-slate-700 ring-slate-200",
     CROSSED_OUT: "bg-rose-50 text-rose-700 ring-rose-200",
   };
-  const cls = map[v] || "bg-amber-50 text-amber-700 ring-amber-200";
+  const cls = map[v] || "bg-slate-50 text-slate-600 ring-slate-200";
   const label = v || "—";
   return (
     <span
