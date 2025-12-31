@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Megaphone, Loader2, RefreshCw, Link as LinkIcon } from "lucide-react";
+import { Megaphone, Loader2, RefreshCw, Link as LinkIcon, AlertCircle } from "lucide-react";
 
 import { apiFetch } from "@/lib/api";
 import { createAnnouncement, fetchAnnouncements } from "@/lib/notifications";
@@ -60,6 +60,7 @@ export default function FacilityAnnouncementsPanel() {
 
   const [announcements, setAnnouncements] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
+  const [listError, setListError] = useState(null);
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -85,7 +86,7 @@ export default function FacilityAnnouncementsPanel() {
       const data = await apiFetch("/accounts/me/", { method: "GET" });
       setMe(data);
     } catch (e) {
-      // ignore
+      console.error("Failed to load user profile:", e);
     } finally {
       setLoadingMe(false);
     }
@@ -93,14 +94,29 @@ export default function FacilityAnnouncementsPanel() {
 
   async function loadAnnouncements() {
     setLoadingList(true);
+    setListError(null);
     try {
+      console.log("Fetching announcements with params:", {
+        active: true,
+        current: true,
+        limit: 20,
+      });
+      
       const res = await fetchAnnouncements({
         active: true,
         current: true,
         limit: 20,
       });
-      setAnnouncements(normalizeList(res));
+      
+      console.log("Announcements API response:", res);
+      
+      const normalized = normalizeList(res);
+      console.log("Normalized announcements:", normalized);
+      
+      setAnnouncements(normalized);
     } catch (e) {
+      console.error("Failed to load announcements:", e);
+      setListError(e?.message || "Failed to load announcements");
       setAnnouncements([]);
     } finally {
       setLoadingList(false);
@@ -140,16 +156,23 @@ export default function FacilityAnnouncementsPanel() {
       audience_roles: audienceRoles,
     };
 
+    console.log("Creating announcement with payload:", payload);
+
     setSubmitting(true);
     try {
-      await createAnnouncement(payload);
+      const result = await createAnnouncement(payload);
+      console.log("Announcement created successfully:", result);
+      
       setTitle("");
       setBody("");
       setActionUrl("");
       setPriority("NORMAL");
-      setFlash({ type: "success", message: "Announcement sent." });
+      setFlash({ type: "success", message: "Announcement sent successfully." });
+      
+      // Reload announcements to show the new one
       await loadAnnouncements();
     } catch (err) {
+      console.error("Failed to create announcement:", err);
       setFlash({
         type: "error",
         message: err?.message || "Failed to send announcement.",
@@ -389,6 +412,17 @@ export default function FacilityAnnouncementsPanel() {
               </button>
             </div>
 
+            {/* Error state */}
+            {listError && (
+              <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Failed to load announcements</p>
+                  <p className="text-xs mt-1">{listError}</p>
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-2">
               {loadingList ? (
                 <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-500">
@@ -463,5 +497,3 @@ export default function FacilityAnnouncementsPanel() {
     </section>
   );
 }
-
-

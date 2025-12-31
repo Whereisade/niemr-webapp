@@ -201,20 +201,24 @@ function NotificationPreviewItem({ notification, onMarkRead, onClose }) {
       onClick={action_url ? handleClick : undefined}
     >
       <div className="flex items-start gap-3">
-        {/* Priority indicator */}
-        <div className="mt-1.5 flex-shrink-0">
-          <span
-            className={`block h-2 w-2 rounded-full ${priorityStyle.dot}`}
-            title={priority}
-          />
-        </div>
+        {/* Priority indicator - only show for unread notifications */}
+        {!is_read && (
+          <div className="mt-1.5 flex-shrink-0">
+            <span
+              className={`block h-2 w-2 rounded-full ${priorityStyle.dot}`}
+              title={priority}
+            />
+          </div>
+        )}
+        {/* Empty space placeholder when read to maintain alignment */}
+        {is_read && <div className="mt-1.5 w-2 flex-shrink-0" />}
 
         {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p
               className={`text-sm font-medium ${
-                is_read ? "text-slate-600" : "text-slate-900"
+                is_read ? "text-slate-500" : "text-slate-900"
               }`}
             >
               {title || "Notification"}
@@ -232,7 +236,9 @@ function NotificationPreviewItem({ notification, onMarkRead, onClose }) {
           </div>
 
           {body && (
-            <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{body}</p>
+            <p className={`mt-0.5 text-xs line-clamp-2 ${
+              is_read ? "text-slate-400" : "text-slate-500"
+            }`}>{body}</p>
           )}
 
           <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">

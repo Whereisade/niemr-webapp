@@ -15,7 +15,10 @@ import {
   Info,
   CheckCircle2,
   AlertCircle,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
+import { deleteDrug, clearPharmacyCatalog } from "@/lib/catalogActions";
 
 const STAFF_ROLES = ["SUPER_ADMIN", "ADMIN", "PHARMACY"];
 
@@ -37,6 +40,11 @@ export default function FacilityPharmacyCatalogPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState(null);
+
+  // Delete state
+  const [deleting, setDeleting] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [clearingCatalog, setClearingCatalog] = useState(false);
 
   // Simple create form state
   const [form, setForm] = useState({
@@ -203,6 +211,51 @@ export default function FacilityPharmacyCatalogPage() {
     }
   }
 
+  async function handleDelete(drugId) {
+    if (!window.confirm("Are you sure you want to delete this drug? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeleting(drugId);
+    setDeleteError("");
+
+    try {
+      await deleteDrug(drugId);
+      // Remove from local state
+      setDrugs((prev) => prev.filter((d) => d.id !== drugId));
+    } catch (err) {
+      console.error("Failed to delete drug", err);
+      setDeleteError(err?.message || "Failed to delete drug");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  async function handleClearCatalog() {
+    if (!window.confirm("⚠️ WARNING: This will delete ALL drugs in your catalog. This action cannot be undone. Are you absolutely sure?")) {
+      return;
+    }
+
+    // Double confirmation for destructive action
+    if (!window.confirm("This is your final confirmation. Click OK to permanently delete all drugs.")) {
+      return;
+    }
+
+    setClearingCatalog(true);
+    setDeleteError("");
+
+    try {
+      const result = await clearPharmacyCatalog();
+      setDrugs([]);
+      alert(result?.detail || "Catalog cleared successfully");
+    } catch (err) {
+      console.error("Failed to clear catalog", err);
+      setDeleteError(err?.message || "Failed to clear catalog");
+    } finally {
+      setClearingCatalog(false);
+    }
+  }
+
   // --- guards ---
 
   if (loadingMe) {
@@ -258,6 +311,17 @@ export default function FacilityPharmacyCatalogPage() {
           </p>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          {drugs.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearCatalog}
+              disabled={clearingCatalog}
+              className="inline-flex items-center justify-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {clearingCatalog ? "Clearing…" : "Clear Catalog"}
+            </button>
+          )}
           <Link
             href="/facility/pharmacy"
             className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -266,6 +330,26 @@ export default function FacilityPharmacyCatalogPage() {
           </Link>
         </div>
       </header>
+
+      {/* Delete error banner */}
+      {deleteError && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-rose-900">Delete failed</p>
+              <p className="mt-1 text-xs text-rose-800">{deleteError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDeleteError("")}
+              className="text-rose-600 hover:text-rose-800"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Column Requirements Info */}
       <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
@@ -360,6 +444,9 @@ export default function FacilityPharmacyCatalogPage() {
                     <th className="px-3 py-2 text-right font-semibold">
                       Unit price
                     </th>
+                    <th className="px-3 py-2 text-center font-semibold">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -385,12 +472,23 @@ export default function FacilityPharmacyCatalogPage() {
                         <td className="px-3 py-2 text-right text-xs text-slate-800">
                           {d.unit_price ?? 0}
                         </td>
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(d.id)}
+                            disabled={deleting === d.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            {deleting === d.id ? "Deleting…" : "Delete"}
+                          </button>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-3 py-6 text-center text-xs text-slate-500"
                       >
                         No drugs found. Import from file or add drugs manually.

@@ -865,11 +865,18 @@ export default async function FacilityDashboard() {
                 )}
 
                 {(isOwner || role === "LAB") && (
+                  <>
                   <QuickLink
                     href="/facility/labs?status=PENDING"
                     icon={FlaskConical}
                     label="Lab Orders"
                   />
+                  <QuickLink
+                    href="/facility/pharmacy"
+                    icon={Pill}
+                    label="Pharmacy"
+                  />
+                  </>
                 )}
 
                 {role === "PHARMACY" && (

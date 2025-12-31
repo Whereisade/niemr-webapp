@@ -21,6 +21,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Activity,
+  Eye,
+  Building,
 } from "lucide-react";
 
 
@@ -66,6 +68,7 @@ function FacilityEncountersPageInner() {
   const status = searchParams.get("status") || "";
   const search = searchParams.get("s") || "";
   const mine = searchParams.get("mine") === "1";
+  const view = searchParams.get("view") || "mine"; // "mine" or "all"
 
   // 🔹 Fetch current user for role-based header
   const [me, setMe] = useState(null);
@@ -113,6 +116,7 @@ function FacilityEncountersPageInner() {
     mine,
     search: search || undefined,
     scope: "facility",
+    view: view || undefined,
   });
 
   const [rows, setRows] = useState([]);
@@ -152,16 +156,25 @@ function FacilityEncountersPageInner() {
   ).length;
   const closedCount = rows.filter((e) => e.status === "CLOSED").length;
 
-  // 🔹 Determine header text based on role
+  // 🔹 Determine header text based on role and view
   const meRole = (me?.role || "").toUpperCase();
-  const headerTitle = meRole === "DOCTOR"
-    ? "My Encounters"
-    : meRole === "NURSE"
+  const isDoctor = meRole === "DOCTOR";
+  const isNurse = meRole === "NURSE";
+  
+  // Header title changes based on view for doctors
+  const headerTitle = isDoctor
+    ? view === "all" 
+      ? "All Facility Encounters"
+      : "My Encounters"
+    : isNurse
       ? "Nurse Encounters"
       : "Facility Encounters";
-  const headerSubtitle = meRole === "DOCTOR"
-    ? "Your completed and ongoing clinical encounters."
-    : meRole === "NURSE"
+  
+  const headerSubtitle = isDoctor
+    ? view === "all"
+      ? "All clinical encounters across the facility."
+      : "Your completed and ongoing clinical encounters."
+    : isNurse
       ? "View and assign all clinical encounters."
       : "View all encounters created under this facility, across all providers.";
 
@@ -175,6 +188,11 @@ function FacilityEncountersPageInner() {
       }
     });
     router.push(`${pathname}?${sp.toString()}`);
+  }
+
+  function toggleView() {
+    const newView = view === "mine" ? "all" : "mine";
+    setQuery({ view: newView, page: 1 });
   }
 
   async function handleDownload(encounterId) {
@@ -216,7 +234,7 @@ function FacilityEncountersPageInner() {
             <Stethoscope className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">
+            <h1 className="text-3xl font-semibold text-slate-900">
               {headerTitle}
             </h1>
             <p className="text-xs text-slate-500">
@@ -225,9 +243,44 @@ function FacilityEncountersPageInner() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Building2 className="mr-1 h-4 w-4" />
-          {meRole === "DOCTOR" ? "Personal view" : meRole === "NURSE" ? "Clinical view" : "Facility-wide view"}
+        <div className="flex items-center gap-3">
+          {/* 🆕 View Toggle Button for Doctors */}
+          {isDoctor && (
+            <button
+              onClick={toggleView}
+              className={`
+                inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition-all
+                ${view === "mine"
+                  ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }
+              `}
+            >
+              {view === "mine" ? (
+                <>
+                  <Eye className="h-4 w-4" />
+                  Viewing: My Encounters
+                </>
+              ) : (
+                <>
+                  <Building className="h-4 w-4" />
+                  Viewing: All Facility
+                </>
+              )}
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Building2 className="mr-1 h-4 w-4" />
+            {isDoctor 
+              ? view === "all" 
+                ? "Facility-wide view" 
+                : "Personal view" 
+              : isNurse 
+                ? "Clinical view" 
+                : "Facility-wide view"
+            }
+          </div>
         </div>
       </header>
 
@@ -534,7 +587,10 @@ function FacilityEncountersPageInner() {
                     colSpan={9}
                     className="p-4 text-center text-sm text-slate-500"
                   >
-                    No encounters found for this facility.
+                    {isDoctor && view === "mine"
+                      ? "No encounters assigned to you yet."
+                      : "No encounters found for this facility."
+                    }
                   </td>
                 </tr>
               )}

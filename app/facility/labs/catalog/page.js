@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { deleteLabTest, clearLabCatalog } from "@/lib/catalogActions";
 import { 
   Beaker, 
   Plus, 
@@ -13,7 +14,9 @@ import {
   FileText,
   Info,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 function normalizeTests(body) {
@@ -36,6 +39,11 @@ export default function FacilityLabCatalogPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState("");
+
+  // Delete state
+  const [deleting, setDeleting] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [clearingCatalog, setClearingCatalog] = useState(false);
 
   const [form, setForm] = useState({
     code: "",
@@ -155,6 +163,51 @@ export default function FacilityLabCatalogPage() {
     }
   }
 
+  async function handleDelete(testId) {
+    if (!window.confirm("Are you sure you want to delete this test? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeleting(testId);
+    setDeleteError("");
+
+    try {
+      await deleteLabTest(testId);
+      // Remove from local state
+      setTests((prev) => prev.filter((t) => t.id !== testId));
+    } catch (err) {
+      console.error("Failed to delete lab test", err);
+      setDeleteError(err?.message || "Failed to delete lab test");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  async function handleClearCatalog() {
+    if (!window.confirm("⚠️ WARNING: This will delete ALL tests in your catalog. This action cannot be undone. Are you absolutely sure?")) {
+      return;
+    }
+
+    // Double confirmation for destructive action
+    if (!window.confirm("This is your final confirmation. Click OK to permanently delete all lab tests.")) {
+      return;
+    }
+
+    setClearingCatalog(true);
+    setDeleteError("");
+
+    try {
+      const result = await clearLabCatalog();
+      setTests([]);
+      alert(result?.detail || "Catalog cleared successfully");
+    } catch (err) {
+      console.error("Failed to clear catalog", err);
+      setDeleteError(err?.message || "Failed to clear catalog");
+    } finally {
+      setClearingCatalog(false);
+    }
+  }
+
   const filteredTests = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return tests;
@@ -210,6 +263,18 @@ export default function FacilityLabCatalogPage() {
               {loading ? "Refreshing…" : "Refresh"}
             </button>
 
+            {tests.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearCatalog}
+                disabled={clearingCatalog}
+                className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-medium text-rose-700 shadow-sm hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <AlertTriangle className="h-3 w-3" />
+                {clearingCatalog ? "Clearing…" : "Clear Catalog"}
+              </button>
+            )}
+
             <Link
               href="/facility/labs"
               className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-medium text-slate-100 shadow-sm hover:bg-slate-800"
@@ -218,6 +283,26 @@ export default function FacilityLabCatalogPage() {
             </Link>
           </div>
         </header>
+
+        {/* Delete error banner */}
+        {deleteError && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-rose-900">Delete failed</p>
+                <p className="mt-1 text-xs text-rose-800">{deleteError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteError("")}
+                className="text-rose-600 hover:text-rose-800"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Column Requirements Info */}
         <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
@@ -575,13 +660,16 @@ export default function FacilityLabCatalogPage() {
                     <th className="px-3 py-2 text-center font-medium">
                       Active
                     </th>
+                    <th className="px-3 py-2 text-center font-medium">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredTests.length === 0 && !loading ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="px-3 py-6 text-center text-[11px] text-slate-500"
                       >
                         No lab tests found. Import from file or add tests manually.
@@ -619,6 +707,17 @@ export default function FacilityLabCatalogPage() {
                           >
                             {t.is_active ? "Active" : "Inactive"}
                           </span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(t.id)}
+                            disabled={deleting === t.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            {deleting === t.id ? "Deleting…" : "Delete"}
+                          </button>
                         </td>
                       </tr>
                     ))

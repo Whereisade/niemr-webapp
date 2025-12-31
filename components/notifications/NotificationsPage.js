@@ -633,13 +633,17 @@ function NotificationItem({
           />
         )}
 
-        {/* Priority indicator */}
-        <div className="mt-1.5 flex-shrink-0">
-          <span
-            className={`block h-2.5 w-2.5 rounded-full ${priorityStyle.dot}`}
-            title={priority}
-          />
-        </div>
+        {/* Priority indicator - only show for unread notifications */}
+        {!is_read && (
+          <div className="mt-1.5 flex-shrink-0">
+            <span
+              className={`block h-2.5 w-2.5 rounded-full ${priorityStyle.dot}`}
+              title={priority}
+            />
+          </div>
+        )}
+        {/* Empty space placeholder when read to maintain alignment */}
+        {is_read && <div className="mt-1.5 w-2.5 flex-shrink-0" />}
 
         {/* Content */}
         <div className="min-w-0 flex-1">
@@ -647,13 +651,15 @@ function NotificationItem({
             <div className="min-w-0 flex-1">
               <p
                 className={`text-sm font-medium ${
-                  is_read ? "text-slate-600" : "text-slate-900"
+                  is_read ? "text-slate-500" : "text-slate-900"
                 } ${is_expired ? "line-through opacity-60" : ""}`}
               >
                 {title || "Notification"}
               </p>
               {body && (
-                <p className="mt-1 text-sm text-slate-600 line-clamp-2">{body}</p>
+                <p className={`mt-1 text-sm line-clamp-2 ${
+                  is_read ? "text-slate-400" : "text-slate-600"
+                }`}>{body}</p>
               )}
             </div>
 
@@ -716,14 +722,18 @@ function NotificationItem({
               </span>
             )}
             <span className="text-slate-400">·</span>
-            <span className="text-slate-500">{timeDisplay}</span>
+            <span className={is_read ? "text-slate-400" : "text-slate-500"}>
+              {timeDisplay}
+            </span>
 
             {action_url && (
               <>
                 <span className="text-slate-400">·</span>
                 <a
                   href={action_url}
-                  className="font-medium text-blue-600 hover:text-blue-700"
+                  className={`font-medium ${
+                    is_read ? "text-blue-500 hover:text-blue-600" : "text-blue-600 hover:text-blue-700"
+                  }`}
                 >
                   Open
                 </a>
