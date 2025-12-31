@@ -643,7 +643,7 @@ export default function FacilityEncounterClinicalPage() {
     router.push(`/facility/encounters/${encounterId}/workflow/labs`);
   }
 
-  async function handleCreateCorrection({ section, reason, content, files }) {
+  async function handleCreateCorrection({ section, reason, content, files, amendment_type }) {
     if (!encounterId) throw new Error("encounterId is required");
 
     // Backend enforces lock before accepting corrections.
@@ -651,6 +651,7 @@ export default function FacilityEncounterClinicalPage() {
       section,
       reason,
       content,
+      amendment_type,
     });
 
     const createdId = created?.id;
