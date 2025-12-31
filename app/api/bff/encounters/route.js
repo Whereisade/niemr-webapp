@@ -1,4 +1,6 @@
-// app/api/bff/encounters/route.js
+// app/api/bff/encounters/route.js - PATCHED VERSION
+// ✅ Clean pass-through to Django API
+// Works for both facility-based and independent provider encounters
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
@@ -51,17 +53,13 @@ export async function GET(req) {
       payload = { detail: text };
     }
 
-    // 5) Always respond with JSON + debug flags (handy if anything goes wrong)
+    // 5) ✅ PATCHED: Clean response without debug fields
+    // Pass through Django response exactly as-is
+    // This ensures both facility and independent provider encounters work identically
     return NextResponse.json(
-      {
-        ...(typeof payload === "object" && payload !== null
-          ? payload
-          : { detail: String(payload) }),
-        _debug_status_from_backend: backendRes.status,
-        _debug_had_access_token: Boolean(access),
-        _debug_auth_header_sent: headers.get("Authorization") || null,
-        _debug_backend_url: target,
-      },
+      typeof payload === "object" && payload !== null
+        ? payload
+        : { detail: String(payload) },
       { status: backendRes.status }
     );
   } catch (err) {
