@@ -17,6 +17,8 @@ import {
   AlertCircle,
   Trash2,
   AlertTriangle,
+  Edit2,
+  X,
 } from "lucide-react";
 import { deleteDrug, clearPharmacyCatalog } from "@/lib/catalogActions";
 
@@ -45,6 +47,20 @@ export default function FacilityPharmacyCatalogPage() {
   const [deleting, setDeleting] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [clearingCatalog, setClearingCatalog] = useState(false);
+
+  // Edit state
+  const [editingDrug, setEditingDrug] = useState(null);
+  const [editForm, setEditForm] = useState({
+    code: "",
+    name: "",
+    strength: "",
+    form: "",
+    route: "",
+    qty_per_unit: 1,
+    unit_price: "",
+  });
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState(null);
 
   // Simple create form state
   const [form, setForm] = useState({
@@ -253,6 +269,75 @@ export default function FacilityPharmacyCatalogPage() {
       setDeleteError(err?.message || "Failed to clear catalog");
     } finally {
       setClearingCatalog(false);
+    }
+  }
+
+  function openEditModal(drug) {
+    setEditingDrug(drug);
+    setEditForm({
+      code: drug.code || "",
+      name: drug.name || "",
+      strength: drug.strength || "",
+      form: drug.form || "",
+      route: drug.route || "",
+      qty_per_unit: drug.qty_per_unit || 1,
+      unit_price: drug.unit_price || "",
+    });
+    setUpdateError(null);
+  }
+
+  function closeEditModal() {
+    setEditingDrug(null);
+    setEditForm({
+      code: "",
+      name: "",
+      strength: "",
+      form: "",
+      route: "",
+      qty_per_unit: 1,
+      unit_price: "",
+    });
+    setUpdateError(null);
+  }
+
+  async function handleUpdate(e) {
+    e.preventDefault();
+    if (!editingDrug) return;
+
+    setUpdateError(null);
+    setUpdating(true);
+
+    try {
+      const payload = {
+        ...editForm,
+        qty_per_unit: Number(editForm.qty_per_unit) || 1,
+        unit_price: editForm.unit_price || "0",
+        is_active: true,
+      };
+
+      const res = await fetch(`/api/proxy/pharmacy/catalog/${editingDrug.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let msg = `Failed to update drug (${res.status})`;
+        try {
+          const err = await res.json();
+          if (err && (err.detail || err.non_field_errors)) {
+            msg = err.detail || err.non_field_errors.join(", ");
+          }
+        } catch {}
+        throw new Error(msg);
+      }
+
+      await loadDrugs();
+      closeEditModal();
+    } catch (err) {
+      setUpdateError(err.message || "Failed to update drug.");
+    } finally {
+      setUpdating(false);
     }
   }
 
@@ -470,18 +555,28 @@ export default function FacilityPharmacyCatalogPage() {
                           {d.route ? `· ${d.route}` : ""}
                         </td>
                         <td className="px-3 py-2 text-right text-xs text-slate-800">
-                          {d.unit_price ?? 0}
+                          ₦{Number(d.unit_price ?? 0).toLocaleString()}
                         </td>
                         <td className="px-3 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(d.id)}
-                            disabled={deleting === d.id}
-                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            {deleting === d.id ? "Deleting…" : "Delete"}
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(d)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(d.id)}
+                              disabled={deleting === d.id}
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              {deleting === d.id ? "Deleting…" : "Delete"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -762,6 +857,190 @@ export default function FacilityPharmacyCatalogPage() {
           </div>
         </div>
       </section>
+
+      {/* Edit Drug Modal */}
+      {editingDrug && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6">
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-sky-50 to-indigo-50 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-sky-600">
+                  <Edit2 className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Edit Drug
+                  </div>
+                  <div className="text-lg font-bold text-slate-900">
+                    {editingDrug.name}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditModal}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <form onSubmit={handleUpdate} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Code<span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      required
+                      value={editForm.code}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, code: e.target.value }))
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Name<span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      required
+                      value={editForm.name}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Strength
+                    </label>
+                    <input
+                      value={editForm.strength}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, strength: e.target.value }))
+                      }
+                      placeholder="e.g. 500mg"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Form
+                    </label>
+                    <input
+                      value={editForm.form}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, form: e.target.value }))
+                      }
+                      placeholder="e.g. Tablet"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Route
+                    </label>
+                    <input
+                      value={editForm.route}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, route: e.target.value }))
+                      }
+                      placeholder="e.g. Oral"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Qty per unit
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={editForm.qty_per_unit}
+                      onChange={(e) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          qty_per_unit: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Unit price<span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      required
+                      value={editForm.unit_price}
+                      onChange={(e) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          unit_price: e.target.value,
+                        }))
+                      }
+                      placeholder="e.g. 250"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                </div>
+
+                {updateError && (
+                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-rose-900">Update failed</p>
+                      <p className="mt-1 text-xs text-rose-800">{updateError}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeEditModal}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updating}
+                    className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    {updating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Updating…
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

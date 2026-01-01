@@ -103,6 +103,8 @@ export default function PatientNewAppointmentPage() {
   // Search states for dropdowns
   const [facilitySearch, setFacilitySearch] = useState("");
   const [providerSearch, setProviderSearch] = useState("");
+  const [labTestSearch, setLabTestSearch] = useState("");
+  const [pharmacyDrugSearch, setPharmacyDrugSearch] = useState("");
 
   // Dependents data
   const [dependents, setDependents] = useState([]);
@@ -1000,30 +1002,58 @@ export default function PatientNewAppointmentPage() {
                       </div>
                     ) : labTests.length > 0 ? (
                       <>
-                        <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-                          {labTests.map((test) => (
-                            <label
-                              key={test.id}
-                              className="flex items-center gap-2 rounded-lg bg-white p-2 hover:bg-blue-50 cursor-pointer transition"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedLabTests.includes(test.id)}
-                                onChange={() => handleLabTestToggle(test.id)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <div className="flex-1">
-                                <span className="text-sm font-medium text-slate-900">
-                                  {test.name || test.test_name || `Test #${test.id}`}
-                                </span>
-                                {test.description && (
-                                  <p className="mt-0.5 text-xs text-slate-500 line-clamp-1">
-                                    {test.description}
-                                  </p>
-                                )}
-                              </div>
-                            </label>
-                          ))}
+                        {/* Search input */}
+                        <input
+                          type="text"
+                          placeholder="Search lab tests..."
+                          value={labTestSearch}
+                          onChange={(e) => setLabTestSearch(e.target.value)}
+                          className="w-full rounded-t-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 mb-0"
+                        />
+                        
+                        <div className="max-h-48 overflow-y-auto rounded-b-lg border border-t-0 border-slate-200 bg-slate-50 p-3 space-y-2">
+                          {labTests
+                            .filter((test) => {
+                              if (!labTestSearch) return true;
+                              const searchLower = labTestSearch.toLowerCase();
+                              const name = (test.name || test.test_name || "").toLowerCase();
+                              const description = (test.description || "").toLowerCase();
+                              return name.includes(searchLower) || description.includes(searchLower);
+                            })
+                            .map((test) => (
+                              <label
+                                key={test.id}
+                                className="flex items-center gap-2 rounded-lg bg-white p-2 hover:bg-blue-50 cursor-pointer transition"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedLabTests.includes(test.id)}
+                                  onChange={() => handleLabTestToggle(test.id)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div className="flex-1">
+                                  <span className="text-sm font-medium text-slate-900">
+                                    {test.name || test.test_name || `Test #${test.id}`}
+                                  </span>
+                                  {test.description && (
+                                    <p className="mt-0.5 text-xs text-slate-500 line-clamp-1">
+                                      {test.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          {labTests.filter((test) => {
+                            if (!labTestSearch) return true;
+                            const searchLower = labTestSearch.toLowerCase();
+                            const name = (test.name || test.test_name || "").toLowerCase();
+                            const description = (test.description || "").toLowerCase();
+                            return name.includes(searchLower) || description.includes(searchLower);
+                          }).length === 0 && (
+                            <div className="px-3 py-2 text-sm text-slate-500 text-center">
+                              No lab tests found matching "{labTestSearch}"
+                            </div>
+                          )}
                         </div>
                         {selectedLabTests.length > 0 && (
                           <div className="mt-2 flex items-center gap-2">
@@ -1070,30 +1100,60 @@ export default function PatientNewAppointmentPage() {
                       </div>
                     ) : pharmacyDrugs.length > 0 ? (
                       <>
-                        <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-                          {pharmacyDrugs.map((drug) => (
-                            <label
-                              key={drug.id}
-                              className="flex items-center gap-2 rounded-lg bg-white p-2 hover:bg-blue-50 cursor-pointer transition"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedPharmacyDrugs.includes(drug.id)}
-                                onChange={() => handlePharmacyDrugToggle(drug.id)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <div className="flex-1">
-                                <span className="text-sm font-medium text-slate-900">
-                                  {drug.name || `Drug #${drug.id}`}
-                                </span>
-                                {(drug.strength || drug.form) && (
-                                  <p className="mt-0.5 text-xs text-slate-500">
-                                    {[drug.strength, drug.form].filter(Boolean).join(" • ")}
-                                  </p>
-                                )}
-                              </div>
-                            </label>
-                          ))}
+                        {/* Search input */}
+                        <input
+                          type="text"
+                          placeholder="Search medications..."
+                          value={pharmacyDrugSearch}
+                          onChange={(e) => setPharmacyDrugSearch(e.target.value)}
+                          className="w-full rounded-t-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 mb-0"
+                        />
+                        
+                        <div className="max-h-48 overflow-y-auto rounded-b-lg border border-t-0 border-slate-200 bg-slate-50 p-3 space-y-2">
+                          {pharmacyDrugs
+                            .filter((drug) => {
+                              if (!pharmacyDrugSearch) return true;
+                              const searchLower = pharmacyDrugSearch.toLowerCase();
+                              const name = (drug.name || "").toLowerCase();
+                              const strength = (drug.strength || "").toLowerCase();
+                              const form = (drug.form || "").toLowerCase();
+                              return name.includes(searchLower) || strength.includes(searchLower) || form.includes(searchLower);
+                            })
+                            .map((drug) => (
+                              <label
+                                key={drug.id}
+                                className="flex items-center gap-2 rounded-lg bg-white p-2 hover:bg-blue-50 cursor-pointer transition"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPharmacyDrugs.includes(drug.id)}
+                                  onChange={() => handlePharmacyDrugToggle(drug.id)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div className="flex-1">
+                                  <span className="text-sm font-medium text-slate-900">
+                                    {drug.name || `Drug #${drug.id}`}
+                                  </span>
+                                  {(drug.strength || drug.form) && (
+                                    <p className="mt-0.5 text-xs text-slate-500">
+                                      {[drug.strength, drug.form].filter(Boolean).join(" • ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          {pharmacyDrugs.filter((drug) => {
+                            if (!pharmacyDrugSearch) return true;
+                            const searchLower = pharmacyDrugSearch.toLowerCase();
+                            const name = (drug.name || "").toLowerCase();
+                            const strength = (drug.strength || "").toLowerCase();
+                            const form = (drug.form || "").toLowerCase();
+                            return name.includes(searchLower) || strength.includes(searchLower) || form.includes(searchLower);
+                          }).length === 0 && (
+                            <div className="px-3 py-2 text-sm text-slate-500 text-center">
+                              No medications found matching "{pharmacyDrugSearch}"
+                            </div>
+                          )}
                         </div>
                         {selectedPharmacyDrugs.length > 0 && (
                           <div className="mt-2 flex items-center gap-2">
@@ -1390,7 +1450,7 @@ export default function PatientNewAppointmentPage() {
                 <ul className="list-disc space-y-1 pl-4">
                   <li>Choose the type of provider you need</li>
                   <li>Select from available providers</li>
-                  {providerType === "LAB" && (
+                  {providerType === "LAB_SCIENTIST" && (
                     <li>Pick the specific lab tests you need</li>
                   )}
                   <li>Your patient profile is linked automatically</li>
