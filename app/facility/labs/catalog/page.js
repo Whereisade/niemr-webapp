@@ -17,6 +17,9 @@ import {
   AlertCircle,
   Trash2,
   AlertTriangle,
+  Edit2,
+  X,
+  Check,
 } from "lucide-react";
 
 function normalizeTests(body) {
@@ -44,6 +47,12 @@ export default function FacilityLabCatalogPage() {
   const [deleting, setDeleting] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [clearingCatalog, setClearingCatalog] = useState(false);
+
+  // Edit price state
+  const [editingTestId, setEditingTestId] = useState(null);
+  const [editPrice, setEditPrice] = useState("");
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState("");
 
   const [form, setForm] = useState({
     code: "",
@@ -208,6 +217,57 @@ export default function FacilityLabCatalogPage() {
     }
   }
 
+  function startEditPrice(test) {
+    setEditingTestId(test.id);
+    setEditPrice(String(test.price || ""));
+    setUpdateError("");
+  }
+
+  function cancelEditPrice() {
+    setEditingTestId(null);
+    setEditPrice("");
+    setUpdateError("");
+  }
+
+  async function savePrice(testId) {
+    const priceValue = editPrice.trim();
+    
+    // Validate price
+    if (!priceValue || isNaN(priceValue) || Number(priceValue) < 0) {
+      setUpdateError("Please enter a valid price (0 or greater)");
+      return;
+    }
+
+    setUpdating(true);
+    setUpdateError("");
+
+    try {
+      const updated = await apiFetch(`/labs/catalog/${testId}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          price: priceValue,
+        }),
+      });
+
+      // Update in local state
+      setTests((prev) =>
+        prev.map((t) => (t.id === testId ? { ...t, price: updated.price } : t))
+      );
+
+      // Clear edit state
+      setEditingTestId(null);
+      setEditPrice("");
+    } catch (err) {
+      console.error("Failed to update price", err);
+      setUpdateError(err?.message || "Failed to update price");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   const filteredTests = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return tests;
@@ -296,6 +356,26 @@ export default function FacilityLabCatalogPage() {
               <button
                 type="button"
                 onClick={() => setDeleteError("")}
+                className="text-rose-600 hover:text-rose-800"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Update error banner */}
+        {updateError && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-rose-900">Update failed</p>
+                <p className="mt-1 text-xs text-rose-800">{updateError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUpdateError("")}
                 className="text-rose-600 hover:text-rose-800"
               >
                 ×
@@ -679,7 +759,7 @@ export default function FacilityLabCatalogPage() {
                     filteredTests.map((t) => (
                       <tr
                         key={t.id || t.code}
-                        className="border-b border-slate-50 last:border-b-0"
+                        className="group border-b border-slate-50 last:border-b-0 hover:bg-slate-50"
                       >
                         <td className="px-3 py-2 font-mono text-[11px] text-slate-800">
                           {t.code}
@@ -694,8 +774,60 @@ export default function FacilityLabCatalogPage() {
                         <td className="px-3 py-2 text-center text-slate-700">
                           {t.ref_high ?? "—"}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-900">
-                          {t.price ?? 0}
+                        <td className="px-3 py-2 text-right">
+                          {editingTestId === t.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={editPrice}
+                                onChange={(e) => setEditPrice(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    savePrice(t.id);
+                                  } else if (e.key === "Escape") {
+                                    cancelEditPrice();
+                                  }
+                                }}
+                                className="w-20 rounded border border-sky-300 bg-sky-50 px-2 py-1 text-xs text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                autoFocus
+                                disabled={updating}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => savePrice(t.id)}
+                                disabled={updating}
+                                className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 p-1 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                                title="Save"
+                              >
+                                <Check className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditPrice}
+                                disabled={updating}
+                                className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                                title="Cancel"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-slate-900">
+                                {t.price ?? 0}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => startEditPrice(t)}
+                                className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-400 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+                                title="Edit price"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-center">
                           <span
