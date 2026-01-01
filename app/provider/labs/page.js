@@ -1,33 +1,37 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useLabOrders } from "@/lib/useLabOrders";
+import { apiFetch } from "@/lib/api";
 import { downloadLabPdf } from "@/lib/reports";
-import {
-  markLabOrderCollected,
-  cancelLabOrder,
-} from "@/lib/labsStatusActions";
+import { markLabOrderCollected } from "@/lib/labsStatusActions";
 import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
 import LabOrderAttachmentsModal from "@/components/labs/LabOrderAttachmentsModal";
+import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 import {
   FlaskConical,
+  Search,
   Filter,
-  UsersRound,
+  Clock,
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+  RefreshCw,
+  CheckCircle2,
+  Building2,
+  UserRound,
+  DownloadCloud,
   Activity,
   ClipboardList,
   Hourglass,
-  ArrowLeft,
-  ArrowRight,
 } from "lucide-react";
-import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
 
-export default function ProviderLabOrdersPage(props) {
+export default function IndependentLabOrdersPage(props) {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
-      <ProviderLabOrdersPageInner {...props} />
+      <IndependentLabOrdersPageInner {...props} />
     </Suspense>
   );
 }
@@ -43,7 +47,22 @@ function formatDateTime(value) {
   }
 }
 
-function ProviderLabOrdersPageInner() {
+function normalizeList(body) {
+  if (!body) return [];
+  if (Array.isArray(body?.results)) return body.results;
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === "object") {
+    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      return numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => body[k]);
+    }
+  }
+  return [];
+}
+
+function IndependentLabOrdersPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -51,505 +70,487 @@ function ProviderLabOrdersPageInner() {
   const page = Number(sp.get("page") || 1);
   const limit = Number(sp.get("limit") || 20);
   const status = sp.get("status") || "";
-  const patient = sp.get("patient") || "";
   const s = sp.get("s") || "";
 
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [orders, setOrders] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  // Backend scopes by facility / role in LabOrderViewSet.get_queryset()
-  const { data, error, isLoading } = useLabOrders({
-    page,
-    limit,
-    status,
-    patient,
-    s,
-    refreshKey,
-  });
-
-  const [downloadingId, setDownloadingId] = useState(null);
-
-  // modal state for lab order details
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [detailsOrderId, setDetailsOrderId] = useState(null);
-
-  // attachments modal state
-  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
-  const [attachmentsOrderId, setAttachmentsOrderId] = useState(null);
-
-  // current user (for role gating)
   const [me, setMe] = useState(null);
   const [meLoading, setMeLoading] = useState(true);
 
+  const [collectingId, setCollectingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  // Modal state
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOrderId, setDetailsOrderId] = useState(null);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [attachmentsOrderId, setAttachmentsOrderId] = useState(null);
+
+  // Load current user
   useEffect(() => {
     let cancelled = false;
-
     async function loadMe() {
       try {
         const res = await fetch("/api/proxy/accounts/me/", {
           method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
+          headers: { Accept: "application/json" },
         });
-        if (!res.ok) {
-          throw new Error("Failed to load current user");
-        }
+        if (!res.ok) throw new Error("Failed to load user");
         const json = await res.json();
-        if (!cancelled) {
-          setMe(json);
-        }
-      } catch (err) {
-        console.error(
-          "Failed to fetch /accounts/me/ in provider labs page:",
-          err
-        );
-        if (!cancelled) {
-          setMe(null);
-        }
+        if (!cancelled) setMe(json);
+      } catch {
+        if (!cancelled) setMe(null);
       } finally {
-        if (!cancelled) {
-          setMeLoading(false);
-        }
+        if (!cancelled) setMeLoading(false);
       }
     }
-
     loadMe();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const meRole = (me?.role || "").toUpperCase();
-  const canCollect =
-    meRole === "LAB" || meRole === "ADMIN" || meRole === "SUPER_ADMIN";
-  const canCancel =
-    meRole === "DOCTOR" ||
-    meRole === "NURSE" ||
-    meRole === "ADMIN" ||
-    meRole === "SUPER_ADMIN";
+  const isLabRole = meRole === "LAB";
 
-  const reload = () => setRefreshKey((k) => k + 1);
+  // Load orders
+  async function loadOrders() {
+    setLoading(true);
+    setError("");
+    try {
+      const qs = new URLSearchParams();
+      qs.set("page", String(page));
+      qs.set("limit", String(limit));
+      if (status) qs.set("status", status);
+      if (s) qs.set("s", s);
 
-  // Normalize data into a proper rows array (handles BFF numeric-key object)
-  let rows = [];
-
-  if (Array.isArray(data?.results)) {
-    rows = data.results;
-  } else if (Array.isArray(data)) {
-    rows = data;
-  } else if (data && typeof data === "object") {
-    const numericKeys = Object.keys(data).filter((k) => /^\d+$/.test(k));
-    if (numericKeys.length) {
-      rows = numericKeys
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => data[k]);
+      const res = await apiFetch(`/labs/orders/?${qs.toString()}`, { method: "GET" });
+      const items = normalizeList(res);
+      setOrders(items);
+      setTotal(res?.count ?? items.length);
+    } catch (err) {
+      setError(err?.message || "Failed to load lab orders.");
+      setOrders([]);
+    } finally {
+      setLoading(false);
     }
   }
 
-  const total = Number(data?.count ?? rows.length);
+  useEffect(() => {
+    loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit, status, s]);
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
     Object.entries(patch).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") params.delete(k);
-      else params.set(k, String(v));
+      if (v === undefined || v === null || v === "") {
+        params.delete(k);
+      } else {
+        params.set(k, String(v));
+      }
     });
-    if ("status" in patch || "patient" in patch || "s" in patch) {
+    if ("status" in patch || "s" in patch || "limit" in patch) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  async function handleDownload(order) {
-    if (!order?.id) {
-      alert("Missing lab id for report.");
-      return;
+  async function handleCollect(orderId) {
+    if (!orderId) return;
+    setCollectingId(orderId);
+    try {
+      await markLabOrderCollected(orderId);
+      await loadOrders();
+    } catch (err) {
+      alert(err?.message || "Failed to mark samples collected.");
+    } finally {
+      setCollectingId(null);
     }
+  }
+
+  async function handleDownload(order) {
+    if (!order?.id) return;
     try {
       setDownloadingId(order.id);
       await downloadLabPdf(order.id);
     } catch (err) {
       console.error("Download lab report failed", err);
-      alert(
-        err?.message || "Failed to download lab report. Please try again."
-      );
+      alert(err?.message || "Failed to download lab report.");
     } finally {
       setDownloadingId(null);
     }
   }
 
-  if (isLoading && !data) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="mb-4 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-          Lab Orders
-        </h1>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="-mt-6 mb-4 h-1.5 w-full rounded-t-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-          <p className="text-slate-500">Loading lab orders…</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <h1 className="mb-4 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-          Lab Orders
-        </h1>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
-        </div>
-      </main>
-    );
-  }
-
   // Quick stats
-  const uniquePatients = new Set(
-    rows.map((r) => r.patient_name || r.patient)
-  ).size;
-  const pendingOnPage = rows.filter(
-    (r) => String(r.status || "").toUpperCase() === "PENDING"
-  ).length;
+  const pendingCount = orders.filter((o) => String(o.status || "").toUpperCase() === "PENDING").length;
+  const inProgressCount = orders.filter((o) => String(o.status || "").toUpperCase() === "IN_PROGRESS").length;
+  const completedCount = orders.filter((o) => String(o.status || "").toUpperCase() === "COMPLETED").length;
+  const uniqueFacilities = new Set(orders.map((o) => o.facility_name || o.facility)).size;
+
+  if (meLoading) {
+    return (
+      <main className="mx-auto max-w-7xl p-6 md:p-10">
+        <div className="flex items-center gap-2 text-slate-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
+      </main>
+    );
+  }
+
+  if (!isLabRole) {
+    return (
+      <main className="mx-auto max-w-7xl p-6 md:p-10">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+          <h1 className="text-lg font-semibold text-amber-900">Access Restricted</h1>
+          <p className="mt-2 text-sm text-amber-800">
+            This page is for independent lab scientists. Your current role is: <strong>{me?.role || "Unknown"}</strong>
+          </p>
+          <Link
+            href="/"
+            className="mt-4 inline-flex items-center gap-1 rounded-full bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+          >
+            Go to Dashboard
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
-      {/* Header + top actions */}
+    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
+      {/* Background accents */}
+      <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-teal-100 blur-3xl opacity-60" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-cyan-100 blur-3xl opacity-60" />
+
+      {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
+          <div className="inline-flex items-center gap-2 rounded-full bg-teal-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-teal-700">
             <FlaskConical className="h-3.5 w-3.5" />
-            Provider Lab Orders
+            Independent Lab Worklist
           </div>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-            Lab orders for patients in my care
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+            Lab Orders Assigned to You
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Filter by patient, status, or search text and track order progress.
+          <p className="mt-1 text-sm text-slate-600">
+            View and process lab orders outsourced to your independent lab practice.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {/* New order button - now available for all provider roles including LAB */}
-          <Link
-            href="/provider/labs/new"
-            className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={loadOrders}
+            disabled={loading}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            New lab order
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+
+          <Link
+            href="/provider/labs/catalog"
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Lab Catalog
           </Link>
-          {meRole === "LAB" ? (
-            <Link
-              href="/provider/labs/catalog"
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-            >
-              Lab catalog
-            </Link>
-          ) : null}
         </div>
       </header>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative">
-          <input
-            type="search"
-            placeholder="Search tests / notes…"
-            defaultValue={s}
-            onBlur={(e) => updateQuery({ s: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
-          />
-          <Activity className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        </div>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Filter by patient ID…"
-            defaultValue={patient}
-            onBlur={(e) => updateQuery({ patient: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-56"
-          />
-          <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        </div>
-        <select
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-40"
-          value={status}
-          onChange={(e) => updateQuery({ status: e.target.value })}
-        >
-          <option value="">All statuses</option>
-          <option value="PENDING">Pending</option>
-          <option value="COLLECTED">Collected</option>
-          <option value="REPORTED">Reported</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
-      </div>
 
       {/* Quick stats */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          icon={UsersRound}
-          label="Patients in results"
-          value={uniquePatients || 0}
-          accent="from-blue-600 via-indigo-600 to-violet-600"
-        />
-        <StatTile
-          icon={ClipboardList}
-          label="Orders on page"
-          value={rows.length}
-          accent="from-emerald-600 via-teal-600 to-cyan-600"
-        />
-        <StatTile
-          icon={Hourglass}
-          label="Pending on page"
-          value={pendingOnPage}
-          accent="from-amber-600 via-orange-600 to-red-600"
-        />
-        <StatTile
-          icon={Activity}
-          label="Total (all pages)"
+          label="Total Orders"
           value={total}
-          accent="from-fuchsia-600 via-pink-600 to-rose-600"
+          accent="from-teal-600 via-cyan-500 to-sky-500"
+        />
+        <StatTile
+          label="Pending Collection"
+          value={pendingCount}
+          accent="from-amber-600 via-orange-500 to-red-500"
+        />
+        <StatTile
+          label="In Progress"
+          value={inProgressCount}
+          accent="from-sky-600 via-blue-500 to-indigo-500"
+        />
+        <StatTile
+          label="Completed"
+          value={completedCount}
+          accent="from-emerald-600 via-green-500 to-lime-500"
         />
       </section>
 
+      {/* Filters */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-1.5 w-full bg-gradient-to-r from-teal-600 via-cyan-500 to-sky-500" />
+        <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+          <div className="relative w-full md:max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="search"
+              placeholder="Search tests / notes…"
+              defaultValue={s}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") updateQuery({ s: e.currentTarget.value });
+              }}
+              onBlur={(e) => updateQuery({ s: e.target.value })}
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
+              <Filter className="h-4 w-4 text-slate-400" />
+              Filters
+            </div>
+
+            <select
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 sm:w-40"
+              value={status}
+              onChange={(e) => updateQuery({ status: e.target.value })}
+            >
+              <option value="">All statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="IN_PROGRESS">In progress</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+
+            <select
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 sm:w-32"
+              value={String(limit)}
+              onChange={(e) => updateQuery({ limit: e.target.value })}
+            >
+              <option value="20">Show 20</option>
+              <option value="50">Show 50</option>
+              <option value="100">Show 100</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          {error}
+        </div>
+      )}
+
       {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <Th>Patient</Th>
-              <Th>Tests</Th>
-              <Th>Status</Th>
-              <Th>Ordered At</Th>
-              <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Result
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((order) => (
-              <tr key={order.id} className="transition hover:bg-slate-50/60">
-                <Td>
-                  <div className="flex items-center gap-2">
-                    <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
-                      <UsersRound className="h-4 w-4 text-blue-700" />
-                    </span>
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">
-                        {order.patient_name || order.patient || "—"}
-                      </div>
-                      {order.encounter_id && (
-                        <div className="text-xs text-slate-500">
-                          Encounter #{order.encounter_id}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Td>
-                <Td>
-                  {Array.isArray(order.items) && order.items.length ? (
-                    <div className="flex flex-wrap gap-1">
-                      {order.items.slice(0, 4).map((i, idx) => (
-                        <span
-                          key={idx}
-                          className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
-                        >
-                          {i.test?.name ||
-                            i.test?.code ||
-                            i.test_name ||
-                            i.code ||
-                            "Test"}
-                        </span>
-                      ))}
-                      {order.items.length > 4 && (
-                        <span className="text-xs text-slate-500">
-                          +{order.items.length - 4} more
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-slate-500">
-                      {order.tests_display || "—"}
-                    </span>
-                  )}
-                </Td>
-                <Td>
-                  <StatusPill value={order.status} />
-                </Td>
-                <Td>
-                  <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                    {formatDateTime(order.ordered_at || order.created_at)}
-                  </span>
-                </Td>
-                <td className="p-3 text-right text-sm">
-                  <div className="inline-flex flex-wrap items-center gap-2">
-                    {/* Results-entry page for independent LAB */}
-                    {canCollect &&
-                    ["PENDING", "IN_PROGRESS"].includes(
-                      String(order.status || "").toUpperCase()
-                    ) ? (
-                      <Link
-                        href={`/provider/labs/${order.id}`}
-                        className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
-                      >
-                        Enter results
-                      </Link>
-                    ) : null}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200/70 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
+              <FlaskConical className="h-5 w-5 text-slate-700" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Lab Orders</h2>
+              <p className="text-xs text-slate-500">{total} order{total === 1 ? "" : "s"} assigned to you</p>
+            </div>
+          </div>
+        </div>
 
-                    {/* View button → opens details modal */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDetailsOrderId(order.id);
-                        setDetailsOpen(true);
-                      }}
-                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                    >
-                      View
-                    </button>
-
-                    {/* Attachments button → opens attachments modal */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAttachmentsOrderId(order.id);
-                        setAttachmentsOpen(true);
-                      }}
-                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                    >
-                      Attachments
-                    </button>
-
-                    {/* Mark sample collected – Lab / Admin only */}
-                    {String(order.status || "").toUpperCase() ===
-                      "PENDING" &&
-                      canCollect && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await markLabOrderCollected(order.id);
-                              reload();
-                            } catch (err) {
-                              console.error(
-                                "Failed to mark lab order collected",
-                                err
-                              );
-                              alert(
-                                err?.message ||
-                                  "Failed to mark sample collected."
-                              );
-                            }
-                          }}
-                          className="text-xs text-sky-700 hover:underline"
-                        >
-                          Mark sample collected
-                        </button>
-                      )}
-
-                    {/* Cancel order – Doctor/Nurse/Admin/Super-admin */}
-                    {String(order.status || "").toUpperCase() ===
-                      "PENDING" &&
-                      canCancel && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                "Cancel this lab order? This cannot be undone."
-                              )
-                            ) {
-                              return;
-                            }
-                            try {
-                              await cancelLabOrder(order.id);
-                              reload();
-                            } catch (err) {
-                              console.error(
-                                "Failed to cancel lab order",
-                                err
-                              );
-                              alert(
-                                err?.message ||
-                                  "Failed to cancel lab order. Please try again."
-                              );
-                            }
-                          }}
-                          className="text-xs text-rose-700 hover:underline"
-                        >
-                          Cancel order
-                        </button>
-                      )}
-
-                    {/* PDF button */}
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(order)}
-                      disabled={downloadingId === order.id}
-                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {downloadingId === order.id ? "Generating…" : "PDF"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-
-            {!rows.length && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50">
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center">
-                  <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
-                    <FlaskConical className="h-6 w-6 text-slate-400" />
-                  </div>
-                  <div className="text-sm font-medium text-slate-900">
-                    No lab orders found
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    New lab orders will appear here automatically.
-                  </div>
-                </td>
+                <Th>Patient</Th>
+                <Th>Facility</Th>
+                <Th>Tests</Th>
+                <Th>Status</Th>
+                <Th>Ordered</Th>
+                <Th className="text-right">Report</Th>
+                <Th>Actions</Th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {loading && !orders.length ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
+                    <p className="mt-2">Loading orders…</p>
+                  </td>
+                </tr>
+              ) : orders.length ? (
+                orders.map((order) => {
+                  const statusNorm = String(order.status || "").toUpperCase();
+                  const { label: statusLabel, badgeClass } = getLabStatusMeta(order.status);
 
-      {/* Pager */}
-      <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
-        <div>
-          Page {page} · {total} total
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => updateQuery({ page: page - 1 })}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={rows.length < limit}
-            onClick={() => updateQuery({ page: page + 1 })}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
-          >
-            Next
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+                  return (
+                    <tr key={order.id} className="transition hover:bg-slate-50/60">
+                      <Td>
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
+                            <UserRound className="h-4 w-4 text-blue-700" />
+                          </span>
+                          <div className="font-medium text-slate-900">
+                            {order.patient_name || `Patient #${order.patient}` || "—"}
+                          </div>
+                        </div>
+                      </Td>
 
-      {/* Lab order details modal */}
+                      <Td>
+                        <div className="flex items-center gap-1 text-slate-700">
+                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          {order.facility_name || order.facility?.name || `Facility #${order.facility}` || "—"}
+                        </div>
+                      </Td>
+
+                      <Td>
+                        <div className="max-w-xs truncate text-slate-800">
+                          {Array.isArray(order.items)
+                            ? order.items
+                                .map(
+                                  (i) =>
+                                    i.display_name ||
+                                    i.test?.name ||
+                                    i.requested_name ||
+                                    "Test"
+                                )
+                                .join(", ")
+                            : order.tests_display || "—"}
+                        </div>
+                      </Td>
+
+                      <Td>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}>
+                          {statusLabel}
+                        </span>
+                      </Td>
+
+                      <Td>
+                        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          {formatDateTime(order.ordered_at || order.created_at)}
+                        </div>
+                      </Td>
+
+                      <Td className="text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(order)}
+                          disabled={downloadingId === order.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <DownloadCloud className="h-3.5 w-3.5" />
+                          {downloadingId === order.id ? "Generating…" : "PDF"}
+                        </button>
+                      </Td>
+
+                      <Td>
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href={`/lab/orders/${order.id}`}
+                            className="text-xs font-medium text-blue-600 hover:underline"
+                          >
+                            View
+                          </Link>
+
+                          {statusNorm === "PENDING" && (
+                            <button
+                              type="button"
+                              onClick={() => handleCollect(order.id)}
+                              disabled={collectingId === order.id}
+                              className="text-xs text-sky-700 hover:underline"
+                            >
+                              {collectingId === order.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Mark collected"
+                              )}
+                            </button>
+                          )}
+
+                          {statusNorm === "IN_PROGRESS" && (
+                            <Link
+                              href={`/lab/orders/${order.id}`}
+                              className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                            >
+                              Enter result
+                            </Link>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDetailsOrderId(order.id);
+                              setDetailsOpen(true);
+                            }}
+                            className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Details
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAttachmentsOrderId(order.id);
+                              setAttachmentsOpen(true);
+                            }}
+                            className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Attachments
+                          </button>
+                        </div>
+                      </Td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center">
+                    <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                      <FlaskConical className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <div className="text-sm font-medium text-slate-900">No lab orders found</div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      Orders outsourced to you will appear here.
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pager */}
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+          <div>Page {page} · {total} total</div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => updateQuery({ page: page - 1 })}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={orders.length < limit}
+              onClick={() => updateQuery({ page: page + 1 })}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
+            >
+              Next
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Details modal */}
       <LabOrderDetailsModal
         orderId={detailsOrderId}
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
       />
 
-      {/* Lab order attachments modal */}
+      {/* Attachments modal */}
       <LabOrderAttachmentsModal
         orderId={attachmentsOrderId}
         open={attachmentsOpen}
@@ -562,44 +563,30 @@ function ProviderLabOrdersPageInner() {
 
 /* ─────────────── UI helpers ─────────────── */
 
-function StatTile({ icon: Icon, label, value, accent }) {
+function StatTile({ label, value, accent }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
       <div className="p-5">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-600">{label}</div>
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
-            <Icon className="h-5 w-5 text-slate-700" />
-          </div>
-        </div>
-        <div className="mt-2 text-3xl font-semibold text-slate-900">
-          {value}
-        </div>
+        <div className="text-xs text-slate-500">{label}</div>
+        <div className="mt-2 text-2xl font-semibold text-slate-900">{value}</div>
       </div>
     </div>
   );
 }
 
-function StatusPill({ value }) {
-  const { label, badgeClass } = getLabStatusMeta(value);
+function Th({ children, className = "" }) {
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${badgeClass}`}
-    >
-      {label}
-    </span>
-  );
-}
-
-function Th({ children }) {
-  return (
-    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 ${className}`}>
       {children}
     </th>
   );
 }
 
-function Td({ children }) {
-  return <td className="p-3 text-sm text-slate-800 align-top">{children}</td>;
+function Td({ children, className = "" }) {
+  return (
+    <td className={`px-4 py-3 align-middle text-sm text-slate-800 ${className}`}>
+      {children}
+    </td>
+  );
 }
