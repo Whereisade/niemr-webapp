@@ -643,8 +643,7 @@ export default function FacilityPharmacyStockPage() {
                       : "bg-slate-50 text-slate-700";
                     const sign = q > 0 ? "+" : "";
                     const user =
-                      txn.created_by?.full_name ||
-                      txn.created_by?.email ||
+                      txn.created_by_name
                       "";
 
                     return (
@@ -654,9 +653,9 @@ export default function FacilityPharmacyStockPage() {
                       >
                         <div className="pr-2">
                           <div className="text-[11px] font-medium text-slate-900">
-                            {drug.name || "Drug"}
+                            {txn.drug_name || "Drug"}
                             <span className="ml-1 font-mono text-[10px] text-slate-500">
-                              {drug.code ? `(${drug.code})` : ""}
+                              {txn.drug_code ? `(${txn.drug_code})` : ""}
                             </span>
                           </div>
                           <div className="mt-0.5 text-[10px] text-slate-500">
