@@ -436,13 +436,23 @@ function FacilityProvidersPageInner() {
         </div>
 
         {canManageProviders && (
+          <div className="flex gap-3">
+          <Link
+            href="/facility/admins"
+           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-400 to-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
+          >
+            <UserPlus className="h-4 w-4" />
+            Manage Admins
+          </Link>
+        
           <Link
             href="/facility/providers/new"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
+           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
           >
             <UserPlus className="h-4 w-4" />
             Add Provider
-          </Link>
+          </Link> 
+          </div>
         )}
       </header>
 

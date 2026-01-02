@@ -9,9 +9,12 @@ import {
   Pill,
   Users,
   Bell,
-  Building2,
   Stethoscope,
   Activity,
+  AlertTriangle,
+  Clock,
+  TrendingUp,
+  CheckCircle2,
 } from "lucide-react";
 import {
   requireIndependentProvider,
@@ -56,8 +59,31 @@ function formatDT(value) {
   }
 }
 
+function formatTime(value) {
+  if (!value) return "—";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return String(value);
+  }
+}
+
+// Extract unique patient count from various data structures
+function countUniquePatients(items) {
+  const patientIds = new Set();
+  items.forEach(item => {
+    const patientId = item?.patient?.id || item?.patient_id || item?.patient;
+    if (patientId && typeof patientId === 'number') {
+      patientIds.add(patientId);
+    }
+  });
+  return patientIds.size;
+}
+
 // Slightly richer stat card with subtle motion
-function StatCard({ title, value, icon: Icon, href, hint, accent = "blue" }) {
+function StatCard({ title, value, icon: Icon, href, hint, accent = "blue", badge }) {
   const accentClasses = {
     blue: {
       blob: "from-blue-500/20 via-indigo-500/10 to-sky-400/15",
@@ -75,6 +101,10 @@ function StatCard({ title, value, icon: Icon, href, hint, accent = "blue" }) {
       blob: "from-violet-500/20 via-indigo-500/10 to-fuchsia-400/15",
       iconBg: "bg-violet-50 text-violet-700",
     },
+    red: {
+      blob: "from-red-500/20 via-rose-400/10 to-pink-400/15",
+      iconBg: "bg-red-50 text-red-700",
+    },
   }[accent] || {
     blob: "from-blue-500/20 via-indigo-500/10 to-sky-400/15",
     iconBg: "bg-blue-50 text-blue-700",
@@ -87,9 +117,16 @@ function StatCard({ title, value, icon: Icon, href, hint, accent = "blue" }) {
         className={`pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gradient-to-br ${accentClasses.blob} blur-2xl transition group-hover:scale-110`}
       />
       <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {title}
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              {title}
+            </div>
+            {badge && (
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.className}`}>
+                {badge.text}
+              </span>
+            )}
           </div>
           <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
             {value}
@@ -116,7 +153,7 @@ function StatCard({ title, value, icon: Icon, href, hint, accent = "blue" }) {
   );
 }
 
-// List card for upcoming work / notifications
+// List card for upcoming work
 function ListCard({ title, icon: Icon, items, empty, renderItem, href, subtitle }) {
   return (
     <section className="relative overflow-hidden rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-slate-200">
@@ -170,13 +207,14 @@ export default async function ProviderPage() {
   const start = now.toISOString();
   const end = in7Days.toISOString();
 
-  // Notifications (unread)
+  // Notifications (unread) - single source of truth
   const notificationsPayload = await authedFetchJSON(
     token,
     `/notifications/notifications/?read=false&limit=5`,
     null
   );
   const notifications = normalizeResults(notificationsPayload);
+  const unreadCount = notifications.length;
 
   // Provider profile check (best effort)
   const providersPayload = await authedFetchJSON(
@@ -202,19 +240,21 @@ export default async function ProviderPage() {
     subtitle: "",
     renderItem: () => null,
   };
+  let secondaryList = null;
 
   if (role === "LAB") {
+    // Fetch lab orders in different states
     const pending = normalizeResults(
       await authedFetchJSON(
         token,
-        `/labs/orders/?status=PENDING&limit=5`,
+        `/labs/orders/?status=PENDING&limit=20`,
         null
       )
     );
     const inProgress = normalizeResults(
       await authedFetchJSON(
         token,
-        `/labs/orders/?status=IN_PROGRESS&limit=1`,
+        `/labs/orders/?status=IN_PROGRESS&limit=20`,
         null
       )
     );
@@ -226,128 +266,203 @@ export default async function ProviderPage() {
       )
     );
 
+    // Calculate unique patients
+    const allOrders = [...pending, ...inProgress, ...completed];
+    const uniquePatients = countUniquePatients(allOrders);
+
+    // Get urgent orders
+    const urgentOrders = [...pending, ...inProgress].filter(
+      o => (o.priority || '').toUpperCase() === 'URGENT' || (o.priority || '').toUpperCase() === 'STAT'
+    );
+
     stats = [
       {
-        title: "Pending lab orders",
+        title: "Pending orders",
         value: pending.length,
         icon: FlaskConical,
-        href: "/provider/labs",
+        href: "/provider/labs?status=PENDING",
         accent: "blue",
+        hint: urgentOrders.length > 0 ? `${urgentOrders.length} urgent` : "All routine",
       },
       {
         title: "In progress",
         value: inProgress.length,
         icon: Activity,
-        href: "/provider/labs",
+        href: "/provider/labs?status=IN_PROGRESS",
         accent: "amber",
+        hint: "Currently processing",
       },
       {
         title: "Completed today",
         value: completed.length,
-        icon: ClipboardList,
-        href: "/provider/labs",
+        icon: CheckCircle2,
+        href: "/provider/labs?status=COMPLETED",
         accent: "emerald",
+        hint: "Results ready",
       },
       {
-        title: "My patients",
-        value: "—",
+        title: "Active patients",
+        value: uniquePatients,
         icon: Users,
         href: "/provider/patients",
         accent: "violet",
-        hint: "Based on your lab activity",
+        hint: "Based on your lab queue",
       },
     ];
 
     primaryList = {
       title: "Pending lab orders",
-      subtitle: "Orders assigned to your lab queue.",
+      subtitle: `${pending.length} orders waiting for processing`,
       icon: FlaskConical,
-      items: pending,
-      empty: "No pending lab orders assigned to you.",
+      items: pending.slice(0, 5),
+      empty: "No pending lab orders. You're all caught up!",
       href: "/provider/labs",
-      renderItem: (o) => (
-        <Link
-          key={o.id}
-          href={`/provider/labs/${o.id}`}
-          className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/40"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="font-medium">
-              {o.test_name || o.test_type || `Order #${o.id}`}
+      renderItem: (o) => {
+        const isUrgent = (o.priority || '').toUpperCase() === 'URGENT' || (o.priority || '').toUpperCase() === 'STAT';
+        return (
+          <Link
+            key={o.id}
+            href={`/provider/labs/${o.id}`}
+            className={`group relative block overflow-hidden rounded-2xl border ${
+              isUrgent ? 'border-red-200 bg-red-50/40' : 'border-slate-200 bg-white/90'
+            } px-3 py-2.5 text-sm text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/40`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {isUrgent && <AlertTriangle className="h-4 w-4 text-red-600" />}
+                <span className="font-medium">
+                  {o.test_name || o.test_type || `Order #${o.id}`}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500">
+                {formatTime(o.created_at)}
+              </div>
             </div>
-            <div className="text-xs text-slate-500">
-              {formatDT(o.created_at)}
+            <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span>
+                Patient:{" "}
+                {o.patient_name ||
+                  o.patient?.full_name ||
+                  o.patient?.name ||
+                  "—"}
+              </span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                isUrgent ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-700'
+              }`}>
+                {o.priority || "ROUTINE"}
+              </span>
             </div>
-          </div>
-          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
-            <span>
+          </Link>
+        );
+      },
+    };
+
+    // Secondary list: In-progress orders
+    if (inProgress.length > 0) {
+      secondaryList = {
+        title: "In progress",
+        subtitle: `${inProgress.length} orders being processed`,
+        icon: Activity,
+        items: inProgress.slice(0, 5),
+        empty: "",
+        href: "/provider/labs?status=IN_PROGRESS",
+        renderItem: (o) => (
+          <Link
+            key={o.id}
+            href={`/provider/labs/${o.id}`}
+            className="group relative block overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/40 px-3 py-2.5 text-sm text-slate-800 transition hover:border-amber-300"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-medium">
+                {o.test_name || o.test_type || `Order #${o.id}`}
+              </div>
+              <div className="text-xs text-slate-500">
+                Started: {formatTime(o.collected_at || o.created_at)}
+              </div>
+            </div>
+            <div className="mt-1 text-xs text-slate-600">
               Patient:{" "}
               {o.patient_name ||
                 o.patient?.full_name ||
-                o.patient?.name ||
                 "—"}
-            </span>
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
-              {o.status || "PENDING"}
-            </span>
-          </div>
-        </Link>
-      ),
-    };
+            </div>
+          </Link>
+        ),
+      };
+    }
   } else if (role === "PHARMACY") {
+    // Fetch prescriptions
     const pendingRx = normalizeResults(
       await authedFetchJSON(
         token,
-        `/pharmacy/prescriptions/?status=PRESCRIBED&limit=5`,
+        `/pharmacy/prescriptions/?status=PRESCRIBED&limit=20`,
         null
       )
     );
     const dispensed = normalizeResults(
       await authedFetchJSON(
         token,
-        `/pharmacy/prescriptions/?status=DISPENSED&limit=1`,
+        `/pharmacy/prescriptions/?status=DISPENSED&limit=20`,
         null
       )
     );
+
+    // Calculate unique patients
+    const allRx = [...pendingRx, ...dispensed];
+    const uniquePatients = countUniquePatients(allRx);
+
+    // Count today's dispensed
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dispensedToday = dispensed.filter(rx => {
+      const dispensedAt = new Date(rx.dispensed_at || rx.updated_at);
+      return dispensedAt >= today;
+    });
 
     stats = [
       {
         title: "To dispense",
         value: pendingRx.length,
         icon: Pill,
-        href: "/provider/pharmacy",
-        accent: "emerald",
-      },
-      {
-        title: "Dispensed",
-        value: dispensed.length,
-        icon: ClipboardList,
-        href: "/provider/pharmacy",
+        href: "/provider/pharmacy?status=PRESCRIBED",
         accent: "blue",
+        hint: "Waiting for pickup",
       },
       {
-        title: "My patients",
-        value: "—",
+        title: "Dispensed today",
+        value: dispensedToday.length,
+        icon: CheckCircle2,
+        href: "/provider/pharmacy?status=DISPENSED",
+        accent: "emerald",
+        hint: "Completed transactions",
+      },
+      {
+        title: "Active patients",
+        value: uniquePatients,
         icon: Users,
         href: "/provider/patients",
         accent: "violet",
-        hint: "Based on your prescriptions",
+        hint: "Based on prescriptions",
       },
       {
         title: "Notifications",
-        value: notifications.length,
+        value: unreadCount,
         icon: Bell,
         href: "/provider/notifications",
         accent: "amber",
+        badge: unreadCount > 0 ? {
+          text: "New",
+          className: "bg-amber-100 text-amber-700"
+        } : null,
       },
     ];
 
     primaryList = {
       title: "Prescriptions to dispense",
-      subtitle: "Medication orders waiting for you.",
+      subtitle: `${pendingRx.length} medications waiting for pickup`,
       icon: Pill,
-      items: pendingRx,
-      empty: "No prescriptions waiting for dispensing.",
+      items: pendingRx.slice(0, 5),
+      empty: "No prescriptions waiting. All clear!",
       href: "/provider/pharmacy",
       renderItem: (rx) => (
         <Link
@@ -360,7 +475,7 @@ export default async function ProviderPage() {
               {rx.medication_name || `Prescription #${rx.id}`}
             </div>
             <div className="text-xs text-slate-500">
-              {formatDT(rx.created_at)}
+              {formatTime(rx.created_at)}
             </div>
           </div>
           <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
@@ -372,12 +487,43 @@ export default async function ProviderPage() {
                 "—"}
             </span>
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-              {rx.status || "PRESCRIBED"}
+              {rx.quantity || 0} units
             </span>
           </div>
         </Link>
       ),
     };
+
+    // Secondary list: Recently dispensed
+    if (dispensedToday.length > 0) {
+      secondaryList = {
+        title: "Dispensed today",
+        subtitle: `${dispensedToday.length} completed transactions`,
+        icon: CheckCircle2,
+        items: dispensedToday.slice(0, 5),
+        empty: "",
+        href: "/provider/pharmacy?status=DISPENSED",
+        renderItem: (rx) => (
+          <Link
+            key={rx.id}
+            href={`/provider/pharmacy/${rx.id}`}
+            className="group relative block overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50/40 px-3 py-2.5 text-sm text-slate-800 transition hover:border-emerald-300"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-medium">
+                {rx.medication_name || `Prescription #${rx.id}`}
+              </div>
+              <div className="text-xs text-slate-500">
+                {formatTime(rx.dispensed_at)}
+              </div>
+            </div>
+            <div className="mt-1 text-xs text-slate-600">
+              Patient: {rx.patient_name || rx.patient?.full_name || "—"}
+            </div>
+          </Link>
+        ),
+      };
+    }
   } else {
     // Doctor / Nurse dashboard
     const apptSummary = await authedFetchJSON(
@@ -389,14 +535,14 @@ export default async function ProviderPage() {
       apptSummary?.total ??
       apptSummary?.count ??
       apptSummary?.today ??
-      "—";
+      0;
 
     const upcoming = normalizeResults(
       await authedFetchJSON(
         token,
         `/appointments/?mine=true&start=${encodeURIComponent(
           start
-        )}&end=${encodeURIComponent(end)}&limit=3`,
+        )}&end=${encodeURIComponent(end)}&limit=20`,
         null
       )
     );
@@ -404,87 +550,157 @@ export default async function ProviderPage() {
     const openEncounters = normalizeResults(
       await authedFetchJSON(
         token,
-        `/encounters/?limit=5`,
+        `/encounters/?status=OPEN&limit=20`,
         null
       )
     );
 
+    // Calculate unique patients from appointments and encounters
+    const allActivity = [...upcoming, ...openEncounters];
+    const uniquePatients = countUniquePatients(allActivity);
+
+    // Get today's appointments
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    const todaysAppointments = upcoming.filter(a => {
+      const startTime = new Date(a.start_at || a.scheduled_for);
+      return startTime >= todayStart && startTime <= todayEnd;
+    });
+
+    // Count pending encounters (needs completion)
+    const pendingEncounters = openEncounters.filter(
+      e => (e.status || '').toUpperCase() === 'OPEN'
+    );
+
     stats = [
       {
-        title: "My appointments (today)",
-        value: String(todaysCount),
+        title: "Today's appointments",
+        value: todaysCount,
         icon: Calendar,
-        href: "/provider/appointments",
+        href: "/provider/appointments?date=today",
         accent: "blue",
+        hint: todaysAppointments.length > 0 ? "Active schedule" : "No appointments",
       },
       {
         title: "Open encounters",
-        value: openEncounters.length,
+        value: pendingEncounters.length,
         icon: ClipboardList,
-        href: "/provider/encounters",
-        accent: "emerald",
+        href: "/provider/encounters?status=OPEN",
+        accent: "amber",
+        hint: pendingEncounters.length > 0 ? "Needs attention" : "All closed",
       },
       {
-        title: "My patients",
-        value: "—",
+        title: "Active patients",
+        value: uniquePatients,
         icon: Users,
         href: "/provider/patients",
         accent: "violet",
-        hint: "From your recent activity",
+        hint: "From recent activity",
       },
       {
         title: "Notifications",
-        value: notifications.length,
+        value: unreadCount,
         icon: Bell,
         href: "/provider/notifications",
-        accent: "amber",
+        accent: unreadCount > 0 ? "red" : "emerald",
+        badge: unreadCount > 0 ? {
+          text: "New",
+          className: "bg-red-100 text-red-700"
+        } : null,
       },
     ];
 
     primaryList = {
       title: "Upcoming appointments",
-      subtitle: "Next 7 days across your schedule.",
+      subtitle: `Next ${upcoming.length} appointments in the next 7 days`,
       icon: Calendar,
-      items: upcoming,
+      items: upcoming.slice(0, 5),
       empty: "No upcoming appointments in the next 7 days.",
       href: "/provider/appointments",
-      renderItem: (a) => (
-        <Link
-          key={a.id}
-          href={`/provider/appointments`}
-          className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-800 transition hover:border-indigo-200 hover:bg-indigo-50/40"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="font-medium">
-              {a.patient_name ||
-                a.patient?.full_name ||
-                `Appointment #${a.id}`}
+      renderItem: (a) => {
+        const isToday = todaysAppointments.some(ta => ta.id === a.id);
+        return (
+          <Link
+            key={a.id}
+            href={`/provider/appointments/${a.id}`}
+            className={`group relative block overflow-hidden rounded-2xl border ${
+              isToday ? 'border-blue-200 bg-blue-50/40' : 'border-slate-200 bg-white/90'
+            } px-3 py-2.5 text-sm text-slate-800 transition hover:border-indigo-200 hover:bg-indigo-50/40`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {isToday && <Clock className="h-4 w-4 text-blue-600" />}
+                <span className="font-medium">
+                  {a.patient_name ||
+                    a.patient?.full_name ||
+                    `Appointment #${a.id}`}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500">
+                {formatDT(a.start_at || a.scheduled_for)}
+              </div>
             </div>
-            <div className="text-xs text-slate-500">
-              {formatDT(a.start_at || a.scheduled_for)}
+            <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span>
+                Reason: {a.reason || "Consultation"}
+              </span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                isToday ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+              }`}>
+                {a.status || "SCHEDULED"}
+              </span>
             </div>
-          </div>
-          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
-            <span>
-              Reason: {a.reason || "—"}
-            </span>
-            <span className="rounded-full bg-slate-900/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-50">
-              {a.status || "—"}
-            </span>
-          </div>
-        </Link>
-      ),
+          </Link>
+        );
+      },
     };
+
+    // Secondary list: Open encounters
+    if (pendingEncounters.length > 0) {
+      secondaryList = {
+        title: "Open encounters",
+        subtitle: `${pendingEncounters.length} encounters need completion`,
+        icon: ClipboardList,
+        items: pendingEncounters.slice(0, 5),
+        empty: "",
+        href: "/provider/encounters?status=OPEN",
+        renderItem: (e) => (
+          <Link
+            key={e.id}
+            href={`/provider/encounters/${e.id}`}
+            className="group relative block overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/40 px-3 py-2.5 text-sm text-slate-800 transition hover:border-amber-300"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-medium">
+                Encounter #{e.id}
+              </div>
+              <div className="text-xs text-slate-500">
+                Started: {formatTime(e.start_time || e.created_at)}
+              </div>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span>
+                Patient:{" "}
+                {e.patient_name ||
+                  e.patient?.full_name ||
+                  "—"}
+              </span>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                {e.encounter_type || "CONSULT"}
+              </span>
+            </div>
+          </Link>
+        ),
+      };
+    }
   }
 
   const quickLinks = [
     { href: "/provider/patients", label: "Patients", icon: Users },
-    { href: "/provider/notifications", label: "Notifications", icon: Bell },
-    // {
-    //   href: "/provider/facility/apply",
-    //   label: "Apply to facility",
-    //   icon: Building2,
-    // },
+    { href: "/provider/notifications", label: `Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`, icon: Bell },
   ];
 
   const displayName =
@@ -518,12 +734,12 @@ export default async function ProviderPage() {
                   Welcome back, {displayName}
                 </h1>
                 <p className="text-sm text-slate-600 md:text-[15px]">
-                  Hello, {" "}
+                  Hello,{" "}
                   <span className="font-semibold">
                     {roleLabel(role)}
                   </span>
                   . Keep an eye on today&apos;s work, open items, and
-                  recent notifications from one place.
+                  recent activity from one place.
                 </p>
               </div>
 
@@ -571,7 +787,7 @@ export default async function ProviderPage() {
 
         {/* Stat row */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((s, idx) => (
+          {stats.map((s) => (
             <StatCard
               key={s.title}
               title={s.title}
@@ -579,13 +795,14 @@ export default async function ProviderPage() {
               icon={s.icon}
               href={s.href}
               hint={s.hint}
-              accent={s.accent || ["blue", "emerald", "amber", "violet"][idx % 4]}
+              accent={s.accent}
+              badge={s.badge}
             />
           ))}
         </section>
 
-        {/* Lists: primary workload + notifications feed */}
-        <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)]">
+        {/* Lists: primary workload + secondary (if exists) */}
+        <section className={`grid grid-cols-1 gap-5 ${secondaryList ? 'lg:grid-cols-2' : ''}`}>
           <ListCard
             title={primaryList.title}
             subtitle={primaryList.subtitle}
@@ -596,68 +813,19 @@ export default async function ProviderPage() {
             renderItem={primaryList.renderItem}
           />
 
-          {/* Notifications in a timeline-ish feed */}
-          <section className="relative overflow-hidden rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500" />
-            <div className="relative pt-3">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                    <Bell className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      Unread notifications
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Latest updates routed to your provider inbox.
-                    </p>
-                  </div>
-                </div>
-                <Link
-                  href="/provider/notifications"
-                  className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
-                >
-                  View all
-                </Link>
-              </div>
-
-              {notifications.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
-                  You&apos;re all caught up. New notifications will appear
-                  here.
-                </div>
-              ) : (
-                <ol className="space-y-2 border-l border-slate-200 pl-3">
-                  {notifications.map((n) => (
-                    <li key={n.id} className="relative pl-3">
-                      {/* Timeline dot */}
-                      <span className="absolute -left-[7px] top-2 flex h-3 w-3 items-center justify-center">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      </span>
-                      <article className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-800">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="font-medium">
-                            {n.title || n.type || "Notification"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {formatDT(n.created_at)}
-                          </div>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-600">
-                          {n.message || n.body || "—"}
-                        </p>
-                      </article>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          </section>
+          {secondaryList && (
+            <ListCard
+              title={secondaryList.title}
+              subtitle={secondaryList.subtitle}
+              icon={secondaryList.icon}
+              items={secondaryList.items}
+              empty={secondaryList.empty}
+              href={secondaryList.href}
+              renderItem={secondaryList.renderItem}
+            />
+          )}
         </section>
       </div>
     </main>
   );
 }
-
-
