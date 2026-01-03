@@ -21,6 +21,7 @@ import {
   Bell,
   Pill,
   Boxes,
+  Mail,
 } from "lucide-react";
 
 import LogoutButton from "@/components/LogoutButton";
@@ -148,6 +149,7 @@ function buildNavForUser(user) {
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
       { href: "/facility/payments", label: "Payments", icon: CreditCard },
       { href: "/facility/reports", label: "Reports", icon: ClipboardList },
+      { href: "/facility/emails", label: "Emails", icon: Mail },
       { href: "/facility/providers", label: "Staff", icon: Users, accent: true },
     ];
   }

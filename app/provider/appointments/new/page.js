@@ -30,7 +30,7 @@ export default function ProviderNewAppointmentPage() {
   const [time, setTime] = useState("");
   const [durationMins, setDurationMins] = useState("30");
   const [reason, setReason] = useState("");
-  const [notifyEmail, setNotifyEmail] = useState("");
+  const [sendEmail, setSendEmail] = useState(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -156,7 +156,7 @@ export default function ProviderNewAppointmentPage() {
       // Default provider to the logged-in independent provider user
       provider: me?.id,
       // Backend expects a boolean
-      notify_email: Boolean(notifyEmail.trim()),
+      notify_email: !!sendEmail,
     };
 
     // remove undefined keys (DRF is happier)
@@ -386,21 +386,22 @@ export default function ProviderNewAppointmentPage() {
               </p>
             </div>
 
-            {/* Notify email */}
+            {/* Email notifications */}
             <div>
-              <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+              <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
                 <Mail className="h-4 w-4 text-slate-500" />
-                Notify email (optional)
+                Email notifications
               </label>
-              <input
-                type="email"
-                value={notifyEmail}
-                onChange={(e) => setNotifyEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="patient@example.com"
-              />
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={!!sendEmail}
+                  onChange={(e) => setSendEmail(e.target.checked)}
+                />
+                Send email notifications (reminders/updates) to the patient’s account email
+              </label>
               <p className="mt-1 text-xs text-slate-500">
-                If provided, we’ll send appointment details to this address.
+                Emails are sent to the patient\'s registered email (custom emails are not supported).
               </p>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
   const router = useRouter();
@@ -102,6 +103,13 @@ export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
           <button disabled={busy} className="btn btn-primary">
             {busy ? "Signing in..." : "Sign in"}
           </button>
+
+          <div className="flex items-center justify-between text-sm">
+            <Link href="/forgot-password" className="text-blue-700 hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+
         </div>
       </div>
     </form>

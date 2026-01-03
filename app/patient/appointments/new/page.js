@@ -78,7 +78,7 @@ export default function PatientNewAppointmentPage() {
   const [providerId, setProviderId] = useState("");
   const [facilityId, setFacilityId] = useState("");
   const [reason, setReason] = useState("");
-  const [notifyEmail, setNotifyEmail] = useState("");
+  const [sendEmail, setSendEmail] = useState(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -479,14 +479,18 @@ export default function PatientNewAppointmentPage() {
     }
 
     // Add selected lab tests to reason if LAB_SCIENTIST booking
-    if (bookingMode === "independent" && providerType === "LAB_SCIENTIST" && selectedLabTests.length > 0) {
+    if (
+      bookingMode === "independent" &&
+      providerType === "LAB_SCIENTIST" &&
+      selectedLabTests.length > 0
+    ) {
       const testNames = selectedLabTests
         .map((id) => {
           const test = labTests.find((t) => t.id === id);
-          return test ? (test.name || test.test_name) : null;
+          return test ? test.name || test.test_name : null;
         })
         .filter(Boolean);
-      
+
       if (testNames.length > 0) {
         const testsText = `Lab tests: ${testNames.join(", ")}`;
         payload.reason = payload.reason
@@ -496,14 +500,18 @@ export default function PatientNewAppointmentPage() {
     }
 
     // Add selected pharmacy drugs to reason if PHARMACIST booking
-    if (bookingMode === "independent" && providerType === "PHARMACIST" && selectedPharmacyDrugs.length > 0) {
+    if (
+      bookingMode === "independent" &&
+      providerType === "PHARMACIST" &&
+      selectedPharmacyDrugs.length > 0
+    ) {
       const drugNames = selectedPharmacyDrugs
         .map((id) => {
           const drug = pharmacyDrugs.find((d) => d.id === id);
           return drug ? drug.name : null;
         })
         .filter(Boolean);
-      
+
       if (drugNames.length > 0) {
         const drugsText = `Medications: ${drugNames.join(", ")}`;
         payload.reason = payload.reason
@@ -512,10 +520,7 @@ export default function PatientNewAppointmentPage() {
       }
     }
 
-    if (notifyEmail.trim()) {
-      payload.notify_email = notifyEmail.trim();
-    }
-
+    payload.notify_email = !!sendEmail;
     setIsSubmitting(true);
     try {
       await createAppointment(payload);
@@ -1251,22 +1256,22 @@ export default function PatientNewAppointmentPage() {
               />
             </div>
 
-            {/* Notify email */}
+            {/* Email notifications */}
             <div>
-              <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+              <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
                 <Mail className="h-4 w-4 text-slate-500" />
-                Email for reminders (optional)
+                Email notifications
               </label>
-              <input
-                type="email"
-                value={notifyEmail}
-                onChange={(e) => setNotifyEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={!!sendEmail}
+                  onChange={(e) => setSendEmail(e.target.checked)}
+                />
+                Send email notifications (reminders/updates) to my email
+              </label>
               <p className="mt-1 text-xs text-slate-500">
-                We&apos;ll send confirmations and reminders to this address if
-                you provide it.
+                Emails are sent to your registered email.
               </p>
             </div>
           </div>

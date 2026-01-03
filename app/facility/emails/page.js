@@ -37,10 +37,14 @@ function formatDateTime(value) {
 }
 
 function deriveStatus(e) {
-  if (e.status) return e.status;
-  if (e.sent_at) return "SENT";
-  if (e.error_message || e.error) return "FAILED";
-  return "PENDING";
+  const raw = (e?.status || "").toString().trim();
+  if (raw) return raw.toUpperCase();
+
+  // Fallbacks if backend didn’t include status for some reason
+  if (e?.delivered_at) return "DELIVERED";
+  if (e?.sent_at) return "SENT";
+  if (e?.last_error || e?.error_message || e?.error) return "FAILED";
+  return "QUEUED";
 }
 
 function FacilityEmailOutboxPageInner() {
@@ -120,12 +124,14 @@ function FacilityEmailOutboxPageInner() {
   const hasPrevPage = page > 1;
   const total = Number(data?.count ?? rows.length);
 
-  const failedCount = rows.filter(
-    (e) => deriveStatus(e).toUpperCase() === "FAILED"
-  ).length;
-  const pendingCount = rows.filter(
-    (e) => deriveStatus(e).toUpperCase() === "PENDING"
-  ).length;
+  const failedCount = rows.filter((e) => {
+    const s = deriveStatus(e).toUpperCase();
+    return s === "FAILED" || s === "BOUNCED";
+  }).length;
+  const pendingCount = rows.filter((e) => {
+    const s = deriveStatus(e).toUpperCase();
+    return s === "QUEUED" || s === "SENDING";
+  }).length;
 
   function goToPage(nextPage) {
     const sp = new URLSearchParams(searchParams.toString());
@@ -262,8 +268,11 @@ function FacilityEmailOutboxPageInner() {
             className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none"
           >
             <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
+            <option value="QUEUED">Queued</option>
+            <option value="SENDING">Sending</option>
             <option value="SENT">Sent</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="BOUNCED">Bounced</option>
             <option value="FAILED">Failed</option>
           </select>
 
@@ -350,22 +359,27 @@ function FacilityEmailOutboxPageInner() {
                       <td className="p-3 text-xs text-slate-800">
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            statusValue === "SENT"
+                            statusValue === "DELIVERED"
                               ? "bg-emerald-50 text-emerald-700"
-                              : statusValue === "FAILED"
+                              : statusValue === "SENT"
+                              ? "bg-blue-50 text-blue-700"
+                              : statusValue === "FAILED" || statusValue === "BOUNCED"
                               ? "bg-red-50 text-red-700"
-                              : statusValue === "PENDING"
+                              : statusValue === "QUEUED" || statusValue === "SENDING"
                               ? "bg-amber-50 text-amber-700"
                               : "bg-slate-50 text-slate-600"
                           }`}
                         >
-                          {statusValue === "SENT" && (
+                          {statusValue === "DELIVERED" && (
                             <CheckCircle2 className="h-3 w-3" />
                           )}
-                          {statusValue === "FAILED" && (
+                          {statusValue === "SENT" && (
+                            <Mail className="h-3 w-3" />
+                          )}
+                          {(statusValue === "FAILED" || statusValue === "BOUNCED") && (
                             <AlertTriangle className="h-3 w-3" />
                           )}
-                          {statusValue === "PENDING" && (
+                          {(statusValue === "QUEUED" || statusValue === "SENDING") && (
                             <Clock className="h-3 w-3" />
                           )}
                           {statusValue}
@@ -373,12 +387,12 @@ function FacilityEmailOutboxPageInner() {
                       </td>
                       <td className="p-3 text-xs text-slate-800">
                         <span className="line-clamp-2">
-                          {e.error_message || e.error || "—"}
+                          {e.last_error || e.error_message || e.error || "—"}
                         </span>
                       </td>
                       <td className="p-3 text-xs text-slate-800">
                         <div className="flex flex-wrap gap-2">
-                          {statusValue === "FAILED" && (
+                          {(statusValue === "FAILED" || statusValue === "BOUNCED") && (
                             <button
                               type="button"
                               onClick={() => handleResend(e.id)}
