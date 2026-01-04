@@ -58,10 +58,18 @@ export default function PatientInsurance({ patientId }) {
 
       // Pre-fill form if patient has insurance
       if (patientRes.hmo) {
-        setSelectedHMO(String(patientRes.hmo));
+        // Handle both cases: hmo as integer ID or as object {id, name}
+        const hmoValue = typeof patientRes.hmo === 'object' ? patientRes.hmo.id : patientRes.hmo;
+        setSelectedHMO(String(hmoValue));
         setInsuranceNumber(patientRes.insurance_number || "");
         setExpiryDate(patientRes.insurance_expiry || "");
         setNotes(patientRes.insurance_notes || "");
+      } else {
+        // Clear form if no insurance
+        setSelectedHMO("");
+        setInsuranceNumber("");
+        setExpiryDate("");
+        setNotes("");
       }
     } catch (e) {
       setError(e?.message || "Failed to load patient insurance data");
@@ -145,7 +153,9 @@ export default function PatientInsurance({ patientId }) {
 
     // Reset form to current patient data
     if (patient?.hmo) {
-      setSelectedHMO(String(patient.hmo));
+      // Handle both cases: hmo as integer ID or as object {id, name}
+      const hmoValue = typeof patient.hmo === 'object' ? patient.hmo.id : patient.hmo;
+      setSelectedHMO(String(hmoValue));
       setInsuranceNumber(patient.insurance_number || "");
       setExpiryDate(patient.insurance_expiry || "");
       setNotes(patient.insurance_notes || "");
@@ -166,7 +176,14 @@ export default function PatientInsurance({ patientId }) {
     );
   }
 
-  const currentHMO = hmos.find((h) => h.id === patient?.hmo);
+  // Determine insurance status
+  // Handle both cases: hmo as integer ID or as object {id, name}
+  const hmoId = patient?.hmo 
+    ? (typeof patient.hmo === 'object' ? patient.hmo.id : patient.hmo)
+    : null;
+  const hasInsurance = Boolean(hmoId);
+  const currentHMO = hasInsurance ? hmos.find((h) => h.id === hmoId) : null;
+  const hmoNotFound = hasInsurance && !currentHMO; // Patient has HMO ID but it's not in active list
   const isExpired = patient?.insurance_expiry
     ? new Date(patient.insurance_expiry) < new Date()
     : false;
@@ -188,7 +205,7 @@ export default function PatientInsurance({ patientId }) {
 
           {!editing && (
             <div className="flex items-center gap-2">
-              {patient?.hmo && (
+              {hasInsurance && (
                 <button
                   onClick={handleClear}
                   disabled={saving}
@@ -204,7 +221,7 @@ export default function PatientInsurance({ patientId }) {
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
               >
                 <Edit2 className="h-4 w-4" />
-                {patient?.hmo ? "Edit Insurance" : "Attach to HMO"}
+                {hasInsurance ? "Edit Insurance" : "Attach to HMO"}
               </button>
             </div>
           )}
@@ -236,6 +253,20 @@ export default function PatientInsurance({ patientId }) {
             <button onClick={() => setSuccess("")} className="text-emerald-600 hover:text-emerald-800">
               <X className="h-4 w-4" />
             </button>
+          </div>
+        )}
+
+        {/* HMO Not Found Warning */}
+        {hmoNotFound && !editing && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">HMO Not Available</p>
+              <p className="mt-1 text-sm text-amber-800">
+                This patient is attached to an HMO that is no longer active or has been deleted.
+                Please update their insurance information.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -350,9 +381,10 @@ export default function PatientInsurance({ patientId }) {
             </div>
           </div>
         ) : (
-          // Display Mode
+          // Display Mode - Dynamic based on insurance status
           <div>
-            {patient?.hmo && currentHMO ? (
+            {hasInsurance && currentHMO ? (
+              // Patient HAS insurance and HMO is found
               <div className="space-y-6">
                 {/* Insurance Status Banner */}
                 <div className={`flex items-start gap-3 rounded-xl border p-4 ${
@@ -416,9 +448,9 @@ export default function PatientInsurance({ patientId }) {
                   <DetailCard
                     icon={User}
                     label="Insurance Status"
-                    value={patient.insurance_status || "ACTIVE"}
-                    iconBg="bg-slate-100"
-                    iconColor="text-slate-600"
+                    value={isExpired ? "EXPIRED" : "ACTIVE"}
+                    iconBg={isExpired ? "bg-amber-100" : "bg-emerald-100"}
+                    iconColor={isExpired ? "text-amber-600" : "text-emerald-600"}
                   />
                 </div>
 
@@ -435,8 +467,37 @@ export default function PatientInsurance({ patientId }) {
                   </div>
                 )}
               </div>
+            ) : hasInsurance && hmoNotFound ? (
+              // Patient HAS insurance but HMO not found (inactive or deleted)
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-8 text-center">
+                <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-full bg-amber-200">
+                  <AlertTriangle className="h-8 w-8 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-amber-900">HMO Not Available</h3>
+                <p className="mt-2 text-sm text-amber-800">
+                  This patient is attached to an HMO (ID: {hmoId}) that is no longer active.
+                  <br />
+                  Please update their insurance information or remove the HMO attachment.
+                </p>
+                <div className="mt-4 flex items-center justify-center gap-3">
+                  <button
+                    onClick={startEditing}
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    Update Insurance
+                  </button>
+                  <button
+                    onClick={handleClear}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-medium text-amber-700 shadow-sm hover:bg-amber-50"
+                  >
+                    <X className="h-4 w-4" />
+                    Remove HMO
+                  </button>
+                </div>
+              </div>
             ) : (
-              // No Insurance
+              // Patient DOES NOT have insurance
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                 <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-full bg-slate-200">
                   <Shield className="h-8 w-8 text-slate-400" />

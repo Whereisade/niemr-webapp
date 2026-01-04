@@ -154,11 +154,9 @@ function buildNavForUser(user) {
         label: "Appointments",
         icon: CalendarClock,
       },
-      { href: "/facility/patients", label: "Patients", icon: Users },
       { href: "/facility/hmos", label: "HMOs", icon: Shield },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
       { href: "/facility/payments", label: "Payments", icon: CreditCard },
-      { href: "/facility/reports", label: "Reports", icon: ClipboardList },
       { href: "/facility/emails", label: "Emails", icon: Mail },
       {
         href: "/facility/providers",

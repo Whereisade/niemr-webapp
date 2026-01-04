@@ -215,7 +215,7 @@ export default function EnhancedHMOPage() {
         body: JSON.stringify({
           hmo_id: Number(selectedPharmacyHMO),
           drug_id: drugId,
-          price: priceValue,
+          amount: priceValue,
         }),
       });
 
@@ -259,7 +259,7 @@ export default function EnhancedHMOPage() {
         body: JSON.stringify({
           hmo_id: Number(selectedLabHMO),
           test_id: testId,
-          price: priceValue,
+          amount: priceValue,
         }),
       });
 
@@ -548,7 +548,7 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, 
           <div>
             <div className="text-sm font-medium text-slate-900">Facility HMOs</div>
             <div className="text-xs text-slate-600">
-              {isSuperAdmin ? "You can create, disable, or delete HMOs." : "You can view HMOs. Only SUPER_ADMIN can edit."}
+              {isSuperAdmin ? "You can create, disable, or delete HMOs." : "You can view HMOs. Only ADMIN can edit."}
             </div>
           </div>
 
@@ -690,6 +690,8 @@ function PharmacyPricingTab({
             { label: "price", desc: "HMO price (required)" },
             { label: "name", desc: "Drug name (optional)" },
             { label: "strength", desc: "e.g., 500mg (optional)" },
+            { label: "form", desc: "e.g., Tablet, Syrup (optional)" },
+            { label: "route", desc: "e.g., Oral, IV (optional)" },
           ]}
         />
       </div>
@@ -769,6 +771,8 @@ function LabPricingTab({
             { label: "price", desc: "HMO price (required)" },
             { label: "name", desc: "Test name (optional)" },
             { label: "unit", desc: "e.g., g/dL (optional)" },
+            { label: "ref_low", desc: "Reference low (optional)" },
+            { label: "ref_high", desc: "Reference high (optional)" },
           ]}
         />
       </div>
