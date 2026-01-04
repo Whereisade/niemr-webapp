@@ -88,6 +88,7 @@ function buildNavForUser(user) {
         { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
         { href: "/facility/encounters", label: "Encounters", icon: ClipboardList },
         { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/labs", label: "Labs", icon: FlaskConical },
         { href: "/facility/pharmacy", label: "Pharmacy", icon: Pill },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
@@ -100,6 +101,7 @@ function buildNavForUser(user) {
         { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
         { href: "/facility/encounters", label: "Encounters", icon: ClipboardList },
         { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/vitals", label: "Vitals", icon: Activity },
         { href: "/facility/labs", label: "Labs", icon: FlaskConical },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
@@ -114,6 +116,7 @@ function buildNavForUser(user) {
         { href: "/facility/billing", label: "Billing", icon: CreditCard },
         { href: "/facility/payments", label: "Payments", icon: CreditCard },
         { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
       ];
     }
@@ -127,6 +130,7 @@ function buildNavForUser(user) {
         { href: "/facility/billing", label: "Billing", icon: CreditCard },
         { href: "/facility/payments", label: "Payments", icon: CreditCard },
         { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
       ];
     }
@@ -136,6 +140,7 @@ function buildNavForUser(user) {
         ...base,
         { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
         { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/billing", label: "Billing", icon: CreditCard },
         { href: "/facility/payments", label: "Payments", icon: CreditCard },
       ];
@@ -144,13 +149,23 @@ function buildNavForUser(user) {
     // ADMIN / SUPER_ADMIN / other facility staff
     return [
       ...base,
-      { href: "/facility/appointments", label: "Appointments", icon: CalendarClock },
+      {
+        href: "/facility/appointments",
+        label: "Appointments",
+        icon: CalendarClock,
+      },
       { href: "/facility/patients", label: "Patients", icon: Users },
+      { href: "/facility/hmos", label: "HMOs", icon: Shield },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
       { href: "/facility/payments", label: "Payments", icon: CreditCard },
       { href: "/facility/reports", label: "Reports", icon: ClipboardList },
       { href: "/facility/emails", label: "Emails", icon: Mail },
-      { href: "/facility/providers", label: "Staff", icon: Users, accent: true },
+      {
+        href: "/facility/providers",
+        label: "Staff",
+        icon: Users,
+        accent: true,
+      },
     ];
   }
 
