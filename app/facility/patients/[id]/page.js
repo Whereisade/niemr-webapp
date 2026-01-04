@@ -9,6 +9,7 @@ import PatientDocumentsProvider from "@/components/patient/PatientDocumentsProvi
 import PatientDocumentUploadProvider from "@/components/patient/PatientDocumentUploadProvider";
 import PatientVitalsHistory from "@/components/patient/PatientVitalsHistory";
 import PatientAllergies from "@/components/patient/Patientallergies";
+import PatientInsurance from "./components/PatientInsurance";
 import { 
   Activity, 
   FileText, 
@@ -926,6 +927,9 @@ function FacilityPatientDetailPageInner() {
         patientId={patientId}
         onSuccess={handleVitalsSuccess}
       />
+      <section>
+        <PatientInsurance patientId={patientId} />
+      </section>
     </main>
   );
 }
