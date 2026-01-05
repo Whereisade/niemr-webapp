@@ -12,6 +12,7 @@ import {
   APPT_ACTION_LABELS,
   canStartEncounter,
   TERMINAL_STATUSES,
+  getAppointmentTypeLabel,
 } from "@/lib/appointmentsActions";
 import {
   CalendarRange,
@@ -22,6 +23,10 @@ import {
   ArrowLeft,
   Loader2,
   AlertCircle,
+  CreditCard,
+  CheckCircle2,
+  XCircle,
+  DollarSign,
 } from "lucide-react";
 
 function formatDateTime(value) {
@@ -35,6 +40,13 @@ function formatDateTime(value) {
   }
 }
 
+function formatMoney(v) {
+  if (v === null || v === undefined) return "—";
+  const n = Number(v);
+  if (Number.isNaN(n)) return String(v);
+  return `₦${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function FacilityAppointmentDetail() {
   const params = useParams();
   const router = useRouter();
@@ -44,6 +56,7 @@ export default function FacilityAppointmentDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [actionSuccess, setActionSuccess] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -79,8 +92,21 @@ export default function FacilityAppointmentDetail() {
     if (!appt?.id || actionLoading) return;
 
     setActionLoading(action);
+    setActionSuccess("");
     try {
       const updated = await postAppointmentAction(appt.id, action);
+      
+      // Show billing info if check-in created a charge
+      if (action === "check_in" && updated.charge_created) {
+        setActionSuccess(
+          `Patient checked in successfully! Billing charge #${updated.charge_id} created for ${formatMoney(updated.charge_amount)}`
+        );
+      } else if (action === "check_in" && updated.charge_error) {
+        setActionSuccess(
+          `Patient checked in, but billing charge failed: ${updated.charge_error}`
+        );
+      }
+      
       // Refresh appointment data
       const refreshed = await apiFetch(`/appointments/${appt.id}/`);
       setAppt(refreshed);
@@ -136,6 +162,7 @@ export default function FacilityAppointmentDetail() {
   const status = (appt.status || "SCHEDULED").toUpperCase();
   const start = appt.start_at || appt.start_time || appt.time || "—";
   const end = appt.end_at || appt.end_time || "—";
+  const apptTypeLabel = getAppointmentTypeLabel(appt.appt_type);
 
   const isTerminal = TERMINAL_STATUSES.includes(status);
   const showStartEncounter =
@@ -175,6 +202,16 @@ export default function FacilityAppointmentDetail() {
           <StatusBadge value={status} />
         </div>
       </header>
+
+      {/* Success message */}
+      {actionSuccess && (
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
+            <p className="text-sm text-emerald-800">{actionSuccess}</p>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -231,7 +268,7 @@ export default function FacilityAppointmentDetail() {
               <dt className="text-slate-500 text-xs uppercase tracking-wide mb-1">
                 Type
               </dt>
-              <dd className="text-slate-900">{appt.appt_type || "Consult"}</dd>
+              <dd className="text-slate-900 font-medium">{apptTypeLabel}</dd>
             </div>
           </dl>
         </div>
@@ -281,6 +318,73 @@ export default function FacilityAppointmentDetail() {
         </div>
       </div>
 
+      {/* Billing Information */}
+      {(appt.charge_id || appt.linked_charge_id) && (
+        <section className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm mb-8">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-100">
+                <CreditCard className="h-5 w-5 text-emerald-700" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Billing Charge</h2>
+                <p className="text-sm text-emerald-700 mt-1">
+                  Automatically created on check-in
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/facility/billing"
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+            >
+              <DollarSign className="h-4 w-4" />
+              View in Billing
+            </Link>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-emerald-200 bg-white p-4">
+              <div className="text-xs font-medium text-emerald-700 mb-1">Charge ID</div>
+              <div className="text-lg font-bold text-slate-900">
+                #{appt.charge_id || appt.linked_charge_id}
+              </div>
+            </div>
+            
+            {appt.charge_amount && (
+              <div className="rounded-xl border border-emerald-200 bg-white p-4">
+                <div className="text-xs font-medium text-emerald-700 mb-1">Amount</div>
+                <div className="text-lg font-bold text-slate-900">
+                  {formatMoney(appt.charge_amount)}
+                </div>
+              </div>
+            )}
+            
+            <div className="rounded-xl border border-emerald-200 bg-white p-4">
+              <div className="text-xs font-medium text-emerald-700 mb-1">Service</div>
+              <div className="text-sm font-medium text-slate-900">{apptTypeLabel}</div>
+              <div className="text-xs text-slate-500 mt-1">APPT:{appt.appt_type}</div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Billing error */}
+      {appt.charge_error && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm mb-8">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-semibold text-amber-900">Billing Issue</h3>
+              <p className="text-sm text-amber-800 mt-1">{appt.charge_error}</p>
+              <p className="text-xs text-amber-700 mt-2">
+                The patient was checked in successfully, but the automatic billing charge could not be created. 
+                You can manually create a charge in the Billing section.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Actions section */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Actions</h2>
@@ -320,6 +424,7 @@ export default function FacilityAppointmentDetail() {
                 {actionLoading === action && (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 )}
+                {action === "check_in" && <CreditCard className="h-4 w-4" />}
                 {APPT_ACTION_LABELS[action] || action}
               </button>
             ))}

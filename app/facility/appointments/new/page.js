@@ -12,6 +12,8 @@ import {
   Stethoscope,
   Mail,
   ArrowLeft,
+  CreditCard,
+  Info,
 } from "lucide-react";
 
 function combineDateTime(date, time) {
@@ -28,7 +30,7 @@ export default function FacilityNewAppointmentPage() {
   // Form state
   const [patientId, setPatientId] = useState("");
   const [providerId, setProviderId] = useState("");
-  const [apptType, setApptType] = useState("CONSULT");
+  const [apptType, setApptType] = useState("CONSULTATION");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [durationMins, setDurationMins] = useState("30");
@@ -215,6 +217,22 @@ export default function FacilityNewAppointmentPage() {
               </div>
             )}
 
+            {/* Auto-billing notice */}
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-100">
+                  <CreditCard className="h-4 w-4 text-emerald-700" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-emerald-900">Auto-Billing Enabled</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-800">
+                    When the patient checks in, a billing charge will be automatically created based on the appointment type. 
+                    The system will use HMO-specific pricing if the patient has insurance, or facility default pricing otherwise.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Patient select */}
             <div>
               <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -300,6 +318,9 @@ export default function FacilityNewAppointmentPage() {
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-slate-500">
+                This determines the billing charge created on check-in.
+              </p>
             </div>
 
             {/* Date / time / duration */}
@@ -379,10 +400,10 @@ export default function FacilityNewAppointmentPage() {
                   checked={!!sendEmail}
                   onChange={(e) => setSendEmail(e.target.checked)}
                 />
-                Send email notifications (reminders/updates) to the patient’s account email
+                Send email notifications (reminders/updates) to the patient's account email
               </label>
               <p className="mt-1 text-xs text-slate-500">
-                Emails are sent to the patient\'s registered email (custom emails are not supported).
+                Emails are sent to the patient&apos;s registered email (custom emails are not supported).
               </p>
             </div>
           </div>
@@ -435,6 +456,12 @@ export default function FacilityNewAppointmentPage() {
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">Type</dt>
+                  <dd className="text-right text-slate-900">
+                    {APPT_TYPES.find((t) => t.value === apptType)?.label || apptType}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
                   <dt className="text-slate-500">Date</dt>
                   <dd className="text-right text-slate-900">
                     {date || "—"}
@@ -454,6 +481,20 @@ export default function FacilityNewAppointmentPage() {
                 </div>
               </dl>
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs text-slate-700">
+            <div className="flex items-start gap-2 mb-2">
+              <Info className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
+              <h3 className="text-xs font-semibold text-blue-900">
+                Billing Information
+              </h3>
+            </div>
+            <ul className="list-disc space-y-1 pl-5 text-blue-800">
+              <li>Billing charges are created automatically when patient checks in</li>
+              <li>Pricing is based on appointment type and patient&apos;s HMO</li>
+              <li>Charges can be viewed and managed in the Billing section</li>
+            </ul>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
