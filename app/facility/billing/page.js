@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useCharges } from "@/lib/useCharges";
 import { useBillingLedger } from "@/lib/useBillingLedger";
@@ -15,7 +16,8 @@ import {
   Clock,
   XCircle,
   Filter,
-  Download
+  Download,
+  Users,
 } from "lucide-react";
 
 function normalizeResults(payload) {
@@ -110,6 +112,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function FacilityBillingPage() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [patient, setPatient] = useState("");
@@ -163,6 +166,13 @@ export default function FacilityBillingPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/facility/billing/patients')}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Users className="h-4 w-4" />
+              Patient History
+            </button>
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
