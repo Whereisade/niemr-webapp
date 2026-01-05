@@ -697,9 +697,46 @@ function TabButton({ active, onClick, icon: Icon, children }) {
 }
 
 function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, toggleActive, deleteHmo }) {
+  // Calculate stats
+  const activeCount = hmos.filter(h => h.is_active).length;
+  const inactiveCount = hmos.length - activeCount;
+
   return (
-    <div className="space-y-4">
-      {/* Info panel */}
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-blue-50 to-white p-5 transition hover:shadow-md">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-blue-100">
+              <Shield className="h-6 w-6 text-blue-700" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-blue-900">{hmos.length}</div>
+          <div className="text-sm font-medium text-blue-700">Total HMOs</div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 transition hover:shadow-md">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-100">
+              <CheckCircle2 className="h-6 w-6 text-emerald-700" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-emerald-900">{activeCount}</div>
+          <div className="text-sm font-medium text-emerald-700">Active Plans</div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 transition hover:shadow-md">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-slate-100">
+              <ToggleLeft className="h-6 w-6 text-slate-700" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-slate-900">{inactiveCount}</div>
+          <div className="text-sm font-medium text-slate-700">Disabled</div>
+        </div>
+      </div>
+
+      {/* Info Panel */}
       <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
         <div className="flex items-start gap-3">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-100">
@@ -707,80 +744,130 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, 
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-blue-900">HMO Workflow</h3>
-            <ol className="mt-2 space-y-1 text-xs text-blue-800">
-              <li>1. Create an HMO plan (e.g., NHIS, Hygeia, AXA Mansard)</li>
-              <li>2. Set HMO-specific prices in Pharmacy Pricing and Lab Pricing tabs</li>
-              <li>3. Attach patients to HMO plans via Patient Details → Insurance tab</li>
-              <li>4. Billing automatically applies HMO prices for attached patients</li>
-            </ol>
+            <div className="mt-2 space-y-1 text-xs text-blue-800">
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">1</div>
+                <div>Create an HMO plan (e.g., NHIS, Hygeia, AXA Mansard)</div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">2</div>
+                <div>Set HMO-specific prices in Pharmacy, Lab, and Appointments tabs</div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">3</div>
+                <div>Attach patients to HMO plans via Patient Details → Insurance tab</div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">4</div>
+                <div>Billing automatically applies HMO prices for attached patients</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* HMO Management */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-sm font-medium text-slate-900">Facility HMOs</div>
-            <div className="text-xs text-slate-600">
-              {isSuperAdmin ? "You can create, disable, or delete HMOs." : "You can view HMOs. Only ADMIN can edit."}
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Facility HMOs</h2>
+              <p className="text-xs text-slate-600">
+                {isSuperAdmin ? "Create, disable, or delete HMO plans" : "View HMO plans (Admin access required for editing)"}
+              </p>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="New HMO name (e.g., NHIS, Hygeia)"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring md:w-[300px]"
-              disabled={!isSuperAdmin || busy}
-            />
-            <button
-              onClick={createHmo}
-              disabled={!isSuperAdmin || busy || !name.trim()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4" />
-              Add HMO
-            </button>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <div className="relative">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && name.trim() && isSuperAdmin && !busy) {
+                      createHmo();
+                    }
+                  }}
+                  placeholder="New HMO name (e.g., NHIS, Hygeia)"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:opacity-60 md:w-[280px]"
+                  disabled={!isSuperAdmin || busy}
+                />
+              </div>
+              <button
+                onClick={createHmo}
+                disabled={!isSuperAdmin || busy || !name.trim()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-500/40 disabled:opacity-60 disabled:shadow-none"
+              >
+                <Plus className="h-4 w-4" />
+                Add HMO
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b bg-slate-50 text-xs text-slate-500">
+            <thead className="border-b border-slate-100 bg-slate-50/50 text-xs font-semibold uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Created</th>
-                <th className="px-3 py-2 text-right">Actions</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Created</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-slate-500">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  <td colSpan={4} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                      <p className="text-sm text-slate-500">Loading HMOs...</p>
+                    </div>
                   </td>
                 </tr>
               ) : hmos.length ? (
                 hmos.map((h) => (
-                  <tr key={h.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-3 font-medium text-slate-900">{h.name}</td>
-                    <td className="px-3 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${h.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                  <tr key={h.id} className="group transition hover:bg-slate-50">
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`grid h-10 w-10 place-items-center rounded-xl ${
+                          h.is_active 
+                            ? "bg-blue-100 text-blue-700" 
+                            : "bg-slate-100 text-slate-600"
+                        }`}>
+                          <Shield className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-900">{h.name}</div>
+                          <div className="text-xs text-slate-500">ID: {h.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                        h.is_active 
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700" 
+                          : "border-slate-200 bg-slate-100 text-slate-700"
+                      }`}>
+                        {h.is_active ? (
+                          <CheckCircle2 className="h-3 w-3" />
+                        ) : (
+                          <AlertCircle className="h-3 w-3" />
+                        )}
                         {h.is_active ? "Active" : "Disabled"}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-xs text-slate-600">
-                      {h.created_at ? new Date(h.created_at).toLocaleString() : "—"}
+                    <td className="px-4 py-4 text-xs text-slate-600">
+                      {h.created_at ? new Date(h.created_at).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric"
+                      }) : "—"}
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-4 py-4">
                       <div className="flex justify-end gap-2">
-                        
                         <a
                           href={`/facility/hmos/${h.id}`}
-                          className="inline-flex items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 shadow-sm hover:bg-blue-100"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
                         >
                           <Eye className="h-4 w-4" />
                           View Details
@@ -788,15 +875,24 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, 
                         <button
                           onClick={() => toggleActive(h)}
                           disabled={!isSuperAdmin || busy}
-                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
                         >
-                          {h.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                          {h.is_active ? "Disable" : "Enable"}
+                          {h.is_active ? (
+                            <>
+                              <ToggleRight className="h-4 w-4" />
+                              Disable
+                            </>
+                          ) : (
+                            <>
+                              <ToggleLeft className="h-4 w-4" />
+                              Enable
+                            </>
+                          )}
                         </button>
                         <button
                           onClick={() => deleteHmo(h)}
                           disabled={!isSuperAdmin || busy}
-                          className="inline-flex items-center gap-1 rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 shadow-sm hover:bg-red-50 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50 disabled:opacity-60"
                         >
                           <Trash2 className="h-4 w-4" />
                           Delete
@@ -807,8 +903,18 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, 
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-slate-500">
-                    No HMOs yet.
+                  <td colSpan={4} className="py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100">
+                        <Shield className="h-8 w-8 text-slate-400" />
+                      </div>
+                      <div className="text-center">
+                        <h3 className="text-sm font-semibold text-slate-900">No HMOs yet</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {isSuperAdmin ? "Create your first HMO plan to get started" : "Contact your admin to add HMO plans"}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               )}
