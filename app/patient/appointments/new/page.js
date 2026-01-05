@@ -694,178 +694,86 @@ export default function PatientNewAppointmentPage() {
 
             {/* Facility Booking Fields */}
             {bookingMode === "facility" && (
-              <>
-                <div>
-                  <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <Building2 className="h-4 w-4 text-slate-500" />
-                    Select Facility
-                  </label>
-                  
-                  {/* Search input */}
-                  <input
-                    type="text"
-                    placeholder="Search facilities..."
-                    value={facilitySearch}
-                    onChange={(e) => setFacilitySearch(e.target.value)}
-                    className="w-full rounded-t-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  
-                  {/* Facility list */}
-                  <div className="max-h-48 overflow-y-auto rounded-b-lg border border-t-0 border-slate-300 bg-white">
-                    {loadingFacilities ? (
-                      <div className="px-3 py-2 text-sm text-slate-500">Loading facilities…</div>
-                    ) : (
-                      <>
-                        {!facilityId && (
-                          <button
-                            type="button"
-                            onClick={() => setFacilityId("")}
-                            className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 border-b border-slate-200"
-                          >
-                            <div className="font-medium">Choose a facility</div>
-                          </button>
-                        )}
-                        {facilities
-                          .filter((f) => {
-                            if (!facilitySearch) return true;
-                            const searchLower = facilitySearch.toLowerCase();
-                            const name = (f.name || "").toLowerCase();
-                            const address = (f.address || "").toLowerCase();
-                            const state = (f.state || "").toLowerCase();
-                            return name.includes(searchLower) || address.includes(searchLower) || state.includes(searchLower);
-                          })
-                          .map((f) => (
-                            <button
-                              key={f.id}
-                              type="button"
-                              onClick={() => {
-                                setFacilityId(String(f.id));
-                                setFacilitySearch("");
-                              }}
-                              className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 border-b border-slate-200 last:border-b-0 ${
-                                String(facilityId) === String(f.id) ? "bg-blue-50" : ""
-                              }`}
-                            >
-                              <div className="font-medium text-slate-900">
-                                {f.name || `Facility #${f.id}`}
-                              </div>
-                              {(f.address || f.state) && (
-                                <div className="text-xs text-slate-500 mt-0.5">
-                                  {[f.address, f.state].filter(Boolean).join(", ")}
-                                </div>
-                              )}
-                            </button>
-                          ))}
-                        {facilities.filter((f) => {
+              <div>
+                <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Building2 className="h-4 w-4 text-slate-500" />
+                  Select Facility
+                </label>
+                
+                {/* Search input */}
+                <input
+                  type="text"
+                  placeholder="Search facilities..."
+                  value={facilitySearch}
+                  onChange={(e) => setFacilitySearch(e.target.value)}
+                  className="w-full rounded-t-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                
+                {/* Facility list */}
+                <div className="max-h-48 overflow-y-auto rounded-b-lg border border-t-0 border-slate-300 bg-white">
+                  {loadingFacilities ? (
+                    <div className="px-3 py-2 text-sm text-slate-500">Loading facilities…</div>
+                  ) : (
+                    <>
+                      {!facilityId && (
+                        <button
+                          type="button"
+                          onClick={() => setFacilityId("")}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 border-b border-slate-200"
+                        >
+                          <div className="font-medium">Choose a facility</div>
+                        </button>
+                      )}
+                      {facilities
+                        .filter((f) => {
                           if (!facilitySearch) return true;
                           const searchLower = facilitySearch.toLowerCase();
                           const name = (f.name || "").toLowerCase();
                           const address = (f.address || "").toLowerCase();
                           const state = (f.state || "").toLowerCase();
                           return name.includes(searchLower) || address.includes(searchLower) || state.includes(searchLower);
-                        }).length === 0 && (
-                          <div className="px-3 py-2 text-sm text-slate-500">
-                            No facilities found
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {facilityId && (
-                  <div>
-                    <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
-                      <Stethoscope className="h-4 w-4 text-slate-500" />
-                      Select Provider (optional)
-                    </label>
-                    
-                    {/* Search input */}
-                    <input
-                      type="text"
-                      placeholder="Search providers..."
-                      value={providerSearch}
-                      onChange={(e) => setProviderSearch(e.target.value)}
-                      disabled={loadingFacilityProviders}
-                      className="w-full rounded-t-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100"
-                    />
-                    
-                    {/* Provider list */}
-                    <div className="max-h-48 overflow-y-auto rounded-b-lg border border-t-0 border-slate-300 bg-white">
-                      {loadingFacilityProviders ? (
-                        <div className="px-3 py-2 text-sm text-slate-500">Loading providers…</div>
-                      ) : (
-                        <>
-                          {!providerId && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setProviderId("");
-                                setProviderSearch("");
-                              }}
-                              className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 border-b border-slate-200"
-                            >
-                              <div className="font-medium">Any available provider</div>
-                            </button>
-                          )}
-                          {facilityProviders
-                            .filter((p) => {
-                              if (!providerSearch) return true;
-                              const searchLower = providerSearch.toLowerCase();
-                              const name = ([p.first_name, p.last_name].filter(Boolean).join(" ") || "").toLowerCase();
-                              const email = (p.email || "").toLowerCase();
-                              const address = (p.address || "").toLowerCase();
-                              const state = (p.state || "").toLowerCase();
-                              return name.includes(searchLower) || email.includes(searchLower) || address.includes(searchLower) || state.includes(searchLower);
-                            })
-                            .map((p) => {
-                              const fullName = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email || `Provider #${p.id}`;
-                              return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setProviderId(String(p.user));
-                                    setProviderSearch("");
-                                  }}
-                                  className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 border-b border-slate-200 last:border-b-0 ${
-                                    String(providerId) === String(p.user) ? "bg-blue-50" : ""
-                                  }`}
-                                >
-                                  <div className="font-medium text-slate-900">
-                                    {fullName}
-                                    {p.provider_type ? ` - ${p.provider_type}` : ""}
-                                  </div>
-                                  {(p.address || p.state) && (
-                                    <div className="text-xs text-slate-500 mt-0.5">
-                                      {[p.address, p.state].filter(Boolean).join(", ")}
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          {facilityProviders.filter((p) => {
-                            if (!providerSearch) return true;
-                            const searchLower = providerSearch.toLowerCase();
-                            const name = ([p.first_name, p.last_name].filter(Boolean).join(" ") || "").toLowerCase();
-                            const email = (p.email || "").toLowerCase();
-                            const address = (p.address || "").toLowerCase();
-                            const state = (p.state || "").toLowerCase();
-                            return name.includes(searchLower) || email.includes(searchLower) || address.includes(searchLower) || state.includes(searchLower);
-                          }).length === 0 && (
-                            <div className="px-3 py-2 text-sm text-slate-500">
-                              No providers found
+                        })
+                        .map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => {
+                              setFacilityId(String(f.id));
+                              setFacilitySearch("");
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 border-b border-slate-200 last:border-b-0 ${
+                              String(facilityId) === String(f.id) ? "bg-blue-50" : ""
+                            }`}
+                          >
+                            <div className="font-medium text-slate-900">
+                              {f.name || `Facility #${f.id}`}
                             </div>
-                          )}
-                        </>
+                            {(f.address || f.state) && (
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {[f.address, f.state].filter(Boolean).join(", ")}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      {facilities.filter((f) => {
+                        if (!facilitySearch) return true;
+                        const searchLower = facilitySearch.toLowerCase();
+                        const name = (f.name || "").toLowerCase();
+                        const address = (f.address || "").toLowerCase();
+                        const state = (f.state || "").toLowerCase();
+                        return name.includes(searchLower) || address.includes(searchLower) || state.includes(searchLower);
+                      }).length === 0 && (
+                        <div className="px-3 py-2 text-sm text-slate-500">
+                          No facilities found
+                        </div>
                       )}
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Leave empty to let the facility assign you to an available provider.
-                    </p>
-                  </div>
-                )}
-              </>
+                    </>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  The facility will assign you to an available provider.
+                </p>
+              </div>
             )}
 
             {/* Independent Provider Booking Fields */}
@@ -1364,8 +1272,7 @@ export default function PatientNewAppointmentPage() {
                     <div className="flex justify-between gap-3">
                       <dt className="text-slate-500">Provider</dt>
                       <dd className="text-right text-slate-900">
-                        {providerName || "Any available"}
-                        {providerRole ? ` · ${providerRole}` : ""}
+                        Assigned by facility
                       </dd>
                     </div>
                   </>
@@ -1442,7 +1349,7 @@ export default function PatientNewAppointmentPage() {
                 </p>
                 <ul className="list-disc space-y-1 pl-4">
                   <li>Select your preferred facility</li>
-                  <li>Optionally choose a specific provider</li>
+                  <li>The facility will assign an available provider</li>
                   <li>Your patient profile is linked automatically</li>
                   <li>You can check the status from your appointments page</li>
                 </ul>
