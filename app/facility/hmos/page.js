@@ -25,6 +25,7 @@ import {
   Loader2,
   DollarSign,
   TrendingDown,
+  Calendar, // added for appointments tab
 } from "lucide-react";
 
 function normalizeList(payload) {
@@ -41,7 +42,7 @@ function normalizeList(payload) {
 
 export default function EnhancedHMOPage() {
   const [me, setMe] = useState(null);
-  const [activeTab, setActiveTab] = useState("hmos"); // hmos | pharmacy | labs
+  const [activeTab, setActiveTab] = useState("hmos"); // hmos | pharmacy | labs | appointments
 
   // HMO management state
   const [hmos, setHmos] = useState([]);
@@ -67,6 +68,18 @@ export default function EnhancedHMOPage() {
   const [editingTestId, setEditingTestId] = useState(null);
   const [editTestPrice, setEditTestPrice] = useState("");
   const [updatingTest, setUpdatingTest] = useState(false);
+
+  // Appointment pricing state (new)
+  const [selectedApptHMO, setSelectedApptHMO] = useState("");
+  const [apptCatalog, setApptCatalog] = useState([]);
+  const [apptLoading, setApptLoading] = useState(false);
+  const [apptSearch, setApptSearch] = useState("");
+  const [apptImportFile, setApptImportFile] = useState(null);
+  const [apptImporting, setApptImporting] = useState(false);
+  const [apptImportResult, setApptImportResult] = useState(null);
+  const [editingApptId, setEditingApptId] = useState(null);
+  const [editApptPrice, setEditApptPrice] = useState("");
+  const [updatingAppt, setUpdatingAppt] = useState(false);
 
   // Import state (shared)
   const [importFile, setImportFile] = useState(null);
@@ -132,6 +145,24 @@ export default function EnhancedHMOPage() {
     }
     loadLab();
   }, [selectedLabHMO, activeTab]);
+
+  // Load appointments catalog when HMO selected and tab active
+  useEffect(() => {
+    if (!selectedApptHMO || activeTab !== "appointments") return;
+
+    async function loadAppt() {
+      setApptLoading(true);
+      try {
+        const res = await apiFetch(`/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`);
+        setApptCatalog(normalizeList(res));
+      } catch (e) {
+        setError(e?.message || "Failed to load appointment catalog");
+      } finally {
+        setApptLoading(false);
+      }
+    }
+    loadAppt();
+  }, [selectedApptHMO, activeTab]);
 
   async function createHmo() {
     const n = name.trim();
@@ -276,7 +307,51 @@ export default function EnhancedHMOPage() {
     }
   }
 
-  // Import function
+  // Appointment pricing functions (new)
+  function startApptEdit(service) {
+    setEditingApptId(service.service_id);
+    setEditApptPrice(String(service.hmo_price || service.catalog_price || ""));
+  }
+
+  function cancelApptEdit() {
+    setEditingApptId(null);
+    setEditApptPrice("");
+  }
+
+  async function saveApptPrice(serviceId) {
+    const priceValue = editApptPrice.trim();
+    if (!priceValue || isNaN(priceValue) || Number(priceValue) < 0) {
+      setError("Please enter a valid price (0 or greater)");
+      return;
+    }
+
+    setUpdatingAppt(true);
+    setError("");
+
+    try {
+      await apiFetch("/appointments/set-hmo-price/", {
+        method: "POST",
+        body: JSON.stringify({
+          hmo_id: Number(selectedApptHMO),
+          service_id: serviceId,
+          amount: priceValue,
+        }),
+      });
+
+      // Reload catalog
+      const res = await apiFetch(`/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`);
+      setApptCatalog(normalizeList(res));
+      
+      setEditingApptId(null);
+      setEditApptPrice("");
+    } catch (e) {
+      setError(e?.message || "Failed to update appointment price");
+    } finally {
+      setUpdatingAppt(false);
+    }
+  }
+
+  // Import function (shared - pharmacy & lab)
   async function handleImport(e, type) {
     e.preventDefault();
     if (!importFile) {
@@ -336,6 +411,58 @@ export default function EnhancedHMOPage() {
     }
   }
 
+  // Appointment import (new) - uses proxy like others
+  async function handleApptImport(e) {
+    e.preventDefault();
+    if (!apptImportFile) {
+      setApptImportResult(null);
+      setError("Please select a file to import.");
+      return;
+    }
+    if (!selectedApptHMO) {
+      setApptImportResult(null);
+      setError("Please select an HMO first.");
+      return;
+    }
+
+    setError("");
+    setApptImportResult(null);
+    setApptImporting(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", apptImportFile);
+
+      const endpoint = `/appointments/import-hmo-file/?hmo_id=${selectedApptHMO}`;
+      const res = await fetch(`/api/proxy${endpoint}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        let msg = `Import failed (${res.status})`;
+        try {
+          const err = await res.json();
+          if (err && err.detail) msg = err.detail;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const result = await res.json();
+      setApptImportResult(result);
+
+      // reload appt catalog
+      const catalog = await apiFetch(`/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`);
+      setApptCatalog(normalizeList(catalog));
+
+      setApptImportFile(null);
+    } catch (err) {
+      setApptImportResult({ errors: [err?.message || "Failed to import file"] });
+    } finally {
+      setApptImporting(false);
+    }
+  }
+
   const filteredPharmacyCatalog = useMemo(() => {
     const q = pharmacySearch.trim().toLowerCase();
     if (!q) return pharmacyCatalog;
@@ -359,8 +486,22 @@ export default function EnhancedHMOPage() {
     });
   }, [labCatalog, labSearch]);
 
+  const filteredApptCatalog = useMemo(() => {
+    const q = apptSearch.trim().toLowerCase();
+    if (!q) return apptCatalog;
+    return apptCatalog.filter((item) => {
+      return (
+        item.service_code?.toLowerCase().includes(q) ||
+        item.service_name?.toLowerCase().includes(q)
+      );
+    });
+  }, [apptCatalog, apptSearch]);
+
   const fileExtension = importFile ? importFile.name.split('.').pop().toLowerCase() : '';
   const isValidFile = ['csv', 'xlsx', 'xls'].includes(fileExtension);
+
+  const apptFileExtension = apptImportFile ? apptImportFile.name.split('.').pop().toLowerCase() : '';
+  const apptIsValidFile = ['csv', 'xlsx', 'xls'].includes(apptFileExtension);
 
   return (
     <div className="mx-auto max-w-7xl p-4 md:p-6">
@@ -426,6 +567,13 @@ export default function EnhancedHMOPage() {
           icon={Beaker}
         >
           Lab Pricing
+        </TabButton>
+        <TabButton
+          active={activeTab === "appointments"}
+          onClick={() => setActiveTab("appointments")}
+          icon={Calendar}
+        >
+          Appointments
         </TabButton>
       </div>
 
@@ -497,6 +645,32 @@ export default function EnhancedHMOPage() {
           handleImport={(e) => handleImport(e, "labs")}
           isValidFile={isValidFile}
           fileExtension={fileExtension}
+        />
+      )}
+
+      {activeTab === "appointments" && (
+        <AppointmentPricingTab
+          activeHMOs={activeHMOs}
+          selectedHMO={selectedApptHMO}
+          setSelectedHMO={setSelectedApptHMO}
+          catalog={filteredApptCatalog}
+          catalogLoading={apptLoading}
+          search={apptSearch}
+          setSearch={setApptSearch}
+          editingId={editingApptId}
+          editPrice={editApptPrice}
+          setEditPrice={setEditApptPrice}
+          startEdit={startApptEdit}
+          cancelEdit={cancelApptEdit}
+          savePrice={saveApptPrice}
+          updating={updatingAppt}
+          importFile={apptImportFile}
+          setImportFile={setApptImportFile}
+          importing={apptImporting}
+          importResult={apptImportResult}
+          isValidFile={apptIsValidFile}
+          fileExtension={apptFileExtension}
+          handleImport={handleApptImport}
         />
       )}
     </div>
@@ -795,6 +969,240 @@ function LabPricingTab({
         savePrice={savePrice}
         updating={updating}
       />
+    </div>
+  );
+}
+
+// Appointment Pricing Tab (new)
+function AppointmentPricingTab({
+  activeHMOs,
+  selectedHMO,
+  setSelectedHMO,
+  catalog,
+  catalogLoading,
+  search,
+  setSearch,
+  editingId,
+  editPrice,
+  setEditPrice,
+  startEdit,
+  cancelEdit,
+  savePrice,
+  updating,
+  importFile,
+  setImportFile,
+  importing,
+  importResult,
+  isValidFile,
+  fileExtension,
+  handleImport,
+}) {
+  return (
+    <div className="space-y-6">
+      {/* HMO Selection */}
+      <div className="bg-white rounded-lg border p-6">
+        <label className="block text-sm font-medium mb-2">Select HMO</label>
+        <select
+          value={selectedHMO || ""}
+          onChange={(e) => setSelectedHMO(e.target.value)}
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          <option value="">Choose an HMO...</option>
+          {activeHMOs.map((hmo) => (
+            <option key={hmo.id} value={hmo.id}>
+              {hmo.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {selectedHMO && (
+        <>
+          {/* Info Panel */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="font-semibold text-blue-900 mb-2">HMO Pricing Information</h3>
+            <div className="text-sm text-blue-800 space-y-1">
+              <p><strong>Selected HMO:</strong> {activeHMOs.find(h => String(h.id) === String(selectedHMO))?.name}</p>
+              <p><strong>Total Services:</strong> {catalog.length}</p>
+              <p className="text-xs mt-2">
+                Set custom prices for this HMO. If no HMO price is set, the catalog price will be used.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Import Panel */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-lg border p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Upload className="w-5 h-5" />
+                  Bulk Import HMO Prices
+                </h3>
+
+                <form onSubmit={handleImport} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Upload CSV or Excel file
+                    </label>
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => setImportFile(e.target.files[0])}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Required columns: <code className="bg-gray-100 px-1 rounded">code</code>, <code className="bg-gray-100 px-1 rounded">price</code>
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!importFile || importing}
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {importing ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        Import Prices
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {importResult && (
+                  <div className={`mt-4 p-4 rounded-lg ${importResult.errors && importResult.errors.length > 0 ? 'bg-yellow-50 border border-yellow-200' : 'bg-green-50 border border-green-200'}`}>
+                    {importResult.created !== undefined && (
+                      <div className="flex items-center gap-2 text-green-700 mb-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span className="text-sm font-medium">
+                          Created: {importResult.created}, Updated: {importResult.updated}
+                        </span>
+                      </div>
+                    )}
+                    {importResult.errors && importResult.errors.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-yellow-700 mb-2">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-sm font-medium">Errors:</span>
+                        </div>
+                        <div className="max-h-32 overflow-y-auto">
+                          {importResult.errors.map((error, idx) => (
+                            <p key={idx} className="text-xs text-yellow-700">{error}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Catalog Table */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Service Catalog</h3>
+                  <div className="relative w-64">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search services..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {catalogLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" />
+                  </div>
+                ) : catalog.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">
+                    No services found. Select an HMO to view pricing.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Service Name</th>
+                          <th className="text-right py-3 px-4 font-medium text-gray-700">Catalog Price</th>
+                          <th className="text-right py-3 px-4 font-medium text-gray-700">HMO Price</th>
+                          <th className="text-right py-3 px-4 font-medium text-gray-700">Discount</th>
+                          <th className="text-center py-3 px-4 font-medium text-gray-700">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {catalog.map((item) => (
+                          <tr key={item.service_id} className="hover:bg-gray-50">
+                            <td className="py-3 px-4">{item.service_name}</td>
+                            <td className="py-3 px-4 text-right">₦{parseFloat(item.catalog_price || 0).toLocaleString()}</td>
+                            <td className="py-3 px-4 text-right">
+                              {editingId === item.service_id ? (
+                                <input
+                                  type="number"
+                                  value={editPrice}
+                                  onChange={(e) => setEditPrice(e.target.value)}
+                                  className="w-24 px-2 py-1 border rounded text-right"
+                                  step="0.01"
+                                  min="0"
+                                />
+                              ) : (
+                                `₦${parseFloat(item.hmo_price || item.catalog_price || 0).toLocaleString()}`
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                (item.discount_percent || 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {item.discount_percent || 0}%
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {editingId === item.service_id ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => savePrice(item.service_id)}
+                                    disabled={updating}
+                                    className="text-green-600 hover:text-green-700 disabled:text-gray-400"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    disabled={updating}
+                                    className="text-red-600 hover:text-red-700 disabled:text-gray-400"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => startEdit(item)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
