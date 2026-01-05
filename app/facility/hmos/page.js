@@ -25,7 +25,8 @@ import {
   Loader2,
   DollarSign,
   TrendingDown,
-  Calendar, // added for appointments tab
+  Calendar,
+  Eye,
 } from "lucide-react";
 
 function normalizeList(payload) {
@@ -776,6 +777,14 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, 
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex justify-end gap-2">
+                        
+                        <a
+                          href={`/facility/hmos/${h.id}`}
+                          className="inline-flex items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 shadow-sm hover:bg-blue-100"
+                        >
+                          <Eye className="h-4 w-4" />
+                          View Details
+                        </a>
                         <button
                           onClick={() => toggleActive(h)}
                           disabled={!isSuperAdmin || busy}
