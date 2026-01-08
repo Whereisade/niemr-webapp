@@ -18,6 +18,7 @@ import {
   Filter,
   Download,
   Users,
+  Settings2,
 } from "lucide-react";
 
 function normalizeResults(payload) {
@@ -167,18 +168,25 @@ export default function FacilityBillingPage() {
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Filter className="h-4 w-4" />
+              
+            </button>
+            <button
+              onClick={() => router.push('/facility/appointments/pricing')}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Settings2 className="h-4 w-4" />
+              Appointment Pricing
+            </button>
+            <button
               onClick={() => router.push('/facility/billing/patients')}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
             >
               <Users className="h-4 w-4" />
               Patient History
-            </button>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <Filter className="h-4 w-4" />
-              Filters
             </button>
             <button
               onClick={() => setShowPaymentModal(true)}

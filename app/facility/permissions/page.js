@@ -221,6 +221,23 @@ const COLOR_CLASSES = {
   teal: "from-teal-500 to-teal-600 bg-teal-50 text-teal-700 border-teal-200",
 };
 
+// ✅ Role-specific category visibility
+// Only show relevant permission categories for each role
+const ROLE_CATEGORIES = {
+  DOCTOR: ["clinical", "appointments", "patients", "vitals", "pharmacy", "lab", "billing", "wards"],
+  NURSE: ["clinical", "appointments", "patients", "vitals", "wards"],
+  PHARMACY: ["pharmacy", "patients", "hmo"],
+  LAB: ["lab", "patients", "hmo"],
+  FRONTDESK: ["appointments", "patients", "billing"],
+  ADMIN: ["pharmacy", "lab", "clinical", "appointments", "patients", "vitals", "billing", "wards", "hmo", "settings"],
+};
+
+// ✅ Helper function to get visible categories for a role
+function getVisibleCategories(roleValue) {
+  const visibleCategoryIds = ROLE_CATEGORIES[roleValue] || [];
+  return PERMISSION_CATEGORIES.filter(cat => visibleCategoryIds.includes(cat.id));
+}
+
 export default function PermissionsPage() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -260,7 +277,7 @@ export default function PermissionsPage() {
   async function loadPermissions() {
     try {
       setLoading(true);
-      setMessage(null); // Clear any previous errors
+      setMessage(null);
       
       console.log('[Permissions] Fetching from /facilities/permissions/');
       const data = await apiFetch("/facilities/permissions/");
@@ -294,7 +311,6 @@ export default function PermissionsPage() {
       
       let errorMessage = "Failed to load permissions";
       
-      // Provide more specific error messages
       if (error.message.includes('404')) {
         errorMessage = "API endpoint not found. Check that backend migrations are complete and URLs are registered.";
       } else if (error.message.includes('403')) {
@@ -410,7 +426,9 @@ export default function PermissionsPage() {
 
   function getPermissionStats(roleValue) {
     const rolePerms = permissions[roleValue] || {};
-    const allPerms = PERMISSION_CATEGORIES.flatMap((cat) =>
+    // ✅ Only count permissions from visible categories for this role
+    const visibleCategories = getVisibleCategories(roleValue);
+    const allPerms = visibleCategories.flatMap((cat) =>
       cat.permissions.map((p) => p.key)
     );
 
@@ -521,7 +539,7 @@ export default function PermissionsPage() {
                   • Backend always enforces permissions - frontend only controls UI visibility
                 </p>
                 <p>
-                  • All changes are logged in the audit trail
+                  • Only relevant permission categories are shown for each role
                 </p>
               </div>
             </div>
@@ -537,6 +555,9 @@ export default function PermissionsPage() {
             const gradient = colorParts[0] + " " + colorParts[1];
             const bg = colorParts[2];
             const text = colorParts[3];
+            
+            // ✅ Get only visible categories for this role
+            const visibleCategories = getVisibleCategories(role.value);
 
             return (
               <div
@@ -622,9 +643,9 @@ export default function PermissionsPage() {
                       </button>
                     </div>
 
-                    {/* Permission Categories */}
+                    {/* Permission Categories - ✅ Only show visible categories */}
                     <div className="space-y-3">
-                      {PERMISSION_CATEGORIES.map((category) => {
+                      {visibleCategories.map((category) => {
                         const categoryKey = `${role.value}-${category.id}`;
                         const isCategoryExpanded = expandedCategories[categoryKey];
                         const categoryColorParts = COLOR_CLASSES[category.color].split(" ");

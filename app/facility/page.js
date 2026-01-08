@@ -904,6 +904,11 @@ export default async function FacilityDashboard() {
                       icon={ClipboardClock}
                       label="Audit Logs"
                     />
+                    <QuickLink
+                      href="/facility/permissions"
+                      icon={ClipboardClock}
+                      label="Permissions"
+                    />
                   </>
                 )}
 
