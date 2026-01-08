@@ -28,6 +28,7 @@ import {
   Calendar,
   Eye,
 } from "lucide-react";
+import AddHMOModal from "@/components/AddHMOModal";
 
 function normalizeList(payload) {
   if (!payload) return [];
@@ -48,9 +49,9 @@ export default function EnhancedHMOPage() {
   // HMO management state
   const [hmos, setHmos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // Pharmacy pricing state
   const [selectedPharmacyHMO, setSelectedPharmacyHMO] = useState("");
@@ -165,26 +166,6 @@ export default function EnhancedHMOPage() {
     loadAppt();
   }, [selectedApptHMO, activeTab]);
 
-  async function createHmo() {
-    const n = name.trim();
-    if (!n) return;
-    setBusy(true);
-    setError("");
-    try {
-      await apiFetch("/facilities/hmos/", {
-        method: "POST",
-        body: JSON.stringify({ name: n, is_active: true }),
-      });
-      setName("");
-      const res = await apiFetch("/facilities/hmos/");
-      setHmos(normalizeList(res));
-    } catch (e) {
-      setError(e?.message || "Failed to create HMO");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function toggleActive(hmo) {
     if (!hmo?.id) return;
     setBusy(true);
@@ -218,6 +199,12 @@ export default function EnhancedHMOPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleModalSuccess() {
+    setShowAddModal(false);
+    const res = await apiFetch("/facilities/hmos/");
+    setHmos(normalizeList(res));
   }
 
   // Pharmacy pricing functions
@@ -585,11 +572,9 @@ export default function EnhancedHMOPage() {
           loading={loading}
           isSuperAdmin={isSuperAdmin}
           busy={busy}
-          name={name}
-          setName={setName}
-          createHmo={createHmo}
           toggleActive={toggleActive}
           deleteHmo={deleteHmo}
+          onAddClick={() => setShowAddModal(true)}
         />
       )}
 
@@ -674,6 +659,14 @@ export default function EnhancedHMOPage() {
           handleImport={handleApptImport}
         />
       )}
+
+      {/* Add HMO Modal */}
+      <AddHMOModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleModalSuccess}
+        busy={busy}
+      />
     </div>
   );
 }
@@ -696,7 +689,7 @@ function TabButton({ active, onClick, icon: Icon, children }) {
   );
 }
 
-function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, toggleActive, deleteHmo }) {
+function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, onAddClick }) {
   // Calculate stats
   const activeCount = hmos.filter(h => h.is_active).length;
   const inactiveCount = hmos.length - activeCount;
@@ -777,30 +770,16 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, name, setName, createHmo, 
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-              <div className="relative">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && name.trim() && isSuperAdmin && !busy) {
-                      createHmo();
-                    }
-                  }}
-                  placeholder="New HMO name (e.g., NHIS, Hygeia)"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:opacity-60 md:w-[280px]"
-                  disabled={!isSuperAdmin || busy}
-                />
-              </div>
+            {isSuperAdmin && (
               <button
-                onClick={createHmo}
-                disabled={!isSuperAdmin || busy || !name.trim()}
+                onClick={onAddClick}
+                disabled={busy}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-500/40 disabled:opacity-60 disabled:shadow-none"
               >
                 <Plus className="h-4 w-4" />
                 Add HMO
               </button>
-            </div>
+            )}
           </div>
         </div>
 
