@@ -21,7 +21,15 @@ import {
   RefreshCcw,
   User,
   CreditCard,
+  Plus, // added Plus
 } from "lucide-react";
+
+// New imports
+import { useHMOOutstanding } from "@/lib/useHMOOutstanding";
+import { usePayments } from "@/lib/usePayments";
+import { useRecordHMOPayment } from "@/lib/useRecordHMOPayment";
+import HMOPaymentModal from "@/components/billing/HMOPaymentModal";
+import HMOPaymentHistory from "@/components/billing/HMOPaymentHistory";
 
 function formatMoney(v) {
   if (v === null || v === undefined) return "—";
@@ -187,6 +195,10 @@ export default function HMODetailPage() {
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [statusFilter, setStatusFilter] = useState("");
 
+  // New state variables
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [activeTab, setActiveTab] = useState("charges"); // "charges" or "payments"
+
   const queryParams = useMemo(() => {
     const p = {};
     if (selectedPatientId) p.patient = selectedPatientId;
@@ -197,6 +209,50 @@ export default function HMODetailPage() {
   }, [selectedPatientId, dateRange, statusFilter]);
 
   const { data, error, isLoading, mutate } = useHMOFinancials(hmoId, queryParams);
+
+  // New hooks (must be called at top level)
+  // Fetch outstanding charges (for payment modal)
+  const { data: outstandingData, mutate: mutateOutstanding } = useHMOOutstanding(hmoId, dateRange);
+
+  // Fetch payment history
+  const paymentsQuery = useMemo(
+    () => ({
+      hmo: hmoId,
+      payment_source: "HMO",
+      ...(dateRange.start && { start: dateRange.start }),
+      ...(dateRange.end && { end: dateRange.end }),
+    }),
+    [hmoId, dateRange]
+  );
+
+  const {
+    data: paymentsData,
+    error: paymentsError,
+    isLoading: paymentsLoading,
+    mutate: mutatePayments,
+  } = usePayments(paymentsQuery);
+
+  // Record payment hook
+  const { recordPayment, isLoading: isRecordingPayment } = useRecordHMOPayment();
+
+  // Handlers for payment
+  const handlePaymentSubmit = async (paymentData) => {
+    try {
+      await recordPayment(paymentData);
+      // Refresh all data
+      mutate();
+      mutateOutstanding();
+      mutatePayments();
+    } catch (err) {
+      // Error handling assumed inside hook; rethrow so modal can display it if needed
+      throw err;
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    // Additional actions after successful payment
+    setShowPaymentModal(false);
+  };
 
   const filteredPatients = useMemo(() => {
     if (!data?.patients) return [];
@@ -251,6 +307,10 @@ export default function HMODetailPage() {
 
   const { hmo, summary, charges, patients } = data;
 
+  // New variables in render
+  const outstandingBalance = outstandingData?.summary?.total_outstanding || summary?.outstanding || 0;
+  const payments = paymentsData?.results || paymentsData || [];
+
   return (
     <div className="mx-auto max-w-[1600px] p-4 md:p-6">
       {/* Header */}
@@ -276,14 +336,28 @@ export default function HMODetailPage() {
             </div>
           </div>
 
-          <button
-            onClick={mutate}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
-          >
-            <RefreshCcw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          {/* Updated Header Section: Make Payment + Refresh */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 hover:from-emerald-700 hover:to-emerald-800"
+            >
+              <Plus className="h-4 w-4" />
+              Make Payment
+            </button>
+            <button
+              onClick={() => {
+                mutate();
+                mutateOutstanding();
+                mutatePayments();
+              }}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+            >
+              <RefreshCcw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 
@@ -317,170 +391,216 @@ export default function HMODetailPage() {
         />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[350px_1fr]">
-        {/* Left Column - Patients List */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">Patients</h2>
-                <p className="text-xs text-slate-600">{filteredPatients.length} patient(s)</p>
-              </div>
-              {selectedPatientId && (
-                <button
-                  onClick={() => setSelectedPatientId(null)}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                >
-                  Clear Filter
-                </button>
-              )}
-            </div>
-
-            {/* Search */}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search patients..."
-                className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
-          </div>
-
-          {/* Patients List */}
-          <div className="max-h-[600px] overflow-auto divide-y divide-slate-100">
-            {filteredPatients.length > 0 ? (
-              filteredPatients.map((p) => (
-                <PatientRow
-                  key={p.id}
-                  patient={p}
-                  onSelect={(patient) => setSelectedPatientId(
-                    selectedPatientId === patient.id ? null : patient.id
-                  )}
-                  isSelected={selectedPatientId === p.id}
-                />
-              ))
-            ) : (
-              <div className="p-8 text-center">
-                <Users className="mx-auto mb-3 h-12 w-12 text-slate-300" />
-                <p className="text-sm text-slate-500">
-                  {searchTerm ? "No patients found" : "No patients attached to this HMO"}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column - Charges Table */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">
-                  {selectedPatientId ? "Patient Charges" : "All Charges"}
-                </h2>
-                <p className="text-xs text-slate-600">{charges?.length || 0} charge(s)</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  title="Export charges"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export
-                </button>
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Calendar className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-slate-400" />
-                <input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs outline-none focus:border-blue-400"
-                  placeholder="Start date"
-                />
-              </div>
-              <div className="relative flex-1 min-w-[200px]">
-                <Calendar className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-slate-400" />
-                <input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs outline-none focus:border-blue-400"
-                  placeholder="End date"
-                />
-              </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-400"
-              >
-                <option value="">All Statuses</option>
-                <option value="UNPAID">Unpaid</option>
-                <option value="PARTIALLY_PAID">Partially Paid</option>
-                <option value="PAID">Paid</option>
-                <option value="VOID">Void</option>
-              </select>
-              {(dateRange.start || dateRange.end || statusFilter) && (
-                <button
-                  onClick={() => {
-                    setDateRange({ start: "", end: "" });
-                    setStatusFilter("");
-                  }}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Charges Table */}
-          <div className="overflow-auto">
-            {charges && charges.length > 0 ? (
-              <table className="min-w-full">
-                <thead className="sticky top-0 bg-slate-50/95 backdrop-blur">
-                  <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    <th className="px-4 py-3">Service</th>
-                    <th className="px-4 py-3">Patient</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                    <th className="px-4 py-3 text-right">Paid</th>
-                    <th className="px-4 py-3 text-right">Outstanding</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {charges.map((charge) => (
-                    <ChargeRow
-                      key={charge.id}
-                      charge={charge}
-                      onViewPatient={(patientId) => setSelectedPatientId(patientId)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="p-12 text-center">
-                <FileText className="mx-auto mb-3 h-12 w-12 text-slate-300" />
-                <p className="text-sm font-medium text-slate-600">No charges found</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {selectedPatientId
-                    ? "This patient has no charges in the selected period"
-                    : "No charges have been recorded for this HMO yet"}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Tab Navigation */}
+      <div className="mb-6 flex items-center gap-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("charges")}
+          className={`px-4 py-3 text-sm font-semibold transition ${
+            activeTab === "charges"
+              ? "border-b-2 border-blue-600 text-blue-600"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Charges & Patients
+        </button>
+        <button
+          onClick={() => setActiveTab("payments")}
+          className={`px-4 py-3 text-sm font-semibold transition ${
+            activeTab === "payments"
+              ? "border-b-2 border-blue-600 text-blue-600"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Payment History
+        </button>
       </div>
+
+      {/* Charges Tab */}
+      {activeTab === "charges" && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[350px_1fr]">
+          {/* Left Column - Patients List */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Patients</h2>
+                  <p className="text-xs text-slate-600">{filteredPatients.length} patient(s)</p>
+                </div>
+                {selectedPatientId && (
+                  <button
+                    onClick={() => setSelectedPatientId(null)}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Clear Filter
+                  </button>
+                )}
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search patients..."
+                  className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            {/* Patients List */}
+            <div className="max-h-[600px] overflow-auto divide-y divide-slate-100">
+              {filteredPatients.length > 0 ? (
+                filteredPatients.map((p) => (
+                  <PatientRow
+                    key={p.id}
+                    patient={p}
+                    onSelect={(patient) => setSelectedPatientId(
+                      selectedPatientId === patient.id ? null : patient.id
+                    )}
+                    isSelected={selectedPatientId === p.id}
+                  />
+                ))
+              ) : (
+                <div className="p-8 text-center">
+                  <Users className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+                  <p className="text-sm text-slate-500">
+                    {searchTerm ? "No patients found" : "No patients attached to this HMO"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Charges Table */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">
+                    {selectedPatientId ? "Patient Charges" : "All Charges"}
+                  </h2>
+                  <p className="text-xs text-slate-600">{charges?.length || 0} charge(s)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    title="Export charges"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Export
+                  </button>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Calendar className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs outline-none focus:border-blue-400"
+                    placeholder="Start date"
+                  />
+                </div>
+                <div className="relative flex-1 min-w-[200px]">
+                  <Calendar className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs outline-none focus:border-blue-400"
+                    placeholder="End date"
+                  />
+                </div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-400"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="UNPAID">Unpaid</option>
+                  <option value="PARTIALLY_PAID">Partially Paid</option>
+                  <option value="PAID">Paid</option>
+                  <option value="VOID">Void</option>
+                </select>
+                {(dateRange.start || dateRange.end || statusFilter) && (
+                  <button
+                    onClick={() => {
+                      setDateRange({ start: "", end: "" });
+                      setStatusFilter("");
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Charges Table */}
+            <div className="overflow-auto">
+              {charges && charges.length > 0 ? (
+                <table className="min-w-full">
+                  <thead className="sticky top-0 bg-slate-50/95 backdrop-blur">
+                    <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      <th className="px-4 py-3">Service</th>
+                      <th className="px-4 py-3">Patient</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                      <th className="px-4 py-3 text-right">Paid</th>
+                      <th className="px-4 py-3 text-right">Outstanding</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {charges.map((charge) => (
+                      <ChargeRow
+                        key={charge.id}
+                        charge={charge}
+                        onViewPatient={(patientId) => setSelectedPatientId(patientId)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-12 text-center">
+                  <FileText className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+                  <p className="text-sm font-medium text-slate-600">No charges found</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {selectedPatientId
+                      ? "This patient has no charges in the selected period"
+                      : "No charges have been recorded for this HMO yet"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payments Tab */}
+      {activeTab === "payments" && (
+        <HMOPaymentHistory
+          payments={payments}
+          isLoading={paymentsLoading}
+          error={paymentsError}
+        />
+      )}
+
+      {/* Payment Modal */}
+      <HMOPaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        hmo={hmo}
+        outstandingBalance={outstandingBalance}
+        onSubmit={handlePaymentSubmit}
+        onPaymentSuccess={handlePaymentSuccess}
+        isSubmitting={isRecordingPayment}
+      />
     </div>
   );
 }
