@@ -19,6 +19,7 @@ import {
   Ban,
   Undo2,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function FacilityProvidersPage(props) {
@@ -35,7 +36,14 @@ function formatName(p) {
   const first = (p.first_name || "").trim();
   const last = (p.last_name || "").trim();
   const full = [first, last].filter(Boolean).join(" ");
-  return full || p.name || p.email || "—";
+  const name = full || p.name || p.email || "—";
+  
+  // ✅ Add "Sacked" prefix for sacked providers
+  if (p.is_sacked) {
+    return `Sacked: ${name}`;
+  }
+  
+  return name;
 }
 
 function formatRoles(p) {
@@ -53,6 +61,9 @@ function formatFacility(p) {
 }
 
 function deriveStatus(p) {
+  // ✅ Show SACKED status for sacked providers
+  if (p.is_sacked) return "SACKED";
+  
   if (p.status) return p.status;
   if (p.verification_status) return p.verification_status.toUpperCase();
   return "UNKNOWN";
@@ -77,6 +88,12 @@ function StatusBadge({ status }) {
       text: "text-red-700",
       ring: "ring-red-600/20",
       icon: XCircle,
+    },
+    SACKED: {
+      bg: "bg-slate-100",
+      text: "text-slate-700",
+      ring: "ring-slate-600/20",
+      icon: AlertTriangle,
     },
   };
 
@@ -259,6 +276,7 @@ function FacilityProvidersPageInner() {
     setStatusFilterInput(value);
     applyFilters(searchInput.trim(), value);
   }
+  
   async function refreshProviders() {
     const qs = new URLSearchParams(searchParams);
     qs.set("facility", "current");
@@ -400,9 +418,7 @@ function FacilityProvidersPageInner() {
 
     const isFacilityCreated = !!provider?.created_by_facility;
     const ok = window.confirm(
-      isFacilityCreated
-        ? "Sack this provider? This will PERMANENTLY delete their account created by your facility."
-        : "Remove this provider from your facility? (Their account will remain, but they will be detached from this facility.)"
+      "Sack this provider? They will remain in the list but will be marked as sacked and cannot access the system."
     );
     if (!ok) return;
 
@@ -412,8 +428,8 @@ function FacilityProvidersPageInner() {
       });
       await refreshProviders();
     } catch (err) {
-      console.error("Failed to remove provider", err);
-      alert(err?.message || "Failed to remove provider. Please try again.");
+      console.error("Failed to sack provider", err);
+      alert(err?.message || "Failed to sack provider. Please try again.");
     }
   }
 
@@ -546,6 +562,7 @@ function FacilityProvidersPageInner() {
               {!loading &&
                 rows.map((p) => {
                   const status = deriveStatus(p);
+                  const isSacked = p.is_sacked === true;
 
                   return (
                     <tr key={p.id} className="transition hover:bg-slate-50/60">
@@ -565,72 +582,75 @@ function FacilityProvidersPageInner() {
                         <StatusBadge status={status} />
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="flex flex-wrap gap-2">
-                          {status === "PENDING" && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleStatusChange(p.id, "APPROVED")
-                                }
-                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleStatusChange(p.id, "REJECTED")
-                                }
-                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
-                              >
-                                <XCircle className="h-3.5 w-3.5" />
-                                Reject
-                              </button>
-                            </>
-                          )}
-
-                          {canManageProviders && (
-                            <>
-                              {p.is_active ? (
+                        {/* ✅ Hide all actions for sacked providers */}
+                        {isSacked ? (
+                          <span className="text-xs text-slate-400 italic">
+                            No actions available
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {status === "PENDING" && (
+                              <>
                                 <button
                                   type="button"
-                                  onClick={() => handleSuspend(p.id)}
-                                  className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
-                                  title="Suspend provider account"
+                                  onClick={() =>
+                                    handleStatusChange(p.id, "APPROVED")
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
                                 >
-                                  <Ban className="h-3.5 w-3.5" />
-                                  Suspend
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Approve
                                 </button>
-                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => handleUnsuspend(p.id)}
-                                  className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
-                                  title="Re-activate provider account"
+                                  onClick={() =>
+                                    handleStatusChange(p.id, "REJECTED")
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
                                 >
-                                  <Undo2 className="h-3.5 w-3.5" />
-                                  Unsuspend
+                                  <XCircle className="h-3.5 w-3.5" />
+                                  Reject
                                 </button>
-                              )}
+                              </>
+                            )}
 
-                              <button
-                                type="button"
-                                onClick={() => handleRemove(p)}
-                                className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100"
-                                title={
-                                  p.created_by_facility
-                                    ? "Sack (delete) provider account"
-                                    : "Remove provider from facility"
-                                }
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                {p.created_by_facility ? "Sack" : "Remove"}
-                              </button>
-                            </>
-                          )}
-                        </div>
+                            {canManageProviders && (
+                              <>
+                                {p.is_active ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSuspend(p.id)}
+                                    className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+                                    title="Suspend provider account"
+                                  >
+                                    <Ban className="h-3.5 w-3.5" />
+                                    Suspend
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUnsuspend(p.id)}
+                                    className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
+                                    title="Re-activate provider account"
+                                  >
+                                    <Undo2 className="h-3.5 w-3.5" />
+                                    Unsuspend
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemove(p)}
+                                  className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100"
+                                  title="Sack provider"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Sack
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
