@@ -16,7 +16,7 @@ function categoryLabel(cat) {
   const c = String(cat || "").toUpperCase();
   if (c === "LABS") return "Laboratory";
   if (c === "PHARMACY") return "Pharmacy";
-  if (c === "OTHER") return "Other Services";
+  if (c === "OTHER") return "Services";
   return c || "—";
 }
 

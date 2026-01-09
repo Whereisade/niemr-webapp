@@ -114,7 +114,7 @@ function buildNavForUser(user) {
         { href: "/facility/labs", label: "Labs", icon: FlaskConical },
         { href: "/facility/labs/catalog", label: "Lab catalog", icon: ClipboardList },
         { href: "/facility/billing", label: "Billing", icon: CreditCard },
-        { href: "/facility/payments", label: "Payments", icon: CreditCard },
+        // { href: "/facility/payments", label: "Payments", icon: CreditCard },
         { href: "/facility/patients", label: "Patients", icon: Users },
         { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
@@ -128,7 +128,7 @@ function buildNavForUser(user) {
         { href: "/facility/pharmacy/catalog", label: "Catalog", icon: ClipboardList },
         { href: "/facility/pharmacy/stock", label: "Stock", icon: Boxes },
         { href: "/facility/billing", label: "Billing", icon: CreditCard },
-        { href: "/facility/payments", label: "Payments", icon: CreditCard },
+        // { href: "/facility/payments", label: "Payments", icon: CreditCard },
         { href: "/facility/patients", label: "Patients", icon: Users },
         { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/notifications", label: "Notifications", icon: Bell },
@@ -142,7 +142,7 @@ function buildNavForUser(user) {
         { href: "/facility/patients", label: "Patients", icon: Users },
         { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/billing", label: "Billing", icon: CreditCard },
-        { href: "/facility/payments", label: "Payments", icon: CreditCard },
+        // { href: "/facility/payments", label: "Payments", icon: CreditCard },
       ];
     }
 
@@ -156,7 +156,7 @@ function buildNavForUser(user) {
       },
       { href: "/facility/hmos", label: "HMOs", icon: Shield },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
-      { href: "/facility/payments", label: "Payments", icon: CreditCard },
+      // { href: "/facility/payments", label: "Payments", icon: CreditCard },
       { href: "/facility/emails", label: "Emails", icon: Mail },
       {
         href: "/facility/providers",

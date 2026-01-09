@@ -6,8 +6,20 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCharges } from "@/lib/useCharges";
 import { useBillingLedger } from "@/lib/useBillingLedger";
 import { downloadBillingPdf } from "@/lib/reports";
-import { FileDown, Receipt, Loader2, AlertCircle } from "lucide-react";
-
+import { 
+  FileDown, 
+  Receipt, 
+  Loader2, 
+  AlertCircle,
+  Shield,
+  User,
+  Building2,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Info,
+} from "lucide-react";
 
 export default function PatientBillingPage(props) {
   return (
@@ -73,6 +85,73 @@ function getStatusLabel(status) {
   }
 }
 
+function ClaimStatusBadge({ status }) {
+  const configs = {
+    PENDING: {
+      icon: Clock,
+      label: "Pending",
+      className: "bg-slate-50 text-slate-700 border-slate-200",
+    },
+    SUBMITTED: {
+      icon: Clock,
+      label: "Submitted",
+      className: "bg-blue-50 text-blue-700 border-blue-200",
+    },
+    APPROVED: {
+      icon: CheckCircle2,
+      label: "Approved",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    },
+    REJECTED: {
+      icon: XCircle,
+      label: "Rejected",
+      className: "bg-rose-50 text-rose-700 border-rose-200",
+    },
+    PAID: {
+      icon: CheckCircle2,
+      label: "Paid",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    },
+  };
+
+  const config = configs[status] || configs.PENDING;
+  const Icon = config.icon;
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${config.className}`}>
+      <Icon className="h-3 w-3" />
+      {config.label}
+    </span>
+  );
+}
+
+function PaymentSourceBadge({ source }) {
+  if (!source || source === "PATIENT_DIRECT") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+        <User className="h-3 w-3" />
+        Patient Direct
+      </span>
+    );
+  }
+
+  if (source === "HMO") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
+        <Shield className="h-3 w-3" />
+        HMO Covered
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+      <Building2 className="h-3 w-3" />
+      {source}
+    </span>
+  );
+}
+
 function PatientBillingPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -81,11 +160,13 @@ function PatientBillingPageInner() {
   const page = Number(sp.get("page") || 1);
   const limit = Number(sp.get("limit") || 20);
   const status = sp.get("status") || "";
+  const paymentSource = sp.get("payment_source") || "";
 
   const { data, error, isLoading, mutate } = useCharges({
     page,
     limit,
     status,
+    payment_source: paymentSource,
   });
 
   const {
@@ -146,7 +227,7 @@ function PatientBillingPageInner() {
         params.set(k, String(v));
       }
     });
-    if ("status" in patch || "limit" in patch) {
+    if ("status" in patch || "limit" in patch || "payment_source" in patch) {
       params.set("page", "1");
     }
     router.push(`${pathname}?${params.toString()}`);
@@ -156,6 +237,14 @@ function PatientBillingPageInner() {
   const rawCharges = ledger?.charges_total ?? 0;
   const rawPayments = ledger?.payments_total ?? 0;
   const rawBalance = ledger?.balance ?? Number(rawCharges) - Number(rawPayments);
+  
+  // HMO-specific breakdown (if available from backend)
+  const patientPortion = ledger?.patient_portion ?? 0;
+  const hmoPortion = ledger?.hmo_portion ?? 0;
+  const hmoUnpaid = ledger?.hmo_unpaid ?? 0;
+
+  // Check if patient has HMO coverage
+  const hasHMO = ledger?.hmo_id || ledger?.hmo_name;
 
   if (isLoading && !data) {
     return (
@@ -207,6 +296,17 @@ function PatientBillingPageInner() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <select
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 sm:w-40"
+            value={paymentSource}
+            onChange={(e) => updateQuery({ payment_source: e.target.value })}
+          >
+            <option value="">All charges</option>
+            <option value="PATIENT_DIRECT">Patient Direct</option>
+            <option value="HMO">HMO Covered</option>
+            <option value="INSURANCE">Insurance</option>
+          </select>
+
+          <select
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 sm:w-40"
             value={status}
             onChange={(e) => updateQuery({ status: e.target.value })}
           >
@@ -248,6 +348,65 @@ function PatientBillingPageInner() {
         </div>
       </header>
 
+      {/* HMO Coverage Card */}
+      {hasHMO && (
+        <section className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white p-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-purple-100">
+              <Shield className="h-6 w-6 text-purple-600" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-base font-semibold text-purple-900">
+                HMO Coverage
+              </h2>
+              <p className="mt-1 text-sm text-purple-700">
+                You are covered by <span className="font-semibold">{ledger.hmo_name || "HMO"}</span>
+              </p>
+              {ledger.nhis_number && (
+                <p className="mt-1 text-xs text-purple-600">
+                  NHIS Number: <span className="font-mono font-semibold">{ledger.nhis_number}</span>
+                </p>
+              )}
+            </div>
+            {ledger.hmo_status && (
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                ledger.hmo_status === "ACTIVE" 
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-700"
+              }`}>
+                {ledger.hmo_status}
+              </span>
+            )}
+          </div>
+
+          {/* HMO Coverage Info */}
+          {(hmoPortion > 0 || hmoUnpaid > 0) && (
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-purple-200 bg-white/50 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Info className="h-4 w-4 text-purple-600" />
+                  <span className="text-xs font-medium text-purple-700">HMO Covered Amount</span>
+                </div>
+                <div className="mt-1 text-xl font-bold text-purple-900">
+                  ₦{formatMoney(hmoPortion)}
+                </div>
+              </div>
+              {hmoUnpaid > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <span className="text-xs font-medium text-amber-700">HMO Pending</span>
+                  </div>
+                  <div className="mt-1 text-xl font-bold text-amber-900">
+                    ₦{formatMoney(hmoUnpaid)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Ledger Summary */}
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100/50 p-6 shadow-sm">
         {ledgerError ? (
@@ -278,7 +437,7 @@ function PatientBillingPageInner() {
               )}
             </div>
 
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl bg-white border border-slate-200 px-5 py-4 shadow-sm">
                 <dt className="text-xs font-medium text-slate-600 uppercase tracking-wide">
                   Total Charges
@@ -287,6 +446,18 @@ function PatientBillingPageInner() {
                   ₦{formatMoney(rawCharges)}
                 </dd>
               </div>
+
+              {hasHMO && patientPortion > 0 && (
+                <div className="rounded-xl bg-blue-50 border border-blue-200 px-5 py-4 shadow-sm">
+                  <dt className="flex items-center gap-1.5 text-xs font-medium text-blue-700 uppercase tracking-wide">
+                    <User className="h-3.5 w-3.5" />
+                    Your Portion
+                  </dt>
+                  <dd className="mt-2 text-2xl font-bold text-blue-900">
+                    ₦{formatMoney(patientPortion)}
+                  </dd>
+                </div>
+              )}
 
               <div className="rounded-xl bg-white border border-slate-200 px-5 py-4 shadow-sm">
                 <dt className="text-xs font-medium text-slate-600 uppercase tracking-wide">
@@ -340,10 +511,16 @@ function PatientBillingPageInner() {
                   Description
                 </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Payment Source
+                </th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Status
                 </th>
                 <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  Amount
+                  Total Amount
+                </th>
+                <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Your Portion
                 </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Date
@@ -354,61 +531,91 @@ function PatientBillingPageInner() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {rows.map((ch) => (
-                <tr key={ch.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-4">
-                    <div className="font-medium text-slate-900 text-sm">
-                      {ch.service_name || ch.description || `Service #${ch.service}` || "—"}
-                    </div>
-                    {ch.description && ch.service_name && (
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {ch.description}
+              {rows.map((ch) => {
+                const isHMOCharge = ch.payment_source === "HMO" || ch.hmo_id;
+                const patientAmount = ch.patient_portion ?? ch.amount;
+                const hmoAmount = ch.hmo_portion ?? 0;
+
+                return (
+                  <tr key={ch.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-4">
+                      <div className="font-medium text-slate-900 text-sm">
+                        {ch.service_name || ch.description || `Service #${ch.service}` || "—"}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-                        ch.status
-                      )}`}
-                    >
-                      {getStatusLabel(ch.status)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-right font-semibold text-slate-900 text-sm">
-                    ₦{formatMoney(ch.amount)}
-                  </td>
-                  <td className="px-5 py-4 text-slate-600 text-sm">
-                    {formatDateTime(ch.created_at)}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleReceiptDownload(ch)}
-                      disabled={downloadingId === ch.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
-                    >
-                      {downloadingId === ch.id ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          <span>Generating…</span>
-                        </>
-                      ) : (
-                        <>
-                          <Receipt className="h-3.5 w-3.5" />
-                          <span>Download</span>
-                        </>
+                      {ch.description && ch.service_name && (
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {ch.description}
+                        </div>
                       )}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      {/* HMO Claim Status */}
+                      {isHMOCharge && ch.claim_status && (
+                        <div className="mt-2">
+                          <ClaimStatusBadge status={ch.claim_status} />
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <PaymentSourceBadge source={ch.payment_source} />
+                      {isHMOCharge && ch.hmo_name && (
+                        <div className="mt-1 text-xs text-slate-600">
+                          {ch.hmo_name}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
+                          ch.status
+                        )}`}
+                      >
+                        {getStatusLabel(ch.status)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="font-semibold text-slate-900 text-sm">
+                        ₦{formatMoney(ch.amount)}
+                      </div>
+                      {isHMOCharge && hmoAmount > 0 && (
+                        <div className="text-xs text-purple-600 mt-0.5">
+                          HMO: ₦{formatMoney(hmoAmount)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-right font-semibold text-slate-900 text-sm">
+                      ₦{formatMoney(patientAmount)}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600 text-sm">
+                      {formatDateTime(ch.created_at)}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleReceiptDownload(ch)}
+                        disabled={downloadingId === ch.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                      >
+                        {downloadingId === ch.id ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Generating…</span>
+                          </>
+                        ) : (
+                          <>
+                            <Receipt className="h-3.5 w-3.5" />
+                            <span>Download</span>
+                          </>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
 
               {!rows.length && (
                 <tr>
                   <td
                     className="px-5 py-12 text-center text-sm text-slate-500"
-                    colSpan={5}
+                    colSpan={7}
                   >
                     <div className="flex flex-col items-center gap-2">
                       <Receipt className="h-8 w-8 text-slate-300" />
@@ -417,7 +624,7 @@ function PatientBillingPageInner() {
                           No charges found
                         </div>
                         <div className="text-xs text-slate-500 mt-1">
-                          {status
+                          {status || paymentSource
                             ? "Try adjusting your filters"
                             : "You don't have any charges yet"}
                         </div>
@@ -458,6 +665,25 @@ function PatientBillingPageInner() {
           </div>
         )}
       </section>
+
+      {/* Info Notice for HMO Patients */}
+      {hasHMO && (
+        <section className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-start gap-3">
+            <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-blue-900">
+                About HMO Coverage
+              </h3>
+              <p className="mt-1 text-xs text-blue-700">
+                Charges covered by your HMO are automatically submitted for processing. 
+                You are only responsible for paying your portion of the charges. 
+                HMO claim statuses are updated as they are processed by your provider.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
