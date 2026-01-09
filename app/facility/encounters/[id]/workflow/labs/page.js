@@ -39,6 +39,10 @@ function normalizeList(body) {
 }
 
 function fullName(p) {
+  // 🆕 Priority: display_name (includes business_name) > constructed name > email
+  if (p?.display_name) {
+    return p.display_name;
+  }
   const n = [p?.first_name, p?.last_name].filter(Boolean).join(" ").trim();
   return n || p?.email || `#${p?.id || "—"}`;
 }
@@ -194,7 +198,7 @@ export default function FacilityEncounterLabsPage() {
         method: "POST",
         body: JSON.stringify({}),
       });
-      router.push(`/facility/encounters/${encounterId}/workflow/prescription`); // CHANGED
+      router.push(`/facility/encounters/${encounterId}/workflow/prescription`);
     } catch (err) {
       setError(err?.message || "Failed to skip labs.");
     } finally {
@@ -309,16 +313,6 @@ export default function FacilityEncounterLabsPage() {
             {patientLabel} • Encounter #{encounterId}
           </p>
         </div>
-
-        {/* <button
-          onClick={handleSkipLabs}
-          disabled={submitting}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-          title="Skip labs and go straight to SOAP note"
-        >
-          <AlertTriangle className="h-4 w-4" />
-          Skip Labs
-        </button> */}
       </div>
 
       {error ? (
@@ -435,7 +429,7 @@ export default function FacilityEncounterLabsPage() {
               <input
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
-                placeholder="Type a test (e.g., “Folate”, “D-dimer”, “HbA1c”)"
+                placeholder="Type a test (e.g., 'Malaria smear')"
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
               <button
@@ -524,7 +518,7 @@ export default function FacilityEncounterLabsPage() {
                   <option value="">— Do not outsource —</option>
                   {labsProviders.map((p) => (
                     <option key={String(p?.user)} value={String(p?.user)}>
-                      {fullName(p)} (User #{p?.user})
+                      {fullName(p)}
                     </option>
                   ))}
                 </select>

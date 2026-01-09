@@ -22,6 +22,7 @@ import {
   Plus,
   Trash2,
   ArrowLeft,
+  Building2,
 } from "lucide-react";
 
 // --- Nigeria-only choices ---
@@ -88,6 +89,7 @@ export default function ProviderRegisterPage() {
     license_expiry: "",
     years_experience: "",
     bio: "",
+    business_name: "",   // 🆕 Business/practice name for independent providers
     phone: "",
     country: "nigeria",
     state: "",
@@ -95,7 +97,7 @@ export default function ProviderRegisterPage() {
     address: "",
     consultation_fee: "",
     specialties: [],     // <-- multi-select values live here
-    extra_specialties: "", // optional free-text for “Other” / extras
+    extra_specialties: "", // optional free-text for "Other" / extras
   });
   const [documents, setDocuments] = useState([{ kind: "license", file: null }]);
   const [busy, setBusy] = useState(false);
@@ -151,6 +153,7 @@ export default function ProviderRegisterPage() {
       if (form.years_experience)
         payload.years_experience = Number(form.years_experience);
       if (form.bio) payload.bio = form.bio;
+      if (form.business_name) payload.business_name = form.business_name; // 🆕 Include business_name
       if (form.phone) payload.phone = form.phone;
       if (form.country) payload.country = form.country;
       if (form.state) payload.state = form.state;
@@ -211,6 +214,7 @@ export default function ProviderRegisterPage() {
         license_expiry: "",
         years_experience: "",
         consultation_fee: "",
+        business_name: "",  // 🆕 Clear business_name on success
         specialties: [],
         extra_specialties: "",
       }));
@@ -363,14 +367,26 @@ export default function ProviderRegisterPage() {
               </div>
             </section>
 
-            {/* Profile */}
+            {/* Profile & Business Information */}
             <section className="rounded-xl border border-slate-100">
               <SectionHead
                 icon={PencilLine}
-                title="Profile"
-                subtitle="Optional bio to show on your profile."
+                title="Profile & Business Information"
+                subtitle="Your professional identity and bio."
               />
-              <div className="p-4">
+              <div className="p-4 space-y-4">
+                {/* 🆕 Business Name Field */}
+                <Field
+                  label="Business/Practice Name (Optional)"
+                  value={form.business_name}
+                  onChange={(e) => upd("business_name", e.target.value)}
+                  icon={Building2}
+                  placeholder="e.g., City Diagnostic Laboratory, Downtown Medical Clinic"
+                />
+                <p className="text-xs text-slate-500 -mt-2">
+                  Your business name will be displayed when outsourcing services. If not provided, your personal name will be used.
+                </p>
+                
                 <Field
                   as="textarea"
                   rows={4}
@@ -391,7 +407,7 @@ export default function ProviderRegisterPage() {
               />
               <div className="p-4 grid md:grid-cols-3 gap-4">
                 <Field
-                  label="Phone (E.+234)"
+                  label="Phone (E.164)"
                   value={form.phone}
                   onChange={(e) => upd("phone", e.target.value)}
                   icon={Phone}

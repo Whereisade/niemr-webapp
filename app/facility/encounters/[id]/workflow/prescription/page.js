@@ -35,6 +35,10 @@ function normalizeList(body) {
 }
 
 function fullName(p) {
+  // 🆕 Priority: display_name (includes business_name) > constructed name > email
+  if (p?.display_name) {
+    return p.display_name;
+  }
   const n = [p?.first_name, p?.last_name].filter(Boolean).join(" ").trim();
   return n || p?.email || `#${p?.id || "—"}`;
 }
@@ -618,7 +622,7 @@ export default function FacilityEncounterPrescriptionPage() {
                 <option value="">— Do not outsource —</option>
                 {pharmProviders.map((p) => (
                   <option key={String(p?.user)} value={String(p?.user)}>
-                    {fullName(p)} (User #{p?.user})
+                    {fullName(p)}
                   </option>
                 ))}
               </select>
