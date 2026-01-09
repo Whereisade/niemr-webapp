@@ -22,6 +22,7 @@ import {
   Clock,
   ArrowLeft,
   ArrowRight,
+  Building2,
 } from "lucide-react";
 
 // 🔹 role-based UI config
@@ -32,6 +33,9 @@ import {
 
 // 🔹 unified lab status UI helper
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
+
+// 🔹 HMO status color helper
+import { getHMOStatusColors } from "@/lib/hmoStatusColors";
 
 
 export default function FacilityLabOrdersPage(props) {
@@ -378,6 +382,7 @@ function FacilityLabOrdersPageInner() {
             <thead className="bg-slate-50">
               <tr>
                 <Th>Patient</Th>
+                <Th>Insurance / HMO</Th>
                 <Th>Tests</Th>
                 <Th>Status</Th>
                 <Th>Ordered</Th>
@@ -389,6 +394,8 @@ function FacilityLabOrdersPageInner() {
               {rows.length ? (
                 rows.map((order) => {
                   const statusCode = normalizeStatus(order.status);
+                  const hmoColors = getHMOStatusColors(order.patient_hmo_relationship_status);
+                  
                   return (
                     <tr
                       key={order.id}
@@ -403,6 +410,19 @@ function FacilityLabOrdersPageInner() {
                             {order.patient_name || order.patient || "—"}
                           </span>
                         </div>
+                      </Td>
+
+                      <Td>
+                        {order.patient_hmo_name ? (
+                          <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${hmoColors.bgColor} ${hmoColors.textColor} ring-1 ${hmoColors.ringColor}`}>
+                            <Building2 className="h-3.5 w-3.5" />
+                            <span className="text-xs font-medium">
+                              {order.patient_hmo_name}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-500">Self Pay</span>
+                        )}
                       </Td>
 
                       <Td>
@@ -560,7 +580,7 @@ function FacilityLabOrdersPageInner() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm">
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm">
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                       <Activity className="h-6 w-6 text-slate-400" />
                     </div>

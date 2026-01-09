@@ -21,9 +21,11 @@ import {
   FileText,
   Loader2,
   CheckCircle2,
+  Building2,  // NEW - for HMO icon
 } from "lucide-react";
 import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
 import { apiFetch } from "@/lib/api";
+import { getHMOStatusColors } from "@/lib/hmoStatusColors";  // NEW - HMO status colors
 
 export default function FacilityPharmacyPage(props) {
   return (
@@ -645,6 +647,7 @@ function PrescriptionsTab({
                 <tr>
                   <Th>Created</Th>
                   <Th>Patient</Th>
+                  <Th>Insurance / HMO</Th>
                   <Th>Medications</Th>
                   <Th>Stock status</Th>
                   <Th>Status</Th>
@@ -663,6 +666,9 @@ function PrescriptionsTab({
                       : rx.patient != null
                       ? `Patient #${rx.patient}`
                       : "—";
+
+                    // Get HMO colors
+                    const hmoColors = getHMOStatusColors(rx.patient_hmo_relationship_status);
 
                     // Check stock availability for items
                     let hasLowStock = false;
@@ -721,6 +727,21 @@ function PrescriptionsTab({
                             </span>
                           )}
                         </Td>
+                        
+                        {/* NEW: HMO Column */}
+                        <Td>
+                          {rx.patient_hmo_name ? (
+                            <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${hmoColors.bgColor} ${hmoColors.textColor} ring-1 ${hmoColors.ringColor}`}>
+                              <Building2 className="h-3.5 w-3.5" />
+                              <span className="text-xs font-medium">
+                                {rx.patient_hmo_name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-500">Self Pay</span>
+                          )}
+                        </Td>
+                        
                         <Td>
                           <span className="text-xs text-slate-700">
                             {itemsSummary}
@@ -779,7 +800,7 @@ function PrescriptionsTab({
                 ) : (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-10 text-center text-sm text-slate-500"
                     >
                       <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">

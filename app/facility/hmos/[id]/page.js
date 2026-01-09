@@ -30,6 +30,7 @@ import { usePayments } from "@/lib/usePayments";
 import { useRecordHMOPayment } from "@/lib/useRecordHMOPayment";
 import HMOPaymentModal from "@/components/billing/HMOPaymentModal";
 import HMOPaymentHistory from "@/components/billing/HMOPaymentHistory";
+import RelationshipStatusCard from "@/components/RelationshipStatusCard";
 
 function formatMoney(v) {
   if (v === null || v === undefined) return "—";
@@ -198,6 +199,7 @@ export default function HMODetailPage() {
   // New state variables
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState("charges"); // "charges" or "payments"
+  const [me, setMe] = useState(null); // Current user
 
   const queryParams = useMemo(() => {
     const p = {};
@@ -235,6 +237,19 @@ export default function HMODetailPage() {
   // Record payment hook
   const { recordPayment, isLoading: isRecordingPayment } = useRecordHMOPayment();
 
+  // 🆕 Fetch current user
+  useEffect(() => {
+    async function loadMe() {
+      try {
+        const res = await apiFetch("/accounts/me/");
+        setMe(res);
+      } catch (err) {
+        console.error("Failed to load user:", err);
+      }
+    }
+    loadMe();
+  }, []);
+
   // Handlers for payment
   const handlePaymentSubmit = async (paymentData) => {
     try {
@@ -253,6 +268,28 @@ export default function HMODetailPage() {
     // Additional actions after successful payment
     setShowPaymentModal(false);
   };
+
+  // 🆕 Handler for relationship status update
+  const handleRelationshipStatusUpdate = async ({ status, notes }) => {
+    try {
+      await apiFetch(`/facilities/hmos/${hmoId}/relationship-status/`, {
+        method: "POST",
+        body: JSON.stringify({ status, notes }),
+      });
+      
+      // Refresh HMO data
+      mutate();
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  // Check if user is admin (can edit relationship status)
+  const isAdmin = useMemo(() => {
+    if (!me) return false;
+    const role = (me?.role || "").toUpperCase();
+    return ["SUPER_ADMIN", "ADMIN"].includes(role);
+  }, [me]);
 
   const filteredPatients = useMemo(() => {
     if (!data?.patients) return [];
@@ -359,6 +396,14 @@ export default function HMODetailPage() {
             </button>
           </div>
         </div>
+      </div>
+      {/* 🆕 Relationship Status Card */}
+      <div className="mb-6">
+        <RelationshipStatusCard
+          hmo={hmo}
+          onUpdate={handleRelationshipStatusUpdate}
+          isAdmin={isAdmin}
+        />
       </div>
 
       {/* Stats Overview */}
