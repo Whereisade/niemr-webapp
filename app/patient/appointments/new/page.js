@@ -845,14 +845,14 @@ export default function PatientNewAppointmentPage() {
                           .filter((p) => {
                             if (!providerSearch) return true;
                             const searchLower = providerSearch.toLowerCase();
-                            const name = ([p.first_name, p.last_name].filter(Boolean).join(" ") || "").toLowerCase();
+                            const name = ([p.display_name].filter(Boolean).join(" ") || "").toLowerCase();
                             const email = (p.email || "").toLowerCase();
                             const address = (p.address || "").toLowerCase();
                             const state = (p.state || "").toLowerCase();
                             return name.includes(searchLower) || email.includes(searchLower) || address.includes(searchLower) || state.includes(searchLower);
                           })
                           .map((p) => {
-                            const fullName = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email || `Provider #${p.id}`;
+                            const fullName = [p.display_name].filter(Boolean).join(" ") || p.email || `Provider #${p.id}`;
                             return (
                               <button
                                 key={p.id}
@@ -880,7 +880,7 @@ export default function PatientNewAppointmentPage() {
                         {providers.filter((p) => {
                           if (!providerSearch) return true;
                           const searchLower = providerSearch.toLowerCase();
-                          const name = ([p.first_name, p.last_name].filter(Boolean).join(" ") || "").toLowerCase();
+                          const name = ([p.display_name].filter(Boolean).join(" ") || "").toLowerCase();
                           const email = (p.email || "").toLowerCase();
                           const address = (p.address || "").toLowerCase();
                           const state = (p.state || "").toLowerCase();
