@@ -31,7 +31,7 @@ export default function StartEncounterButton({ scope, appointment, size = "sm", 
 
     try {
       const url = scope === "facility" 
-        ? `/encounters/facility-encounters/start_from_appointment/`
+        ? `/encounters/start_from_appointment/`
         : `/encounters/start_from_appointment/`;
 
       const res = await apiFetch(url, {

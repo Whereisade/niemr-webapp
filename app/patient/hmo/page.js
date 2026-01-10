@@ -1,4 +1,4 @@
-// app/patient/hmo/page.js - FIXED VERSION
+// app/patient/hmo/page.js - WITH DETACH BUTTON
 export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
@@ -22,6 +22,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { getHMOStatusColors } from "@/lib/hmoStatusColors";
+import DetachHMOButton from "@/components/patient/DetachHMOButton";
 
 const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
@@ -43,12 +44,10 @@ async function fetchMe() {
   }
 }
 
-// 🔧 FIXED: Use proxy endpoint and better error handling
 async function fetchPatientProfile(token) {
   if (!token) return null;
   
   try {
-    // Try using the proxy endpoint
     const res = await fetch(`${BACKEND}/api/patients/`, {
       headers: { 
         Authorization: `Bearer ${token}`,
@@ -64,7 +63,6 @@ async function fetchPatientProfile(token) {
     
     const data = await res.json();
     
-    // Handle both array and paginated responses
     if (Array.isArray(data)) {
       return data[0] || null;
     }
@@ -128,10 +126,8 @@ export default async function PatientHMOPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ACCESS_COOKIE)?.value;
   
-  // 🔧 FIXED: Don't redirect if patient is null, just show message
   const patient = await fetchPatientProfile(token);
 
-  // Show error message if we couldn't fetch patient data
   if (!patient) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
@@ -177,7 +173,6 @@ export default async function PatientHMOPage() {
   const hasHMO = patient.insurance_status === "INSURED" && patient.hmo;
 
   if (!hasHMO) {
-    // Show no HMO page
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
         <div className="mx-auto max-w-4xl px-4 py-8">
@@ -241,7 +236,6 @@ export default async function PatientHMOPage() {
     ? getHMOStatusColors(hmo.relationship_status)
     : null;
 
-  // Get primary contact info - handle both field patterns
   const primaryAddress = hmo.primary_address || (hmo.addresses && hmo.addresses[0]) || "Not provided";
   const primaryContact = hmo.primary_contact || (hmo.contact_numbers && hmo.contact_numbers[0]) || "Not provided";
 
@@ -257,18 +251,30 @@ export default async function PatientHMOPage() {
           Back to Dashboard
         </Link>
 
-        {/* Header */}
+        {/* Header with Action Buttons */}
         <div className="mb-8">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/25">
-            <Shield className="h-3.5 w-3.5" />
-            <span>HMO Coverage</span>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/25">
+                <Shield className="h-3.5 w-3.5" />
+                <span>HMO Coverage</span>
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900 lg:text-4xl">
+                Insurance Details
+              </h1>
+              <p className="mt-2 text-base text-slate-600">
+                Your health maintenance organization coverage and benefits
+              </p>
+            </div>
+            
+            {/* Detach Button */}
+            <div className="flex-shrink-0">
+              <DetachHMOButton 
+                patientId={patient.id} 
+                hmoName={hmo.name} 
+              />
+            </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 lg:text-4xl">
-            Insurance Details
-          </h1>
-          <p className="mt-2 text-base text-slate-600">
-            Your health maintenance organization coverage and benefits
-          </p>
         </div>
 
         {/* Status Alert */}
@@ -322,7 +328,6 @@ export default async function PatientHMOPage() {
               </div>
 
               <div className="p-6 space-y-4">
-                {/* Provider Name */}
                 <div>
                   <label className="text-xs font-medium text-slate-600">Provider Name</label>
                   <p className="mt-1 text-lg font-bold text-slate-900">{hmo.name}</p>
@@ -334,7 +339,6 @@ export default async function PatientHMOPage() {
                   )}
                 </div>
 
-                {/* NHIS Number */}
                 {hmo.nhis_number && (
                   <div>
                     <label className="text-xs font-medium text-slate-600">NHIS Registration</label>
@@ -342,7 +346,6 @@ export default async function PatientHMOPage() {
                   </div>
                 )}
 
-                {/* Email */}
                 {hmo.email && (
                   <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
                     <Mail className="h-5 w-5 text-slate-400" />
@@ -353,7 +356,6 @@ export default async function PatientHMOPage() {
                   </div>
                 )}
 
-                {/* Primary Contact */}
                 <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
                   <Phone className="h-5 w-5 text-slate-400" />
                   <div className="flex-1 min-w-0">
@@ -362,7 +364,6 @@ export default async function PatientHMOPage() {
                   </div>
                 </div>
 
-                {/* Primary Address */}
                 <div className="flex items-start gap-3 rounded-lg bg-slate-50 p-3">
                   <MapPin className="h-5 w-5 text-slate-400 mt-0.5" />
                   <div className="flex-1 min-w-0">
@@ -371,7 +372,6 @@ export default async function PatientHMOPage() {
                   </div>
                 </div>
 
-                {/* Contact Person */}
                 {hmo.contact_person_name && (
                   <div>
                     <label className="mb-2 block text-xs font-medium text-slate-600">Contact Person</label>
@@ -400,7 +400,6 @@ export default async function PatientHMOPage() {
               </div>
             </div>
 
-            {/* Additional Addresses (if multiple) */}
             {hmo.addresses && hmo.addresses.length > 1 && (
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-5">
@@ -422,7 +421,6 @@ export default async function PatientHMOPage() {
               </div>
             )}
 
-            {/* Additional Contact Numbers (if multiple) */}
             {hmo.contact_numbers && hmo.contact_numbers.length > 1 && (
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-5">
@@ -457,19 +455,16 @@ export default async function PatientHMOPage() {
               </div>
 
               <div className="p-5 space-y-4">
-                {/* Insurance Number */}
                 <div>
                   <label className="text-xs font-medium text-slate-600">Insurance Number</label>
                   <p className="mt-1 font-mono text-sm font-bold text-slate-900">{insuranceNumber}</p>
                 </div>
 
-                {/* Plan */}
                 <div>
                   <label className="text-xs font-medium text-slate-600">Plan</label>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{plan}</p>
                 </div>
 
-                {/* Expiry Date */}
                 {expiryDate && (
                   <div>
                     <label className="text-xs font-medium text-slate-600">Coverage Expiry</label>
@@ -500,7 +495,6 @@ export default async function PatientHMOPage() {
                   </div>
                 )}
 
-                {/* Status */}
                 <div>
                   <label className="text-xs font-medium text-slate-600">Status</label>
                   <div className={`mt-1 flex items-center gap-2 rounded-lg px-3 py-2 ${
@@ -522,7 +516,6 @@ export default async function PatientHMOPage() {
                   </div>
                 </div>
 
-                {/* Notes */}
                 {notes && (
                   <div>
                     <label className="text-xs font-medium text-slate-600">Additional Notes</label>
