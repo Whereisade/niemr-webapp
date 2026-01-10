@@ -15,6 +15,9 @@ import {
   AlertTriangle,
   ChevronRight,
   Building2,
+  MapPin,
+  RefreshCw,
+  Bug,
 } from "lucide-react";
 
 const PRIORITY_OPTIONS = [
@@ -39,12 +42,17 @@ function normalizeList(body) {
 }
 
 function fullName(p) {
-  // 🆕 Priority: display_name (includes business_name) > constructed name > email
   if (p?.display_name) {
     return p.display_name;
   }
   const n = [p?.first_name, p?.last_name].filter(Boolean).join(" ").trim();
   return n || p?.email || `#${p?.id || "—"}`;
+}
+
+function formatAddress(p) {
+  if (!p) return "";
+  const parts = [p?.lga, p?.state].filter(Boolean);
+  return parts.length ? parts.join(", ") : (p?.address || "").substring(0, 40);
 }
 
 export default function FacilityEncounterLabsPage() {
@@ -62,6 +70,8 @@ export default function FacilityEncounterLabsPage() {
   const [catalog, setCatalog] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
+  const [catalogSource, setCatalogSource] = useState("facility");
+  const [debugInfo, setDebugInfo] = useState(null); // 🔍 Debug info
 
   // Selection
   const [selectedCodes, setSelectedCodes] = useState(() => new Set());
@@ -71,13 +81,14 @@ export default function FacilityEncounterLabsPage() {
   // Outsource
   const [labsProviders, setLabsProviders] = useState([]);
   const [labsProvidersLoading, setLabsProvidersLoading] = useState(false);
-  const [outsourcedToUserId, setOutsourcedToUserId] = useState(""); // user id (NOT provider profile id)
+  const [outsourcedToUserId, setOutsourcedToUserId] = useState("");
 
   // Order meta
   const [priority, setPriority] = useState("ROUTINE");
   const [note, setNote] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
+  const [showDebug, setShowDebug] = useState(false); // 🔍 Toggle debug panel
 
   const selectedProvider = useMemo(() => {
     if (!outsourcedToUserId) return null;
@@ -108,18 +119,75 @@ export default function FacilityEncounterLabsPage() {
     }
   }
 
-  async function loadCatalog(search = "") {
+  async function loadCatalog(search = "", source = "facility", userId = null) {
     setCatalogError("");
     setCatalogLoading(true);
+    setCatalogSource(source);
+    
+    // 🔍 Build debug info
+    const debugData = {
+      timestamp: new Date().toISOString(),
+      source,
+      userId,
+      search,
+      url: "",
+      response: null,
+      error: null,
+    };
+    
     try {
-      const qs = search?.trim() ? `?s=${encodeURIComponent(search.trim())}` : "";
-      const res = await apiFetch(`/labs/catalog/${qs}`, { method: "GET" });
-      setCatalog(normalizeList(res));
+      let url = "/labs/catalog/";
+      const params = new URLSearchParams();
+      
+      if (search?.trim()) {
+        params.set("s", search.trim());
+      }
+      
+      // 🔥 Pass created_by parameter for outsourced catalog
+      if (source === "outsourced" && userId) {
+        params.set("created_by", String(userId));
+      }
+      
+      const qs = params.toString();
+      url = qs ? `${url}?${qs}` : url;
+      
+      debugData.url = url; // 🔍 Store URL
+      
+      console.log(`[loadCatalog] Fetching: ${url}`); // 🔍 Console log
+      
+      const res = await apiFetch(url, { method: "GET" });
+      const tests = normalizeList(res);
+      
+      debugData.response = {
+        rawType: typeof res,
+        isArray: Array.isArray(res),
+        hasResults: !!res?.results,
+        count: tests.length,
+        firstThree: tests.slice(0, 3).map(t => ({
+          id: t?.id,
+          code: t?.code,
+          name: t?.name,
+          created_by: t?.created_by,
+          facility: t?.facility,
+        })),
+      }; // 🔍 Store response details
+      
+      setCatalog(tests);
+      
+      console.log(`[loadCatalog] Success: ${tests.length} tests loaded`); // 🔍 Console log
     } catch (err) {
+      debugData.error = {
+        message: err?.message,
+        stack: err?.stack,
+      }; // 🔍 Store error
+      
       setCatalogError(err?.message || "Failed to load lab catalog.");
       setCatalog([]);
+      
+      console.error(`[loadCatalog] Error:`, err); // 🔍 Console log
     } finally {
       setCatalogLoading(false);
+      setDebugInfo(debugData); // 🔍 Store debug info
     }
   }
 
@@ -130,8 +198,20 @@ export default function FacilityEncounterLabsPage() {
         "/providers/?facility=none&type=LAB_SCIENTIST&page=1&limit=50",
         { method: "GET" }
       );
-      setLabsProviders(normalizeList(res));
-    } catch {
+      const providers = normalizeList(res);
+      setLabsProviders(providers);
+      
+      console.log(`[loadIndependentLabs] Loaded ${providers.length} independent labs`); // 🔍 Console log
+      if (providers.length > 0) {
+        console.log('[loadIndependentLabs] First provider:', {
+          id: providers[0]?.id,
+          user: providers[0]?.user,
+          display_name: providers[0]?.display_name,
+          business_name: providers[0]?.business_name,
+        }); // 🔍 Console log
+      }
+    } catch (err) {
+      console.error('[loadIndependentLabs] Error:', err); // 🔍 Console log
       setLabsProviders([]);
     } finally {
       setLabsProvidersLoading(false);
@@ -141,7 +221,7 @@ export default function FacilityEncounterLabsPage() {
   useEffect(() => {
     loadMe();
     loadEncounter();
-    loadCatalog("");
+    loadCatalog("", "facility");
     loadIndependentLabs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
@@ -149,11 +229,26 @@ export default function FacilityEncounterLabsPage() {
   // Debounced search
   useEffect(() => {
     const t = setTimeout(() => {
-      loadCatalog(q);
+      loadCatalog(q, catalogSource, outsourcedToUserId || null);
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
+
+  // 🔥 Auto-reload catalog when outsourced lab changes
+  useEffect(() => {
+    if (outsourcedToUserId) {
+      console.log(`[useEffect] Outsourced lab changed to user ID: ${outsourcedToUserId}`); // 🔍 Console log
+      setQ("");
+      setSelectedCodes(new Set());
+      loadCatalog("", "outsourced", outsourcedToUserId);
+    } else {
+      console.log('[useEffect] Outsource cleared, loading facility catalog'); // 🔍 Console log
+      setQ("");
+      loadCatalog("", "facility");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outsourcedToUserId]);
 
   const canDoctorActions = useMemo(() => {
     const role = String(me?.role || "").toUpperCase();
@@ -235,7 +330,6 @@ export default function FacilityEncounterLabsPage() {
 
     setSubmitting(true);
     try {
-      // 1) Create the lab order
       await createLabOrder({
         patient: patientId,
         priority,
@@ -245,10 +339,8 @@ export default function FacilityEncounterLabsPage() {
         items,
       });
 
-      // 2) Pause encounter => WAITING_LABS + read-only
       await pauseEncounter(encounterId);
 
-      // 3) Go to waiting screen
       router.push(`/facility/encounters/${encounterId}/workflow/waiting-labs`);
     } catch (err) {
       setError(err?.message || "Failed to order labs.");
@@ -313,6 +405,17 @@ export default function FacilityEncounterLabsPage() {
             {patientLabel} • Encounter #{encounterId}
           </p>
         </div>
+
+        {/* 🔍 Debug toggle button */}
+        {/* <button
+          type="button"
+          onClick={() => setShowDebug(!showDebug)}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 hover:bg-slate-50"
+          title="Toggle debug panel"
+        >
+          <Bug className="h-3 w-3" />
+          {showDebug ? "Hide" : "Show"} Debug
+        </button> */}
       </div>
 
       {error ? (
@@ -327,6 +430,22 @@ export default function FacilityEncounterLabsPage() {
         </div>
       ) : null}
 
+      {/* 🔍 Debug panel */}
+      {showDebug && debugInfo ? (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-blue-900 mb-2">
+            <Bug className="h-4 w-4" />
+            Debug Information
+          </div>
+          <pre className="text-xs text-blue-800 overflow-x-auto bg-white p-3 rounded border border-blue-200">
+            {JSON.stringify(debugInfo, null, 2)}
+          </pre>
+          <div className="mt-2 text-xs text-blue-700">
+            Check browser console for detailed logs. Open DevTools (F12) → Console tab
+          </div>
+        </div>
+      ) : null}
+
       <form onSubmit={handleOrderLabs} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Left: Catalog */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -336,6 +455,17 @@ export default function FacilityEncounterLabsPage() {
               <h2 className="text-sm font-semibold text-slate-900">
                 Test Catalog
               </h2>
+              {catalogSource === "outsourced" && selectedProvider ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">
+                  <Building2 className="h-3 w-3" />
+                  {fullName(selectedProvider)}
+                </span>
+              ) : catalogSource === "facility" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                  <Building2 className="h-3 w-3" />
+                  Facility Catalog
+                </span>
+              ) : null}
             </div>
 
             <div className="relative w-full max-w-md">
@@ -351,7 +481,31 @@ export default function FacilityEncounterLabsPage() {
 
           {catalogError ? (
             <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              {catalogError}
+              <div className="font-medium">Failed to load catalog</div>
+              <div className="mt-1">{catalogError}</div>
+              <button
+                type="button"
+                onClick={() => loadCatalog(q, catalogSource, outsourcedToUserId || null)}
+                className="mt-2 inline-flex items-center gap-1 text-xs underline"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Try again
+              </button>
+            </div>
+          ) : null}
+
+          {catalogSource === "outsourced" && selectedProvider ? (
+            <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-sky-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-sky-800">
+                  <div className="font-medium">Viewing outsourced lab catalog</div>
+                  <div className="mt-1 text-xs">
+                    You're browsing tests from <span className="font-semibold">{fullName(selectedProvider)}</span>.
+                    Select tests to include in your order. To return to facility catalog, clear the outsource selection below.
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -364,12 +518,13 @@ export default function FacilityEncounterLabsPage() {
                     <th className="px-3 py-2">Test</th>
                     <th className="px-3 py-2">Code</th>
                     <th className="px-3 py-2">Unit</th>
+                    <th className="px-3 py-2 text-right">Price (₦)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {catalogLoading ? (
                     <tr>
-                      <td colSpan={4} className="px-3 py-4 text-slate-600">
+                      <td colSpan={5} className="px-3 py-4 text-slate-600">
                         <span className="inline-flex items-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           Loading catalog…
@@ -399,13 +554,39 @@ export default function FacilityEncounterLabsPage() {
                           <td className="px-3 py-2 text-slate-700">
                             {t?.unit || "—"}
                           </td>
+                          <td className="px-3 py-2 text-right text-slate-700">
+                            {t?.price ? Number(t.price).toLocaleString() : "—"}
+                          </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-3 py-4 text-slate-600">
-                        No tests found.
+                      <td colSpan={5} className="px-3 py-8 text-center text-slate-600">
+                        {catalogSource === "outsourced" ? (
+                          <div>
+                            <div className="font-medium text-slate-900">No tests found in this lab's catalog</div>
+                            <div className="mt-2 text-xs text-slate-600">
+                              The selected lab ({fullName(selectedProvider) || "Unknown"}) may not have any tests configured yet.
+                            </div>
+                            <div className="mt-3 text-xs text-slate-500">
+                              <div className="font-medium mb-1">Debug Info:</div>
+                              <div>User ID: {outsourcedToUserId || "Not set"}</div>
+                              <div>API Called: {debugInfo?.url || "N/A"}</div>
+                              <div>Results: {debugInfo?.response?.count ?? "N/A"} tests</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowDebug(true)}
+                              className="mt-3 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                            >
+                              <Bug className="h-3 w-3" />
+                              Show full debug info
+                            </button>
+                          </div>
+                        ) : (
+                          "No tests found."
+                        )}
                       </td>
                     </tr>
                   )}
@@ -469,6 +650,72 @@ export default function FacilityEncounterLabsPage() {
           <h2 className="text-sm font-semibold text-slate-900">Order Details</h2>
 
           <div className="mt-3 grid gap-3">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Building2 className="h-4 w-4" />
+                Outsource to Independent Lab
+              </div>
+              <p className="mt-1 text-xs text-slate-600">
+                Optional. If not selected, the order stays within the facility lab workflow.
+              </p>
+
+              <div className="mt-2">
+                <select
+                  value={outsourcedToUserId}
+                  onChange={(e) => setOutsourcedToUserId(e.target.value)}
+                  disabled={labsProvidersLoading}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
+                >
+                  <option value="">— Do not outsource —</option>
+                  {labsProviders.map((p) => {
+                    const name = fullName(p);
+                    const addr = formatAddress(p);
+                    return (
+                      <option key={String(p?.user)} value={String(p?.user)}>
+                        {name}{addr ? ` • ${addr}` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                
+                {selectedProvider ? (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
+                    <div className="text-xs">
+                      <div className="font-semibold text-slate-900">{fullName(selectedProvider)}</div>
+                      {selectedProvider?.phone ? (
+                        <div className="mt-1 text-slate-600">📞 {selectedProvider.phone}</div>
+                      ) : null}
+                      {formatAddress(selectedProvider) ? (
+                        <div className="mt-1 flex items-start gap-1 text-slate-600">
+                          <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                          <span>{formatAddress(selectedProvider)}</span>
+                        </div>
+                      ) : null}
+                      {selectedProvider?.address ? (
+                        <div className="mt-1 text-slate-500 text-xs line-clamp-2">
+                          {selectedProvider.address}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                        User ID: {selectedProvider?.user || "N/A"}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQ("");
+                        loadCatalog("", "outsourced", outsourcedToUserId);
+                      }}
+                      className="mt-2 inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Reload catalog
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
             <label className="grid gap-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Priority
@@ -498,37 +745,6 @@ export default function FacilityEncounterLabsPage() {
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
             </label>
-
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <Building2 className="h-4 w-4" />
-                Outsource to Independent Lab
-              </div>
-              <p className="mt-1 text-xs text-slate-600">
-                Optional. If not selected, the order stays within the facility lab workflow.
-              </p>
-
-              <div className="mt-2">
-                <select
-                  value={outsourcedToUserId}
-                  onChange={(e) => setOutsourcedToUserId(e.target.value)}
-                  disabled={labsProvidersLoading}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
-                >
-                  <option value="">— Do not outsource —</option>
-                  {labsProviders.map((p) => (
-                    <option key={String(p?.user)} value={String(p?.user)}>
-                      {fullName(p)}
-                    </option>
-                  ))}
-                </select>
-                {selectedProvider ? (
-                  <div className="mt-2 text-xs text-slate-600">
-                    Selected: <span className="font-medium text-slate-800">{fullName(selectedProvider)}</span>
-                  </div>
-                ) : null}
-              </div>
-            </div>
 
             <div className="rounded-2xl border border-slate-100 bg-white p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
