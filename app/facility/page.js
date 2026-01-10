@@ -33,6 +33,10 @@ import {
   Sparkles,
   Zap,
   BarChart3,
+  DollarSign,
+  AlertCircle,
+  Package,
+  Boxes,
 } from "lucide-react";
 
 import {
@@ -57,6 +61,85 @@ async function safeFetchJSON(path, fallback) {
   }
 }
 
+// Normalize API responses to get list
+function normalizeList(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.results)) {
+    return payload.results;
+  }
+  if (payload && typeof payload === "object") {
+    const keys = Object.keys(payload).filter((k) => String(Number(k)) === k);
+    if (keys.length) {
+      return keys.sort((a, b) => Number(a) - Number(b)).map((k) => payload[k]);
+    }
+  }
+  return [];
+}
+
+// Get count from various response formats
+function getCount(payload) {
+  if (typeof payload === "number") return payload;
+  if (payload && typeof payload.count === "number") return payload.count;
+  const list = normalizeList(payload);
+  return list.length;
+}
+
+// Normalize and extract both list and count
+function normalizeListAndCount(payload) {
+  if (Array.isArray(payload)) {
+    return { list: payload, count: payload.length };
+  }
+  if (payload && Array.isArray(payload.items)) {
+    return {
+      list: payload.items,
+      count: typeof payload.total_unread === "number" ? payload.total_unread : payload.items.length,
+    };
+  }
+  if (payload && Array.isArray(payload.results)) {
+    return {
+      list: payload.results,
+      count: typeof payload.count === "number" ? payload.count : payload.results.length,
+    };
+  }
+  return { list: [], count: 0 };
+}
+
+// Simplified count fetcher
+async function safeFetchCount(path, fallback = 0) {
+  const payload = await safeFetchJSON(path, null);
+  if (!payload) return fallback;
+  return getCount(payload);
+}
+
+// Calculate percentage change between two numbers
+function calculatePercentageChange(current, previous) {
+  if (previous === 0) return current > 0 ? "+100%" : "0%";
+  const change = ((current - previous) / previous) * 100;
+  const sign = change >= 0 ? "+" : "";
+  return `${sign}${Math.round(change)}%`;
+}
+
+// Calculate average wait time from appointments
+function calculateAverageWaitTime(appointments) {
+  const checkedInAppts = appointments.filter(
+    (a) => a.status === "CHECKED_IN" && a.checked_in_at && a.started_at
+  );
+  
+  if (checkedInAppts.length === 0) return null;
+  
+  const totalWaitMinutes = checkedInAppts.reduce((sum, a) => {
+    const checkedIn = new Date(a.checked_in_at);
+    const started = new Date(a.started_at);
+    const waitMs = started - checkedIn;
+    return sum + (waitMs / 1000 / 60);
+  }, 0);
+  
+  const avgMinutes = Math.round(totalWaitMinutes / checkedInAppts.length);
+  return `${avgMinutes}m`;
+}
+
 async function fetchMe() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ACCESS_COOKIE)?.value;
@@ -76,64 +159,44 @@ async function fetchMe() {
   }
 }
 
-function normalizeListAndCount(payload) {
-  if (Array.isArray(payload)) {
-    return { list: payload, count: payload.length };
-  }
-  // /notifications/recent/ returns: { items: [...], total_unread: number }
-  if (payload && Array.isArray(payload.items)) {
-    return {
-      list: payload.items,
-      count:
-        typeof payload.total_unread === "number"
-          ? payload.total_unread
-          : payload.items.length,
-    };
-  }
-  if (payload && Array.isArray(payload.results)) {
-    return {
-      list: payload.results,
-      count:
-        typeof payload.count === "number"
-          ? payload.count
-          : payload.results.length,
-    };
-  }
-  return { list: [], count: 0 };
-}
-
-async function safeFetchCount(path, fallback = 0) {
-  const payload = await safeFetchJSON(path, null);
-  if (!payload) return fallback;
-  const { count } = normalizeListAndCount(payload);
-  return typeof count === "number" ? count : fallback;
-}
-
 export default async function FacilityDashboard() {
   const now = new Date();
   const end = new Date(now);
   end.setDate(end.getDate() + 30);
 
+  // Today's date range
   const dayStart = new Date(now);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(now);
   dayEnd.setHours(23, 59, 59, 999);
+
+  // Yesterday's date range (for trend calculation)
+  const yesterdayStart = new Date(dayStart);
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  const yesterdayEnd = new Date(dayEnd);
+  yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
 
   const dayRangeQs = new URLSearchParams();
   dayRangeQs.set("start", dayStart.toISOString());
   dayRangeQs.set("end", dayEnd.toISOString());
   dayRangeQs.set("limit", "1");
 
+  const yesterdayRangeQs = new URLSearchParams();
+  yesterdayRangeQs.set("start", yesterdayStart.toISOString());
+  yesterdayRangeQs.set("end", yesterdayEnd.toISOString());
+  yesterdayRangeQs.set("limit", "1");
+
   const upcomingQs = new URLSearchParams();
   upcomingQs.set("start", now.toISOString());
   upcomingQs.set("end", end.toISOString());
   upcomingQs.set("limit", "20");
 
-  const [notifications, todaysAppointments, upcomingAppointments, providers, me] = await Promise.all([
+  const [notifications, todaysAppointments, yesterdaysAppointments, upcomingAppointments, providers, me] = await Promise.all([
     safeFetchJSON("/notifications/recent/?limit=7", { items: [], total_unread: 0 }),
-    safeFetchJSON("/appointments/?date=today&limit=20", []),
+    safeFetchJSON("/appointments/?date=today&limit=200", []),
+    safeFetchJSON(`/appointments/?${yesterdayRangeQs.toString()}`, []),
     safeFetchJSON(`/appointments/?${upcomingQs.toString()}`, []),
-    safeFetchJSON("/providers/?limit=5", []),
+    safeFetchJSON("/providers/?limit=100", []),
     fetchMe(),
   ]);
 
@@ -153,9 +216,11 @@ export default async function FacilityDashboard() {
   const isClinical = workspace.type === FACILITY_WORKSPACE_TYPES.CLINICAL;
   const isSuperAdmin = role === "SUPER_ADMIN";
 
-  // Role-based enhanced widgets: fetch just the counts we need.
+  // Enhanced role-based data fetching
   let labCounts = { pending: 0, inProgress: 0, completedToday: 0, cancelled: 0 };
   let rxCounts = { prescribed: 0, partial: 0, dispensed: 0, cancelled: 0 };
+  let stockCounts = { lowStock: 0, outOfStock: 0, totalItems: 0 };
+  let revenueCounts = { todayTotal: 0, paymentsCollected: 0 };
 
   if (role === "LAB") {
     const [pending, inProgress, completedToday, cancelled] = await Promise.all([
@@ -168,29 +233,54 @@ export default async function FacilityDashboard() {
   }
 
   if (role === "PHARMACY") {
-    const [prescribed, partial, dispensed, cancelled] = await Promise.all([
+    const [prescribed, partial, dispensed, cancelled, stockData] = await Promise.all([
       safeFetchCount("/pharmacy/prescriptions/?status=PRESCRIBED&limit=1", 0),
-      safeFetchCount(
-        "/pharmacy/prescriptions/?status=PARTIALLY_DISPENSED&limit=1",
-        0
-      ),
+      safeFetchCount("/pharmacy/prescriptions/?status=PARTIALLY_DISPENSED&limit=1", 0),
       safeFetchCount("/pharmacy/prescriptions/?status=DISPENSED&limit=1", 0),
       safeFetchCount("/pharmacy/prescriptions/?status=CANCELLED&limit=1", 0),
+      safeFetchJSON("/pharmacy/stock/", []),
     ]);
     rxCounts = { prescribed, partial, dispensed, cancelled };
+    
+    // Calculate stock alerts
+    const stockList = normalizeList(stockData);
+    let lowStock = 0;
+    let outOfStock = 0;
+    stockList.forEach(item => {
+      const qty = item.current_qty || 0;
+      if (qty === 0) outOfStock++;
+      else if (qty <= 10) lowStock++;
+    });
+    stockCounts = { lowStock, outOfStock, totalItems: stockList.length };
   }
 
-  const { list: notifList, count: unreadCount } = normalizeListAndCount(
-    notifications
-  );
+  if (isOwner) {
+    const [chargesData, paymentsData] = await Promise.all([
+      safeFetchJSON(`/billing/charges/?${dayRangeQs.toString()}`, []),
+      safeFetchJSON(`/billing/payments/?${dayRangeQs.toString()}`, []),
+    ]);
+    
+    const chargesList = normalizeList(chargesData);
+    const paymentsList = normalizeList(paymentsData);
+    
+    const todayTotal = chargesList.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const paymentsCollected = paymentsList.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    
+    revenueCounts = { todayTotal, paymentsCollected };
+  }
 
-  const { list: appts, count: todaysApptCount } = normalizeListAndCount(
-    todaysAppointments
-  );
+  const { list: notifList, count: unreadCount } = normalizeListAndCount(notifications);
+
+  const { list: appts, count: todaysApptCount } = normalizeListAndCount(todaysAppointments);
+  const { count: yesterdaysApptCount } = normalizeListAndCount(yesterdaysAppointments);
 
   const { list: upcomingAppts } = normalizeListAndCount(upcomingAppointments);
 
-  // Role-focused schedule: lab/pharmacy users should see their service queue by default.
+  // Calculate appointment trend
+  const apptTrend = calculatePercentageChange(todaysApptCount, yesterdaysApptCount);
+  const apptTrendUp = todaysApptCount >= yesterdaysApptCount;
+
+  // Role-focused schedule
   const scheduleApptTypes =
     role === "LAB" ? ["LAB"] : role === "PHARMACY" ? ["PHARMACY"] : null;
 
@@ -238,8 +328,6 @@ export default async function FacilityDashboard() {
     ? providers
     : providers?.results || [];
 
-
-
   const greetingName =
     [me?.first_name, me?.last_name].filter(Boolean).join(" ") ||
     me?.email ||
@@ -253,7 +341,7 @@ export default async function FacilityDashboard() {
       : facilityName
     : greetingName;
 
-  // Enhanced stats with trends
+  // ===== ENHANCED DYNAMIC STATS (Role-based, 3 stats per role) =====
   let stats;
   if (isOwner) {
     stats = [
@@ -261,8 +349,8 @@ export default async function FacilityDashboard() {
         label: "Today's Appointments",
         value: todaysCountForDashboard,
         icon: CalendarRange,
-        trend: "+12%",
-        trendUp: true,
+        trend: apptTrend,
+        trendUp: apptTrendUp,
         accent: "from-blue-500 to-indigo-600",
         bgAccent: "bg-blue-50",
         iconColor: "text-blue-600",
@@ -271,9 +359,9 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Active Providers",
-        value: provs.length,
+        value: provs.filter(p => p.is_active).length,
         icon: Users2,
-        trend: "+2",
+        trend: `${provs.length - provs.filter(p => p.is_active).length} inactive`,
         trendUp: true,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
@@ -282,15 +370,15 @@ export default async function FacilityDashboard() {
         cta: "Manage team",
       },
       {
-        label: "Unread Alerts",
-        value: unreadCount,
-        icon: BellRing,
-        badge: unreadCount > 0 ? "New" : null,
-        accent: "from-amber-500 to-orange-600",
-        bgAccent: "bg-amber-50",
-        iconColor: "text-amber-600",
-        href: "/notifications",
-        cta: "View notifications",
+        label: "Today's Revenue",
+        value: `₦${revenueCounts.todayTotal.toLocaleString()}`,
+        subValue: `${revenueCounts.paymentsCollected.toLocaleString()} collected`,
+        icon: DollarSign,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
+        href: "/facility/billing",
+        cta: "View billing",
       },
     ];
   } else if (role === "LAB") {
@@ -316,15 +404,14 @@ export default async function FacilityDashboard() {
         cta: "Continue work",
       },
       {
-        label: "Unread Alerts",
-        value: unreadCount,
-        icon: BellRing,
-        badge: unreadCount > 0 ? "Review" : null,
-        accent: "from-amber-500 to-orange-600",
-        bgAccent: "bg-amber-50",
-        iconColor: "text-amber-600",
-        href: "/facility/notifications",
-        cta: "View updates",
+        label: "Completed Today",
+        value: labCounts.completedToday,
+        icon: CheckCircle2,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
+        href: "/facility/labs?status=COMPLETED",
+        cta: "View reports",
       },
     ];
   } else if (role === "PHARMACY") {
@@ -333,6 +420,7 @@ export default async function FacilityDashboard() {
       {
         label: "Dispense Queue",
         value: dispenseQueue,
+        subValue: `${rxCounts.prescribed} new, ${rxCounts.partial} partial`,
         icon: Pill,
         accent: "from-blue-500 to-indigo-600",
         bgAccent: "bg-blue-50",
@@ -341,7 +429,7 @@ export default async function FacilityDashboard() {
         cta: "Open queue",
       },
       {
-        label: "Dispensed",
+        label: "Dispensed Today",
         value: rxCounts.dispensed,
         icon: CheckCircle2,
         accent: "from-emerald-500 to-teal-600",
@@ -351,15 +439,16 @@ export default async function FacilityDashboard() {
         cta: "View history",
       },
       {
-        label: "Unread Alerts",
-        value: unreadCount,
-        icon: BellRing,
-        badge: unreadCount > 0 ? "Review" : null,
+        label: "Stock Alerts",
+        value: stockCounts.lowStock + stockCounts.outOfStock,
+        subValue: `${stockCounts.outOfStock} out of stock`,
+        icon: AlertCircle,
+        badge: stockCounts.outOfStock > 0 ? "Critical" : null,
         accent: "from-amber-500 to-orange-600",
         bgAccent: "bg-amber-50",
         iconColor: "text-amber-600",
-        href: "/facility/notifications",
-        cta: "View updates",
+        href: "/facility/pharmacy/stock",
+        cta: "Manage stock",
       },
     ];
   } else if (isFrontdesk) {
@@ -368,8 +457,8 @@ export default async function FacilityDashboard() {
         label: "Appointments Today",
         value: todaysCountForDashboard,
         icon: CalendarRange,
-        trend: "+8%",
-        trendUp: true,
+        trend: apptTrend,
+        trendUp: apptTrendUp,
         accent: "from-blue-500 to-indigo-600",
         bgAccent: "bg-blue-50",
         iconColor: "text-blue-600",
@@ -377,28 +466,73 @@ export default async function FacilityDashboard() {
         cta: "Open schedule",
       },
       {
-        label: "Providers on Duty",
-        value: provs.length,
-        icon: Users2,
+        label: "Checked In",
+        value: statusCounts.CHECKED_IN || 0,
+        icon: CheckCircle2,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
         iconColor: "text-emerald-600",
+        href: "/facility/appointments?status=CHECKED_IN",
+        cta: "View patients",
+      },
+      {
+        label: "Providers on Duty",
+        value: provs.filter(p => p.is_active).length,
+        icon: Users2,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
         href: "/facility/providers",
         cta: "View providers",
       },
+    ];
+  } else if (role === "DOCTOR") {
+    // Fetch doctor-specific data
+    const [myAppts, myEncounters] = await Promise.all([
+      safeFetchJSON("/appointments/?mine=1&date=today&limit=1", []),
+      safeFetchJSON("/encounters/?mine=1&limit=1", []),
+    ]);
+    
+    const myApptsCount = getCount(myAppts);
+    const myEncountersList = normalizeList(myEncounters);
+    const openEncounters = myEncountersList.filter(e => 
+      !["CLOSED", "CROSSED_OUT"].includes(String(e.status || "").toUpperCase())
+    ).length;
+    const completedToday = statusCounts.COMPLETED || 0;
+    
+    stats = [
       {
-        label: "New Notifications",
-        value: unreadCount,
-        icon: BellRing,
-        badge: unreadCount > 0 ? "Action needed" : null,
-        accent: "from-amber-500 to-orange-600",
-        bgAccent: "bg-amber-50",
-        iconColor: "text-amber-600",
-        href: "/notifications",
-        cta: "Review alerts",
+        label: "My Appointments Today",
+        value: myApptsCount,
+        icon: CalendarRange,
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
+        href: "/facility/appointments?mine=1",
+        cta: "View schedule",
+      },
+      {
+        label: "Open Encounters",
+        value: openEncounters,
+        icon: Activity,
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
+        href: "/facility/encounters?mine=1",
+        cta: "View cases",
+      },
+      {
+        label: "Completed Today",
+        value: completedToday,
+        icon: CheckCircle2,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
+        href: "/facility/encounters?status=COMPLETED",
+        cta: "View reports",
       },
     ];
-  } else if (isClinical) {
+  } else if (role === "NURSE") {
     stats = [
       {
         label: "My Appointments",
@@ -411,28 +545,28 @@ export default async function FacilityDashboard() {
         cta: "View schedule",
       },
       {
-        label: "Team Members",
-        value: provs.length,
-        icon: Users2,
+        label: "Checked In",
+        value: statusCounts.CHECKED_IN || 0,
+        icon: Activity,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
         iconColor: "text-emerald-600",
-        href: "/facility/providers",
-        cta: "View colleagues",
+        href: "/facility/appointments?status=CHECKED_IN",
+        cta: "Triage queue",
       },
       {
-        label: "Pending Tasks",
-        value: unreadCount,
-        icon: BellRing,
-        badge: unreadCount > 0 ? "Review" : null,
-        accent: "from-amber-500 to-orange-600",
-        bgAccent: "bg-amber-50",
-        iconColor: "text-amber-600",
-        href: "/notifications",
-        cta: "View tasks",
+        label: "Open Encounters",
+        value: statusCounts.IN_PROGRESS || 0,
+        icon: Stethoscope,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
+        href: "/facility/encounters",
+        cta: "View encounters",
       },
     ];
   } else {
+    // Default staff stats
     stats = [
       {
         label: "Total Appointments",
@@ -455,48 +589,55 @@ export default async function FacilityDashboard() {
         cta: "View providers",
       },
       {
-        label: "Notifications",
-        value: unreadCount,
-        icon: BellRing,
-        accent: "from-amber-500 to-orange-600",
-        bgAccent: "bg-amber-50",
-        iconColor: "text-amber-600",
-        href: "/notifications",
-        cta: "View all",
+        label: "Open Encounters",
+        value: statusCounts.IN_PROGRESS || 0,
+        icon: Activity,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
+        href: "/facility/encounters",
+        cta: "View encounters",
       },
     ];
   }
 
-  // Enhanced widgets (quick metrics) – role based.
+  // ===== ENHANCED QUICK METRICS (Role-based, 4 metrics per role) =====
   let quickMetrics = [];
+  
   if (isOwner) {
+    const completedCount = statusCounts.COMPLETED || 0;
+    const totalCount = todaysCountForDashboard || 1;
+    const completionRate = Math.round((completedCount / totalCount) * 100);
+    const avgWaitTime = calculateAverageWaitTime(appts) || "—";
+    const capacityUtilization = Math.min(Math.round((totalCount / 50) * 100), 100); // Assuming 50 slots
+    
     quickMetrics = [
       {
-        icon: Activity,
-        label: "Patient Flow",
-        value: "94%",
-        sublabel: "On-time check-ins",
+        icon: BarChart3,
+        label: "Completion Rate",
+        value: `${completionRate}%`,
+        sublabel: `${completedCount} of ${totalCount}`,
         color: "emerald",
       },
       {
         icon: Clock,
         label: "Avg Wait Time",
-        value: "11m",
-        sublabel: "vs 15m yesterday",
+        value: avgWaitTime,
+        sublabel: "Check-in to start",
         color: "blue",
       },
       {
-        icon: CheckCircle2,
-        label: "Completed",
-        value: appts.filter((a) => a.status === "COMPLETED").length,
-        sublabel: "Today's visits",
+        icon: Activity,
+        label: "Capacity Utilization",
+        value: `${capacityUtilization}%`,
+        sublabel: "Appointment slots",
         color: "violet",
       },
       {
-        icon: BarChart3,
-        label: "Utilization",
-        value: "87%",
-        sublabel: "Capacity used",
+        icon: DollarSign,
+        label: "Outstanding Balance",
+        value: `₦${(revenueCounts.todayTotal - revenueCounts.paymentsCollected).toLocaleString()}`,
+        sublabel: "Pending payment",
         color: "amber",
       },
     ];
@@ -524,73 +665,185 @@ export default async function FacilityDashboard() {
         color: "violet",
       },
       {
-        icon: BellRing,
-        label: "Unread Alerts",
-        value: unreadCount,
-        sublabel: "Notifications",
+        icon: XCircle,
+        label: "Cancelled",
+        value: labCounts.cancelled,
+        sublabel: "Total cancelled",
         color: "amber",
       },
     ];
   } else if (role === "PHARMACY") {
+    const toDispense = rxCounts.prescribed + rxCounts.partial;
     quickMetrics = [
       {
         icon: Pill,
-        label: "Prescribed",
-        value: rxCounts.prescribed,
-        sublabel: "Awaiting dispense",
+        label: "To Dispense",
+        value: toDispense,
+        sublabel: `${rxCounts.prescribed} new + ${rxCounts.partial} partial`,
         color: "blue",
-      },
-      {
-        icon: Activity,
-        label: "Partial",
-        value: rxCounts.partial,
-        sublabel: "Partially dispensed",
-        color: "emerald",
       },
       {
         icon: CheckCircle2,
         label: "Dispensed",
         value: rxCounts.dispensed,
-        sublabel: "Completed",
-        color: "violet",
-      },
-      {
-        icon: BellRing,
-        label: "Unread Alerts",
-        value: unreadCount,
-        sublabel: "Notifications",
-        color: "amber",
-      },
-    ];
-  } else {
-    // Default staff widgets
-    quickMetrics = [
-      {
-        icon: CalendarRange,
-        label: isFrontdesk ? "Scheduled" : "Appointments",
-        value: todaysCountForDashboard,
-        sublabel: "Today",
-        color: "blue",
-      },
-      {
-        icon: Activity,
-        label: "Checked-in",
-        value: statusCounts.CHECKED_IN || 0,
-        sublabel: isFrontdesk ? "Ready for triage" : "In queue",
+        sublabel: "Completed today",
         color: "emerald",
       },
       {
+        icon: AlertCircle,
+        label: "Low Stock",
+        value: stockCounts.lowStock,
+        sublabel: `${stockCounts.outOfStock} out of stock`,
+        color: "amber",
+      },
+      {
+        icon: Package,
+        label: "Catalog Items",
+        value: stockCounts.totalItems,
+        sublabel: "Total drugs",
+        color: "violet",
+      },
+    ];
+  } else if (isFrontdesk) {
+    quickMetrics = [
+      {
+        icon: CalendarRange,
+        label: "Scheduled",
+        value: statusCounts.SCHEDULED || 0,
+        sublabel: "Awaiting check-in",
+        color: "blue",
+      },
+      {
         icon: CheckCircle2,
+        label: "Checked In",
+        value: statusCounts.CHECKED_IN || 0,
+        sublabel: "Ready for triage",
+        color: "emerald",
+      },
+      {
+        icon: Activity,
         label: "Completed",
         value: statusCounts.COMPLETED || 0,
         sublabel: "Today",
         color: "violet",
       },
       {
-        icon: BellRing,
-        label: "Unread Alerts",
-        value: unreadCount,
-        sublabel: "Notifications",
+        icon: Users2,
+        label: "Total Patients",
+        value: new Set(appts.map(a => a.patient)).size,
+        sublabel: "Unique today",
+        color: "amber",
+      },
+    ];
+  } else if (role === "DOCTOR") {
+    const [myAppts, myEncounters] = await Promise.all([
+      safeFetchJSON("/appointments/?mine=1&date=today&limit=1", []),
+      safeFetchJSON("/encounters/?mine=1&limit=200", []),
+    ]);
+    
+    const myApptsCount = getCount(myAppts);
+    const myEncountersList = normalizeList(myEncounters);
+    const openCases = myEncountersList.filter(e => 
+      !["CLOSED", "CROSSED_OUT"].includes(String(e.status || "").toUpperCase())
+    ).length;
+    const completedToday = myEncountersList.filter(e => {
+      const completedAt = e.completed_at || e.clinical_finalized_at;
+      if (!completedAt) return false;
+      const completedDate = new Date(completedAt);
+      return completedDate >= dayStart && completedDate <= dayEnd;
+    }).length;
+    const completionRate = myApptsCount > 0 ? Math.round((completedToday / myApptsCount) * 100) : 0;
+    
+    quickMetrics = [
+      {
+        icon: CalendarRange,
+        label: "Appointments",
+        value: myApptsCount,
+        sublabel: "Today",
+        color: "blue",
+      },
+      {
+        icon: Activity,
+        label: "Open Cases",
+        value: openCases,
+        sublabel: "Active encounters",
+        color: "emerald",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Completed",
+        value: completedToday,
+        sublabel: "Today",
+        color: "violet",
+      },
+      {
+        icon: BarChart3,
+        label: "Completion Rate",
+        value: `${completionRate}%`,
+        sublabel: "Today's efficiency",
+        color: "amber",
+      },
+    ];
+  } else if (role === "NURSE") {
+    quickMetrics = [
+      {
+        icon: CalendarRange,
+        label: "Appointments",
+        value: todaysCountForDashboard,
+        sublabel: "Today",
+        color: "blue",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Checked In",
+        value: statusCounts.CHECKED_IN || 0,
+        sublabel: "Ready for triage",
+        color: "emerald",
+      },
+      {
+        icon: Activity,
+        label: "Open Encounters",
+        value: statusCounts.IN_PROGRESS || 0,
+        sublabel: "In progress",
+        color: "violet",
+      },
+      {
+        icon: Stethoscope,
+        label: "Completed",
+        value: statusCounts.COMPLETED || 0,
+        sublabel: "Today",
+        color: "amber",
+      },
+    ];
+  } else {
+    // Default metrics
+    quickMetrics = [
+      {
+        icon: CalendarRange,
+        label: "Appointments",
+        value: todaysCountForDashboard,
+        sublabel: "Today",
+        color: "blue",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Checked In",
+        value: statusCounts.CHECKED_IN || 0,
+        sublabel: "In queue",
+        color: "emerald",
+      },
+      {
+        icon: Activity,
+        label: "Completed",
+        value: statusCounts.COMPLETED || 0,
+        sublabel: "Today",
+        color: "violet",
+      },
+      {
+        icon: Users2,
+        label: "Total Patients",
+        value: new Set(appts.map(a => a.patient)).size,
+        sublabel: "Unique today",
         color: "amber",
       },
     ];
@@ -656,7 +909,7 @@ export default async function FacilityDashboard() {
           </div>
         </header>
 
-        {/* Enhanced Stat Cards */}
+        {/* Enhanced Stat Cards (3 per role, fully dynamic) */}
         <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {stats.map((stat) => (
             <Link
@@ -678,7 +931,7 @@ export default async function FacilityDashboard() {
                     </p>
                     <div className="mt-2 flex items-baseline gap-2">
                       <span className="text-3xl font-bold text-slate-900">
-                        {stat.href === "/facility/appointments" ? (
+                        {stat.href === "/facility/appointments" && typeof stat.value === 'number' ? (
                           <LiveAppointmentsCount initialCount={stat.value} />
                         ) : (
                           stat.value
@@ -704,6 +957,9 @@ export default async function FacilityDashboard() {
                         </span>
                       )}
                     </div>
+                    {stat.subValue && (
+                      <p className="mt-1 text-xs text-slate-500">{stat.subValue}</p>
+                    )}
                     <div className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-all group-hover:gap-2">
                       {stat.cta}
                       <ChevronRight className="h-4 w-4" />
@@ -850,7 +1106,7 @@ export default async function FacilityDashboard() {
           </div>
         </section>
 
-        {/* Quick Metrics */}
+        {/* Quick Metrics (4 per role, fully dynamic) */}
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {quickMetrics.map((m, idx) => (
             <MetricCard
