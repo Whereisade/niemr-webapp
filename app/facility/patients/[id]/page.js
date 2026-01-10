@@ -5,6 +5,7 @@ import { useEffect, useState, Suspense, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { getHMOStatusColors } from "@/lib/hmoStatusColors";
 import PatientDocumentsProvider from "@/components/patient/PatientDocumentsProvider";
 import PatientDocumentUploadProvider from "@/components/patient/PatientDocumentUploadProvider";
 import PatientVitalsHistory from "@/components/patient/PatientVitalsHistory";
@@ -20,7 +21,9 @@ import {
   X,
   Lock,
   UserRound,
-  CalendarClock
+  CalendarClock,
+  Shield,
+  Building2
 } from "lucide-react";
 
 export default function FacilityPatientDetailPage(props) {
@@ -400,6 +403,8 @@ function FacilityPatientDetailPageInner() {
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [startingEncounter, setStartingEncounter] = useState(false);
   const [me, setMe] = useState(null);
+  const [hmoDetails, setHmoDetails] = useState(null);
+  const [loadingHMO, setLoadingHMO] = useState(false);
   
   // State for encounter history
   const [encounterPayload, setEncounterPayload] = useState(null);
@@ -435,6 +440,13 @@ function FacilityPatientDetailPageInner() {
         setPatientError("");
         const data = await apiFetch(`/patients/${patientId}/`);
         setPatient(data);
+        
+        // If patient has HMO, load HMO details to get relationship status
+        if (data?.hmo) {
+          loadHMODetails(data.hmo);
+        } else {
+          setHmoDetails(null);
+        }
       } catch (err) {
         console.error("Failed to load patient", err);
         setPatientError("Unable to load patient details. Please try again.");
@@ -445,6 +457,27 @@ function FacilityPatientDetailPageInner() {
 
     loadPatient();
   }, [patientId]);
+
+  // Load HMO details function
+  async function loadHMODetails(hmo) {
+    try {
+      setLoadingHMO(true);
+      // Handle both cases: hmo as integer ID or as object {id, name}
+      const hmoId = typeof hmo === 'object' ? hmo.id : hmo;
+      
+      // Fetch all HMOs and find the matching one
+      const hmosRes = await apiFetch("/facilities/hmos/");
+      const hmosList = normalizeList(hmosRes);
+      const matchedHmo = hmosList.find(h => h.id === hmoId);
+      
+      setHmoDetails(matchedHmo || null);
+    } catch (err) {
+      console.error("Failed to load HMO details", err);
+      setHmoDetails(null);
+    } finally {
+      setLoadingHMO(false);
+    }
+  }
 
   // Load encounter history
   useEffect(() => {
@@ -535,6 +568,58 @@ function FacilityPatientDetailPageInner() {
     router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
   };
 
+  // Get insurance status display with colors
+  const getInsuranceDisplay = () => {
+    if (loadingHMO || loadingPatient) {
+      return {
+        text: "Loading...",
+        bgColor: "bg-slate-100",
+        textColor: "text-slate-600",
+        icon: Loader2,
+        iconClass: "animate-spin"
+      };
+    }
+
+    if (!patient?.hmo) {
+      return {
+        text: "Self Pay",
+        bgColor: "bg-slate-100",
+        textColor: "text-slate-700",
+        icon: Shield,
+        iconClass: ""
+      };
+    }
+
+    // Patient has HMO
+    const hmoName = typeof patient.hmo === 'object' ? patient.hmo.name : null;
+    const displayText = hmoDetails?.name || hmoName || "HMO Patient";
+    
+    // Get colors based on relationship status
+    if (hmoDetails?.relationship_status) {
+      const colors = getHMOStatusColors(hmoDetails.relationship_status);
+      return {
+        text: displayText,
+        bgColor: colors.bgColor,
+        textColor: colors.textColor,
+        icon: Building2,
+        iconClass: "",
+        relationshipStatus: colors.label
+      };
+    }
+
+    // Default if no relationship status
+    return {
+      text: displayText,
+      bgColor: "bg-blue-100",
+      textColor: "text-blue-700",
+      icon: Building2,
+      iconClass: ""
+    };
+  };
+
+  const insuranceDisplay = getInsuranceDisplay();
+  const InsuranceIcon = insuranceDisplay.icon;
+
   return (
     <main className="min-h-screen bg-slate-50/80">
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-4 md:px-6 md:py-6 lg:px-8 lg:py-8">
@@ -579,12 +664,10 @@ function FacilityPatientDetailPageInner() {
                   <h1 className="text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
                     {loadingPatient ? "Loading…" : displayName || "Patient"}
                   </h1>
-                  {patient && (
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      ID: <span className="font-medium text-slate-800">{patient.id}</span>
-                      {patient.mrn && <> • MRN: <span className="font-medium text-slate-800">{patient.mrn}</span></>}
-                    </p>
-                  )}
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    ID: <span className="font-medium text-slate-800">{patient?.id || "—"}</span>
+                    {patient?.mrn && <> • MRN: <span className="font-medium text-slate-800">{patient.mrn}</span></>}
+                  </p>
                 </div>
               </div>
 
@@ -633,7 +716,8 @@ function FacilityPatientDetailPageInner() {
 
             {/* Error or skeleton or details */}
             {loadingPatient ? (
-              <div className="mt-4 grid animate-pulse gap-2 grid-cols-2 md:grid-cols-4">
+              <div className="mt-4 grid animate-pulse gap-2 grid-cols-2 md:grid-cols-5">
+                <div className="h-14 rounded-xl bg-slate-100" />
                 <div className="h-14 rounded-xl bg-slate-100" />
                 <div className="h-14 rounded-xl bg-slate-100" />
                 <div className="h-14 rounded-xl bg-slate-100" />
@@ -644,7 +728,7 @@ function FacilityPatientDetailPageInner() {
                 {patientError}
               </div>
             ) : patient ? (
-              <div className="mt-4 grid gap-2 grid-cols-2 md:grid-cols-4">
+              <div className="mt-4 grid gap-2 grid-cols-2 md:grid-cols-5">
                 <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2">
                   <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                     Date of birth
@@ -675,6 +759,25 @@ function FacilityPatientDetailPageInner() {
                   </div>
                   <div className="mt-1 text-sm font-semibold text-slate-900">
                     {patient.phone || "N/A"}
+                  </div>
+                </div>
+                {/* Insurance Status Card */}
+                <div className={`rounded-xl border border-slate-100 px-3 py-2 ${insuranceDisplay.bgColor}`}>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    Insurance
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <InsuranceIcon className={`h-3.5 w-3.5 ${insuranceDisplay.textColor} ${insuranceDisplay.iconClass}`} />
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-semibold ${insuranceDisplay.textColor}`}>
+                        {insuranceDisplay.text}
+                      </span>
+                      {insuranceDisplay.relationshipStatus && (
+                        <span className="text-[9px] font-medium text-slate-500">
+                          {insuranceDisplay.relationshipStatus} relationship
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -918,6 +1021,11 @@ function FacilityPatientDetailPageInner() {
             </div>
           </section>
         </div>
+
+        {/* Insurance Management Section */}
+        <section>
+          <PatientInsurance patientId={patientId} />
+        </section>
       </div>
 
       {/* Add Vitals Modal */}
@@ -927,9 +1035,6 @@ function FacilityPatientDetailPageInner() {
         patientId={patientId}
         onSuccess={handleVitalsSuccess}
       />
-      <section>
-        <PatientInsurance patientId={patientId} />
-      </section>
     </main>
   );
 }

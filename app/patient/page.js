@@ -391,7 +391,7 @@ export default async function PatientDashboard() {
 
           {/* Sidebar */}
           <aside className="space-y-6">
-            {/* 🆕 HMO SUMMARY CARD - ADD THIS ABOVE QUICK ACTIONS */}
+            {/* HMO SUMMARY CARD*/}
             {patientProfile && <HMOSummaryCard patient={patientProfile} />}
 
             {/* Quick Actions */}

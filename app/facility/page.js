@@ -657,7 +657,7 @@ export default async function FacilityDashboard() {
         </header>
 
         {/* Enhanced Stat Cards */}
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {stats.map((stat) => (
             <Link
               key={stat.label}
@@ -718,6 +718,136 @@ export default async function FacilityDashboard() {
               </div>
             </Link>
           ))}
+        </section>
+
+        {/* Quick Actions */}
+        <section className="mb-8">
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
+              <div className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-blue-600" />
+                <h3 className="font-semibold text-slate-900">
+                  Quick Actions
+                </h3>
+              </div>
+              <p className="mt-1 text-xs text-slate-600">
+                Common tasks for your role
+              </p>
+            </div>
+            <div className="p-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Role-specific actions */}
+              <QuickLink
+                href="/facility/appointments/new"
+                icon={Plus}
+                label={
+                  isFrontdesk ? "Schedule / Check-in" : "New Appointment"
+                }
+                primary
+              />
+
+              {(isOwner || isFrontdesk || role === "DOCTOR" || role === "NURSE") && (
+                <QuickLink
+                  href="/facility/patients"
+                  icon={Users2}
+                  label="Manage Patients"
+                />
+              )}
+              {role !== "LAB" && role !== "PHARMACY" && (
+                <QuickLink
+                  href="/facility/wards"
+                  icon={Bed}
+                  label="Ward Management"
+                />
+              )}
+
+              {role === "DOCTOR" && (
+                <QuickLink
+                  href="/facility/encounters?mine=1"
+                  icon={FileText}
+                  label="My Encounters"
+                />
+              )}
+
+              {role === "NURSE" && (
+                <QuickLink
+                  href="/facility/vitals"
+                  icon={HeartPulse}
+                  label="Capture Vitals"
+                />
+              )}
+
+              {(isOwner || role === "LAB") && (
+                <>
+                <QuickLink
+                  href="/facility/labs?status=PENDING"
+                  icon={FlaskConical}
+                  label="Lab Orders"
+                />
+                <QuickLink
+                  href="/facility/pharmacy"
+                  icon={Pill}
+                  label="Pharmacy"
+                />
+                </>
+              )}
+
+              {role === "PHARMACY" && (
+                <QuickLink
+                  href="/facility/pharmacy?status=PRESCRIBED"
+                  icon={Pill}
+                  label="Dispense Queue"
+                />
+              )}
+
+              {isOwner && (
+                <>
+                  <QuickLink
+                    href="/facility/providers"
+                    icon={Stethoscope}
+                    label="Manage Providers"
+                  />
+                  <QuickLink
+                    href="/facility/bed-history"
+                    icon={Bed}
+                    label="Ward history"
+                  />
+                  <QuickLink
+                    href="/facility/audit"
+                    icon={ClipboardClock}
+                    label="Audit Logs"
+                  />
+                  <QuickLink
+                    href="/facility/permissions"
+                    icon={ClipboardClock}
+                    label="Permissions"
+                  />
+                </>
+              )}
+
+              {isSuperAdmin && (
+                <QuickLink
+                  href="/facility/admins"
+                  icon={Shield}
+                  label="Manage Admins"
+                />
+              )}
+
+              {(role === "DOCTOR" || role === "NURSE") && (
+                <QuickLink
+                  href="/facility/labs/new"
+                  icon={FileText}
+                  label="Order Lab Test"
+                />
+              )}
+
+              <QuickLink
+                href="/facility/notifications"
+                icon={BellRing}
+                label="All Notifications"
+                badge={unreadCount > 0 ? unreadCount : undefined}
+              />
+            </div>
+          </div>
         </section>
 
         {/* Quick Metrics */}
@@ -809,136 +939,6 @@ export default async function FacilityDashboard() {
 
           {/* Sidebar */}
           <aside className="space-y-6">
-            {/* Quick Actions */}
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-600" />
-                  <h3 className="font-semibold text-slate-900">
-                    Quick Actions
-                  </h3>
-                </div>
-                <p className="mt-1 text-xs text-slate-600">
-                  Common tasks for your role
-                </p>
-              </div>
-              <div className="p-4 space-y-2">
-                {/* Role-specific actions */}
-                <QuickLink
-                  href="/facility/appointments/new"
-                  icon={Plus}
-                  label={
-                    isFrontdesk ? "Schedule / Check-in" : "New Appointment"
-                  }
-                  primary
-                />
-
-                {(isOwner || isFrontdesk || role === "DOCTOR" || role === "NURSE") && (
-                  <QuickLink
-                    href="/facility/patients"
-                    icon={Users2}
-                    label="Manage Patients"
-                  />
-                )}
-                {role !== "LAB" && role !== "PHARMACY" && (
-                  <QuickLink
-                    href="/facility/wards"
-                    icon={Bed}
-                    label="Ward Management"
-                  />
-                )}
-
-                {role === "DOCTOR" && (
-                  <QuickLink
-                    href="/facility/encounters?mine=1"
-                    icon={FileText}
-                    label="My Encounters"
-                  />
-                )}
-
-                {role === "NURSE" && (
-                  <QuickLink
-                    href="/facility/vitals"
-                    icon={HeartPulse}
-                    label="Capture Vitals"
-                  />
-                )}
-
-                {(isOwner || role === "LAB") && (
-                  <>
-                  <QuickLink
-                    href="/facility/labs?status=PENDING"
-                    icon={FlaskConical}
-                    label="Lab Orders"
-                  />
-                  <QuickLink
-                    href="/facility/pharmacy"
-                    icon={Pill}
-                    label="Pharmacy"
-                  />
-                  </>
-                )}
-
-                {role === "PHARMACY" && (
-                  <QuickLink
-                    href="/facility/pharmacy?status=PRESCRIBED"
-                    icon={Pill}
-                    label="Dispense Queue"
-                  />
-                )}
-
-                {isOwner && (
-                  <>
-                    <QuickLink
-                      href="/facility/providers"
-                      icon={Stethoscope}
-                      label="Manage Providers"
-                    />
-                    <QuickLink
-                      href="/facility/bed-history"
-                      icon={Bed}
-                      label="Ward history"
-                    />
-                    <QuickLink
-                      href="/facility/audit"
-                      icon={ClipboardClock}
-                      label="Audit Logs"
-                    />
-                    <QuickLink
-                      href="/facility/permissions"
-                      icon={ClipboardClock}
-                      label="Permissions"
-                    />
-                  </>
-                )}
-
-                {isSuperAdmin && (
-                  <QuickLink
-                    href="/facility/admins"
-                    icon={Shield}
-                    label="Manage Admins"
-                  />
-                )}
-
-                {(role === "DOCTOR" || role === "NURSE") && (
-                  <QuickLink
-                    href="/facility/labs/new"
-                    icon={FileText}
-                    label="Order Lab Test"
-                  />
-                )}
-
-                <div className="border-t border-slate-200 pt-2 mt-2">
-                  <QuickLink
-                    href="/facility/notifications"
-                    icon={BellRing}
-                    label="All Notifications"
-                    badge={unreadCount > 0 ? unreadCount : undefined}
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* Providers Preview */}
             {provs.length > 0 && (
               <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
@@ -1140,15 +1140,15 @@ function QuickLink({ href, icon: Icon, label, badge, primary }) {
   return (
     <Link
       href={href}
-      className={`group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+      className={`group flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium transition-all ${
         primary
           ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl"
           : "bg-slate-50 text-slate-700 hover:bg-slate-100"
       }`}
     >
-      <span className="flex items-center gap-2">
-        <Icon className="h-4 w-4" />
-        {label}
+      <span className="flex items-center gap-2.5">
+        <Icon className="h-4 w-4 flex-shrink-0" />
+        <span className="truncate">{label}</span>
         {badge !== undefined && (
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
             primary ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"
@@ -1157,7 +1157,7 @@ function QuickLink({ href, icon: Icon, label, badge, primary }) {
           </span>
         )}
       </span>
-      <ChevronRight className={`h-4 w-4 transition-transform group-hover:translate-x-0.5 ${primary ? "text-white/70" : "text-slate-400"}`} />
+      <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform group-hover:translate-x-0.5 ${primary ? "text-white/70" : "text-slate-400"}`} />
     </Link>
   );
 }
