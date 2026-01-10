@@ -1,3 +1,6 @@
+// app/patient/page.js - UPDATED VERSION WITH HMO CARD
+// This shows the changes needed to integrate the HMO Summary Card
+
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -5,6 +8,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import GreetingLine from "@/components/GreetingLine";
 import NotificationsBell from "@/components/notifications/NotificationsBell";
+import HMOSummaryCard from "@/components/patient/HMOSummaryCard"; // 🆕 ADD THIS IMPORT
 import {
   CalendarRange,
   BellRing,
@@ -60,13 +64,26 @@ async function fetchMe() {
   }
 }
 
-export default async function PatientDashboard() {
-  const [myAppointments, notifications, me] = await Promise.all([
-    safeFetchJSON("/appointments/?mine=true&limit=10", []),
-    safeFetchJSON("/notifications/?limit=10", []),
-    fetchMe(),
-  ]);
+// 🆕 ADD THIS FUNCTION to fetch patient profile with HMO data
+async function fetchPatientProfile(token) {
+  try {
+    const res = await fetch(`${BACKEND}/api/patients/?mine=true&limit=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const patients = Array.isArray(data) ? data : data?.results || [];
+    return patients[0] || null;
+  } catch {
+    return null;
+  }
+}
 
+export default async function PatientDashboard() {
+  // 🆕 UPDATE THIS SECTION to fetch patient profile
+  const me = await fetchMe();
+  
   if (!me) {
     redirect("/login/patient");
   }
@@ -74,6 +91,17 @@ export default async function PatientDashboard() {
   if (me.role !== "PATIENT") {
     redirect("/login/patient");
   }
+
+  // 🆕 Fetch patient profile with HMO data
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ACCESS_COOKIE)?.value;
+  const patientProfile = await fetchPatientProfile(token);
+
+  // Existing fetches
+  const [myAppointments, notifications] = await Promise.all([
+    safeFetchJSON("/appointments/?mine=true&limit=10", []),
+    safeFetchJSON("/notifications/?limit=10", []),
+  ]);
 
   const appts = Array.isArray(myAppointments)
     ? myAppointments
@@ -363,6 +391,9 @@ export default async function PatientDashboard() {
 
           {/* Sidebar */}
           <aside className="space-y-6">
+            {/* 🆕 HMO SUMMARY CARD - ADD THIS ABOVE QUICK ACTIONS */}
+            {patientProfile && <HMOSummaryCard patient={patientProfile} />}
+
             {/* Quick Actions */}
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
               <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
@@ -435,7 +466,6 @@ export default async function PatientDashboard() {
                 <div className="mt-4 space-y-2">
                   <SummaryItem label="Allergies" value="Updated" status="success" />
                   <SummaryItem label="Medications" value="3 active" status="info" />
-                  {/* <SummaryItem label="Last checkup" value="2 weeks ago" status="success" /> */}
                 </div>
                 <Link
                   href="/patient/allergies"
