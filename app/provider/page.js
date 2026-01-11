@@ -15,6 +15,7 @@ import {
   Clock,
   TrendingUp,
   CheckCircle2,
+  User
 } from "lucide-react";
 import {
   requireIndependentProvider,
@@ -700,6 +701,7 @@ export default async function ProviderPage() {
 
   const quickLinks = [
     { href: "/provider/patients", label: "Patients", icon: Users },
+    { href: "/settings/profile", label: "Settings", icon: User },
     { href: "/provider/notifications", label: `Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`, icon: Bell },
   ];
 
