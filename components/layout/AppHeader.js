@@ -91,7 +91,7 @@ function buildNavForUser(user) {
         { href: "/facility/hmos", label: "HMOs", icon: Shield },
         { href: "/facility/labs", label: "Labs", icon: FlaskConical },
         { href: "/facility/pharmacy", label: "Pharmacy", icon: Pill },
-        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+        
       ];
     }
 
@@ -131,7 +131,7 @@ function buildNavForUser(user) {
         // { href: "/facility/payments", label: "Payments", icon: CreditCard },
         { href: "/facility/patients", label: "Patients", icon: Users },
         { href: "/facility/hmos", label: "HMOs", icon: Shield },
-        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+        
       ];
     }
 
@@ -178,7 +178,7 @@ function buildNavForUser(user) {
         { href: "/provider/appointments", label: "Appointments", icon: CalendarClock },
         { href: "/provider/encounters", label: "Encounters", icon: ClipboardList },
         { href: "/provider/patients", label: "Patients", icon: Users },
-        { href: "/provider/labs/new", label: "Labs", icon: FlaskConical },
+        { href: "/provider/labs", label: "Labs", icon: FlaskConical },
         { href: "/provider/pharmacy", label: "Pharmacy", icon: Pill },
         { href: "/provider/notifications", label: "Notifications", icon: Bell },
       ];

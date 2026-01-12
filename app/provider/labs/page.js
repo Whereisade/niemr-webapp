@@ -25,6 +25,7 @@ import {
   Activity,
   ClipboardList,
   Hourglass,
+  FileText,
 } from "lucide-react";
 
 
@@ -236,11 +237,19 @@ function IndependentLabOrdersPageInner() {
             Lab Orders Assigned to You
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            View and process lab orders outsourced to your independent lab practice.
+            View and process lab orders outsourced to your independent lab
+            practice.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/provider/labs/new"
+            className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            New lab order
+          </Link>
           <button
             type="button"
             onClick={loadOrders}
@@ -295,7 +304,8 @@ function IndependentLabOrdersPageInner() {
               placeholder="Search tests / notes…"
               defaultValue={s}
               onKeyDown={(e) => {
-                if (e.key === "Enter") updateQuery({ s: e.currentTarget.value });
+                if (e.key === "Enter")
+                  updateQuery({ s: e.currentTarget.value });
               }}
               onBlur={(e) => updateQuery({ s: e.target.value })}
               className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -348,8 +358,12 @@ function IndependentLabOrdersPageInner() {
               <FlaskConical className="h-5 w-5 text-slate-700" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Lab Orders</h2>
-              <p className="text-xs text-slate-500">{total} order{total === 1 ? "" : "s"} assigned to you</p>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Lab Orders
+              </h2>
+              <p className="text-xs text-slate-500">
+                {total} order{total === 1 ? "" : "s"} assigned to you
+              </p>
             </div>
           </div>
         </div>
@@ -370,7 +384,10 @@ function IndependentLabOrdersPageInner() {
             <tbody className="divide-y divide-slate-100 bg-white">
               {loading && !orders.length ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
+                  <td
+                    colSpan={7}
+                    className="px-4 py-10 text-center text-sm text-slate-500"
+                  >
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
                     <p className="mt-2">Loading orders…</p>
                   </td>
@@ -378,17 +395,24 @@ function IndependentLabOrdersPageInner() {
               ) : orders.length ? (
                 orders.map((order) => {
                   const statusNorm = String(order.status || "").toUpperCase();
-                  const { label: statusLabel, badgeClass } = getLabStatusMeta(order.status);
+                  const { label: statusLabel, badgeClass } = getLabStatusMeta(
+                    order.status
+                  );
 
                   return (
-                    <tr key={order.id} className="transition hover:bg-slate-50/60">
+                    <tr
+                      key={order.id}
+                      className="transition hover:bg-slate-50/60"
+                    >
                       <Td>
                         <div className="flex items-center gap-2">
                           <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
                             <UserRound className="h-4 w-4 text-blue-700" />
                           </span>
                           <div className="font-medium text-slate-900">
-                            {order.patient_name || `Patient #${order.patient}` || "—"}
+                            {order.patient_name ||
+                              `Patient #${order.patient}` ||
+                              "—"}
                           </div>
                         </div>
                       </Td>
@@ -396,7 +420,10 @@ function IndependentLabOrdersPageInner() {
                       <Td>
                         <div className="flex items-center gap-1 text-slate-700">
                           <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                          {order.facility_name || order.facility?.name || `Facility #${order.facility}` || "—"}
+                          {order.facility_name ||
+                            order.facility?.name ||
+                            `Facility #${order.facility}` ||
+                            "—"}
                         </div>
                       </Td>
 
@@ -417,7 +444,9 @@ function IndependentLabOrdersPageInner() {
                       </Td>
 
                       <Td>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}
+                        >
                           {statusLabel}
                         </span>
                       </Td>
@@ -506,7 +535,9 @@ function IndependentLabOrdersPageInner() {
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                       <FlaskConical className="h-6 w-6 text-slate-400" />
                     </div>
-                    <div className="text-sm font-medium text-slate-900">No lab orders found</div>
+                    <div className="text-sm font-medium text-slate-900">
+                      No lab orders found
+                    </div>
                     <div className="mt-1 text-sm text-slate-500">
                       Orders outsourced to you will appear here.
                     </div>
@@ -519,7 +550,9 @@ function IndependentLabOrdersPageInner() {
 
         {/* Pager */}
         <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
-          <div>Page {page} · {total} total</div>
+          <div>
+            Page {page} · {total} total
+          </div>
           <div className="flex gap-2">
             <button
               type="button"

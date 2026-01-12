@@ -139,7 +139,7 @@ export default function ProviderEncounterPrescriptionPage() {
     setPharmLoading(true);
     try {
       const res = await apiFetch(
-        "/providers/?facility=none&type=PHARMACY&page=1&limit=50",
+        "/providers/?facility=none&type=PHARMACIST&page=1&limit=50",
         { method: "GET" }
       );
       setPharmProviders(normalizeList(res));

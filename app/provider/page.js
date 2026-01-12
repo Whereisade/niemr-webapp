@@ -332,7 +332,7 @@ export default async function ProviderPage() {
               <div className="flex items-center gap-2">
                 {isUrgent && <AlertTriangle className="h-4 w-4 text-red-600" />}
                 <span className="font-medium">
-                  {o.test_name || o.test_type || `Order #${o.id}`}
+                  {o.items?.[0]?.display_name || o.test_type || `Order #${o.id}`}
                 </span>
               </div>
               <div className="text-xs text-slate-500">
@@ -375,7 +375,7 @@ export default async function ProviderPage() {
           >
             <div className="flex items-center justify-between gap-3">
               <div className="font-medium">
-                {o.test_name || o.test_type || `Order #${o.id}`}
+                {o.items?.[0]?.display_name || o.test_type || `Order #${o.id}`}
               </div>
               <div className="text-xs text-slate-500">
                 Started: {formatTime(o.collected_at || o.created_at)}
@@ -473,7 +473,7 @@ export default async function ProviderPage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div className="font-medium">
-              {rx.medication_name || `Prescription #${rx.id}`}
+              {rx.items?.[0]?.drug?.name || `Prescription #${rx.id}`}
             </div>
             <div className="text-xs text-slate-500">
               {formatTime(rx.created_at)}
@@ -512,7 +512,7 @@ export default async function ProviderPage() {
           >
             <div className="flex items-center justify-between gap-3">
               <div className="font-medium">
-                {rx.medication_name || `Prescription #${rx.id}`}
+                {rx.items?.[0]?.drug?.name || `Prescription #${rx.id}`}
               </div>
               <div className="text-xs text-slate-500">
                 {formatTime(rx.dispensed_at)}
@@ -676,7 +676,9 @@ export default async function ProviderPage() {
           >
             <div className="flex items-center justify-between gap-3">
               <div className="font-medium">
-                Encounter #{e.id}
+                {e.patient_name ||
+                  e.patient?.full_name ||
+                  `Encounter #${e.id}`}
               </div>
               <div className="text-xs text-slate-500">
                 Started: {formatTime(e.start_time || e.created_at)}
@@ -684,10 +686,7 @@ export default async function ProviderPage() {
             </div>
             <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
               <span>
-                Patient:{" "}
-                {e.patient_name ||
-                  e.patient?.full_name ||
-                  "—"}
+                Encounter ID: #{e.id}
               </span>
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
                 {e.encounter_type || "CONSULT"}
