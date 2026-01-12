@@ -45,12 +45,13 @@ export default function ProviderNewLabOrderPage() {
   const [priority, setPriority] = useState("ROUTINE");
   const [notes, setNotes] = useState("");
 
-  // Lab catalog state (for LAB users)
+  // Lab catalog state (for LAB users AND doctors/nurses viewing outsourced lab catalogs)
   const [labCatalog, setLabCatalog] = useState([]);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const [selectedTests, setSelectedTests] = useState([]);
   const [catalogSearch, setCatalogSearch] = useState("");
+  const [selectedLabName, setSelectedLabName] = useState(""); // Track selected lab's business name
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +79,7 @@ export default function ProviderNewLabOrderPage() {
 
   const meRole = String(me?.role || "").toUpperCase();
   const isIndependentLab = meRole === "LAB" && !me?.facility;
+  const isDoctorOrNurse = ["DOCTOR", "NURSE"].includes(meRole);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +105,7 @@ export default function ProviderNewLabOrderPage() {
     };
   }, []);
 
-  // Load lab catalog for independent LAB users
+  // Load lab catalog for independent LAB users (their own catalog)
   useEffect(() => {
     if (!isIndependentLab) return;
 
@@ -165,6 +167,46 @@ export default function ProviderNewLabOrderPage() {
     };
   }, [isIndependentLab]);
 
+  // 🔥 NEW: Load external lab's catalog when doctor/nurse selects an external lab
+  useEffect(() => {
+    if (!isDoctorOrNurse || !outsourcedTo || outsourcedTo === "__other__") {
+      // Clear catalog when no valid lab is selected
+      setLabCatalog([]);
+      setSelectedTests([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchOutsourcedCatalog() {
+      setLoadingCatalog(true);
+      setCatalogError("");
+
+      try {
+        // Fetch catalog using ?created_by parameter (backend already supports this)
+        const data = await apiFetch(`/labs/catalog/?created_by=${outsourcedTo}`);
+        if (!cancelled) {
+          setLabCatalog(normalizeList(data).filter((t) => t.is_active));
+          // Clear any previously selected tests when switching labs
+          setSelectedTests([]);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCatalogError(e?.message || "Failed to load external lab's catalog.");
+          setLabCatalog([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingCatalog(false);
+      }
+    }
+
+    fetchOutsourcedCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDoctorOrNurse, outsourcedTo]);
+
   const handleAddTest = (test) => {
     if (selectedTests.some((t) => t.id === test.id)) return;
     setSelectedTests([...selectedTests, test]);
@@ -208,8 +250,13 @@ export default function ProviderNewLabOrderPage() {
     } else {
       // For doctors/nurses: must specify external lab
       if (!externalLabName.trim()) {
-        setError("Please enter the external lab name.");
+        setError("Please enter the external lab name or select from the list.");
         return;
+      }
+
+      // 🔥 NEW: If doctor selected tests from catalog, require them
+      if (outsourcedTo && outsourcedTo !== "__other__" && labCatalog.length > 0 && selectedTests.length === 0) {
+        setError("Please select at least one test from the external lab's catalog, or provide details in the clinical notes.");
       }
     }
 
@@ -232,7 +279,9 @@ export default function ProviderNewLabOrderPage() {
       const isOtherLab = outsourcedTo === "__other__";
       resolvedOutsourcedTo = outsourcedTo && !isOtherLab ? Number(outsourcedTo) : null;
       resolvedExternalName = externalLabName.trim();
-      items = []; // Doctors describe tests in notes, not catalog
+      
+      // 🔥 NEW: Include selected tests if any were chosen from catalog
+      items = selectedTests.map((t) => ({ test_code: t.code }));
     }
 
     const payload = {
@@ -258,6 +307,20 @@ export default function ProviderNewLabOrderPage() {
 
   const selectedPriorityOption = PRIORITY_OPTIONS.find((p) => p.value === priority);
 
+  // 🔥 FIXED: Helper to get business name from provider
+  const getProviderDisplayName = (provider) => {
+    // Priority: business_name > full_name > email
+    if (provider?.business_name) return provider.business_name;
+    
+    const fullName = provider?.full_name || provider?.user_name;
+    if (fullName) return fullName;
+    
+    return provider?.user_email || provider?.email || "External lab";
+  };
+
+  // Determine if catalog should be shown
+  const shouldShowCatalog = isIndependentLab || (isDoctorOrNurse && outsourcedTo && outsourcedTo !== "__other__");
+
   return (
     <main className="mx-auto max-w-4xl p-6 md:p-10">
       {/* Header */}
@@ -272,7 +335,7 @@ export default function ProviderNewLabOrderPage() {
         <p className="mt-2 text-sm text-slate-600">
           {isIndependentLab
             ? "Create a lab order for your walk-in patient. Select tests from your catalog and provide clinical context."
-            : "Request lab tests from an external laboratory. Describe the tests needed and provide clinical context."}
+            : "Request lab tests from an external laboratory. Select tests from their catalog or describe the tests needed in your clinical notes."}
         </p>
       </header>
 
@@ -338,8 +401,88 @@ export default function ProviderNewLabOrderPage() {
           </div>
         </section>
 
-        {/* Lab Catalog Selection (for independent LAB users) */}
-        {isIndependentLab && (
+        {/* External Lab Selection (for doctors/nurses) */}
+        {!isIndependentLab && (
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="h-1.5 w-full bg-gradient-to-r from-amber-600 via-orange-600 to-red-600" />
+            <div className="p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50">
+                  <Building2 className="h-5 w-5 text-amber-700" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    External Laboratory
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Select where to send this lab request
+                  </p>
+                </div>
+              </div>
+
+              <select
+                value={outsourcedTo}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setOutsourcedTo(v);
+
+                  if (!v || v === "__other__") {
+                    setExternalLabName("");
+                    setSelectedLabName("");
+                    return;
+                  }
+
+                  const selected = externalLabs.find(
+                    (lab) =>
+                      String(lab?.user ?? lab?.user_id ?? "") === String(v)
+                  );
+
+                  if (selected) {
+                    // 🔥 FIXED: Use business name priority
+                    const displayName = getProviderDisplayName(selected);
+                    setExternalLabName(displayName);
+                    setSelectedLabName(displayName);
+                  }
+                }}
+                disabled={loadingLabs}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60"
+              >
+                <option value="">
+                  {loadingLabs ? "Loading labs..." : "— Select external lab —"}
+                </option>
+                {externalLabs.map((lab) => {
+                  const value = String(lab?.user ?? lab?.user_id ?? "");
+                  // 🔥 FIXED: Display business name
+                  const displayName = getProviderDisplayName(lab);
+
+                  return (
+                    <option key={value || displayName} value={value}>
+                      {displayName}
+                    </option>
+                  );
+                })}
+                <option value="__other__">Other (enter name manually)</option>
+              </select>
+
+              {outsourcedTo === "__other__" && (
+                <input
+                  type="text"
+                  value={externalLabName}
+                  onChange={(e) => setExternalLabName(e.target.value)}
+                  className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="Enter external lab name"
+                />
+              )}
+
+              {labsError && (
+                <p className="mt-2 text-xs text-red-600">{labsError}</p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Lab Catalog Selection (for independent LAB users OR doctors viewing external lab catalog) */}
+        {shouldShowCatalog && (
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="h-1.5 w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600" />
             <div className="p-6">
@@ -349,10 +492,14 @@ export default function ProviderNewLabOrderPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-slate-900">
-                    Tests to Perform
+                    {isIndependentLab 
+                      ? "Tests to Perform" 
+                      : `Tests from ${selectedLabName || "External Lab"}`}
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Select tests from your lab catalog
+                    {isIndependentLab
+                      ? "Select tests from your lab catalog"
+                      : "Select specific tests or describe them in clinical notes below"}
                   </p>
                 </div>
               </div>
@@ -470,103 +617,33 @@ export default function ProviderNewLabOrderPage() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
                   No tests match "{catalogSearch}"
                 </div>
-              ) : (
+              ) : labCatalog.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
-                  Your lab catalog is empty. Add tests in{" "}
-                  <a
-                    href="/provider/labs/catalog"
-                    className="font-medium text-blue-600 hover:underline"
-                  >
-                    Lab Catalog
-                  </a>
-                  .
+                  {isIndependentLab ? (
+                    <>
+                      Your lab catalog is empty. Add tests in{" "}
+                      <a
+                        href="/provider/labs/catalog"
+                        className="font-medium text-blue-600 hover:underline"
+                      >
+                        Lab Catalog
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      This external lab has no tests in their catalog.
+                      Please describe the required tests in the clinical notes below.
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-          </section>
-        )}
+              ) : null}
 
-        {/* External Lab Selection (for doctors/nurses) */}
-        {!isIndependentLab && (
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="h-1.5 w-full bg-gradient-to-r from-amber-600 via-orange-600 to-red-600" />
-            <div className="p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50">
-                  <Building2 className="h-5 w-5 text-amber-700" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">
-                    External Laboratory
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Select where to send this lab request
-                  </p>
-                </div>
-              </div>
-
-              <select
-                value={outsourcedTo}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setOutsourcedTo(v);
-
-                  if (!v || v === "__other__") {
-                    setExternalLabName("");
-                    return;
-                  }
-
-                  const selected = externalLabs.find(
-                    (lab) =>
-                      String(lab?.user ?? lab?.user_id ?? "") === String(v)
-                  );
-
-                  const label =
-                    selected?.full_name ||
-                    selected?.user_name ||
-                    selected?.user_email ||
-                    selected?.email ||
-                    "External lab";
-
-                  setExternalLabName(label);
-                }}
-                disabled={loadingLabs}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60"
-              >
-                <option value="">
-                  {loadingLabs ? "Loading labs..." : "— Select external lab —"}
-                </option>
-                {externalLabs.map((lab) => {
-                  const value = String(lab?.user ?? lab?.user_id ?? "");
-                  const label =
-                    lab?.full_name ||
-                    lab?.user_name ||
-                    lab?.user_email ||
-                    lab?.email ||
-                    value ||
-                    "External lab";
-
-                  return (
-                    <option key={value || label} value={value}>
-                      {label}
-                    </option>
-                  );
-                })}
-                <option value="__other__">Other (enter name manually)</option>
-              </select>
-
-              {outsourcedTo === "__other__" && (
-                <input
-                  type="text"
-                  value={externalLabName}
-                  onChange={(e) => setExternalLabName(e.target.value)}
-                  className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  placeholder="Enter external lab name"
-                />
-              )}
-
-              {labsError && (
-                <p className="mt-2 text-xs text-red-600">{labsError}</p>
+              {/* Helper text for doctors/nurses */}
+              {!isIndependentLab && labCatalog.length > 0 && (
+                <p className="mt-3 text-xs text-slate-600 italic">
+                  💡 You can select tests from this lab's catalog, or describe custom tests in your clinical notes below.
+                </p>
               )}
             </div>
           </section>

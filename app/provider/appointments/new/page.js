@@ -103,6 +103,11 @@ export default function ProviderNewAppointmentPage() {
     };
   }, []);
 
+  // Derive selectedPatient from patientId and patients list
+  const selectedPatient = patients.find(
+    (p) => String(p.id) === String(patientId)
+  );
+
   useEffect(() => {
     if (!selectedPatient) return;
     const fac = selectedPatient?.facility;
@@ -184,9 +189,6 @@ export default function ProviderNewAppointmentPage() {
     !loadingPatients &&
     patients.length > 0;
 
-  const selectedPatient = patients.find(
-    (p) => String(p.id) === String(patientId)
-  );
   const selectedName = selectedPatient
     ? [selectedPatient.first_name, selectedPatient.last_name]
         .filter(Boolean)
