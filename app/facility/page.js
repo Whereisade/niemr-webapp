@@ -196,7 +196,7 @@ export default async function FacilityDashboard() {
     safeFetchJSON("/appointments/?date=today&limit=200", []),
     safeFetchJSON(`/appointments/?${yesterdayRangeQs.toString()}`, []),
     safeFetchJSON(`/appointments/?${upcomingQs.toString()}`, []),
-    safeFetchJSON("/providers/?limit=100", []),
+    safeFetchJSON("/providers/?facility=current", []),  // ✅ FIXED: Fetch facility providers (including sacked)
     fetchMe(),
   ]);
 
@@ -344,6 +344,12 @@ export default async function FacilityDashboard() {
   // ===== ENHANCED DYNAMIC STATS (Role-based, 3 stats per role) =====
   let stats;
   if (isOwner) {
+    // ✅ FIXED: Count only APPROVED, active, non-sacked providers
+    const activeProviders = provs.filter(p => {
+      const status = (p.status || p.verification_status || "").toUpperCase();
+      return p.is_active && !p.is_sacked && status === "APPROVED";
+    }).length;
+    
     stats = [
       {
         label: "Today's Appointments",
@@ -359,9 +365,12 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Active Providers",
-        value: provs.filter(p => p.is_active).length,
+        value: activeProviders,  // ✅ FIXED: Real active provider count (approved only)
         icon: Users2,
-        trend: `${provs.length - provs.filter(p => p.is_active).length} inactive`,
+        trend: `${provs.filter(p => {
+          const status = (p.status || p.verification_status || "").toUpperCase();
+          return !p.is_active || p.is_sacked || status !== "APPROVED";
+        }).length} `,
         trendUp: true,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
@@ -371,8 +380,8 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Today's Revenue",
-        value: `₦${revenueCounts.todayTotal.toLocaleString()}`,
-        subValue: `${revenueCounts.paymentsCollected.toLocaleString()} collected`,
+        value: `₦${revenueCounts.todayTotal.toLocaleString()}`,  // ✅ Already connected to real data
+        subValue: `₦${revenueCounts.paymentsCollected.toLocaleString()} collected`,
         icon: DollarSign,
         accent: "from-purple-500 to-pink-600",
         bgAccent: "bg-purple-50",
@@ -477,7 +486,10 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Providers on Duty",
-        value: provs.filter(p => p.is_active).length,
+        value: provs.filter(p => {
+          const status = (p.status || p.verification_status || "").toUpperCase();
+          return p.is_active && !p.is_sacked && status === "APPROVED";
+        }).length,
         icon: Users2,
         accent: "from-purple-500 to-pink-600",
         bgAccent: "bg-purple-50",
@@ -487,18 +499,31 @@ export default async function FacilityDashboard() {
       },
     ];
   } else if (role === "DOCTOR") {
-    // Fetch doctor-specific data
+    // ✅ FIXED: Fetch doctor-specific encounters without limit restrictions
     const [myAppts, myEncounters] = await Promise.all([
-      safeFetchJSON("/appointments/?mine=1&date=today&limit=1", []),
-      safeFetchJSON("/encounters/?mine=1&limit=1", []),
+      safeFetchJSON("/encounters/?mine=1", []),  // Fetch ALL encounters (no limit)
+      safeFetchJSON("/appointments/?mine=1&date=today", []),
     ]);
     
     const myApptsCount = getCount(myAppts);
     const myEncountersList = normalizeList(myEncounters);
+    
+    // ✅ Open encounters: not CLOSED or CROSSED_OUT
     const openEncounters = myEncountersList.filter(e => 
       !["CLOSED", "CROSSED_OUT"].includes(String(e.status || "").toUpperCase())
     ).length;
-    const completedToday = statusCounts.COMPLETED || 0;
+    
+    // ✅ Completed today: CLOSED status and finalized/locked within today's date range
+    const completedToday = myEncountersList.filter(e => {
+      if (String(e.status || "").toUpperCase() !== "CLOSED") return false;
+      
+      // Check if closed/locked today
+      const closedAt = e.locked_at || e.clinical_finalized_at || e.updated_at;
+      if (!closedAt) return false;
+      
+      const closedDate = new Date(closedAt);
+      return closedDate >= dayStart && closedDate <= dayEnd;
+    }).length;
     
     stats = [
       {
@@ -513,7 +538,7 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Open Encounters",
-        value: openEncounters,
+        value: openEncounters,  // ✅ FIXED: Real count of open encounters
         icon: Activity,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
@@ -523,12 +548,12 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Completed Today",
-        value: completedToday,
+        value: completedToday,  // ✅ FIXED: Real count of encounters completed today
         icon: CheckCircle2,
         accent: "from-purple-500 to-pink-600",
         bgAccent: "bg-purple-50",
         iconColor: "text-purple-600",
-        href: "/facility/encounters?status=COMPLETED",
+        href: "/facility/encounters?status=CLOSED",
         cta: "View reports",
       },
     ];
@@ -580,7 +605,10 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Active Providers",
-        value: provs.length,
+        value: provs.filter(p => {
+          const status = (p.status || p.verification_status || "").toUpperCase();
+          return p.is_active && !p.is_sacked && status === "APPROVED";
+        }).length,
         icon: Users2,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
@@ -736,9 +764,10 @@ export default async function FacilityDashboard() {
       },
     ];
   } else if (role === "DOCTOR") {
+    // ✅ FIXED: Use the real encounter data we fetched above
     const [myAppts, myEncounters] = await Promise.all([
-      safeFetchJSON("/appointments/?mine=1&date=today&limit=1", []),
-      safeFetchJSON("/encounters/?mine=1&limit=200", []),
+      safeFetchJSON("/appointments/?mine=1&date=today", []),
+      safeFetchJSON("/encounters/?mine=1", []),
     ]);
     
     const myApptsCount = getCount(myAppts);
@@ -747,10 +776,11 @@ export default async function FacilityDashboard() {
       !["CLOSED", "CROSSED_OUT"].includes(String(e.status || "").toUpperCase())
     ).length;
     const completedToday = myEncountersList.filter(e => {
-      const completedAt = e.completed_at || e.clinical_finalized_at;
-      if (!completedAt) return false;
-      const completedDate = new Date(completedAt);
-      return completedDate >= dayStart && completedDate <= dayEnd;
+      if (String(e.status || "").toUpperCase() !== "CLOSED") return false;
+      const closedAt = e.locked_at || e.clinical_finalized_at || e.updated_at;
+      if (!closedAt) return false;
+      const closedDate = new Date(closedAt);
+      return closedDate >= dayStart && closedDate <= dayEnd;
     }).length;
     const completionRate = myApptsCount > 0 ? Math.round((completedToday / myApptsCount) * 100) : 0;
     
@@ -1205,8 +1235,14 @@ export default async function FacilityDashboard() {
                         Care Team
                       </h3>
                       <p className="text-xs text-slate-600">
-                        {provs.length} active provider
-                        {provs.length !== 1 ? "s" : ""}
+                        {provs.filter(p => {
+                          const status = (p.status || p.verification_status || "").toUpperCase();
+                          return p.is_active && !p.is_sacked && status === "APPROVED";
+                        }).length} active provider
+                        {provs.filter(p => {
+                          const status = (p.status || p.verification_status || "").toUpperCase();
+                          return p.is_active && !p.is_sacked && status === "APPROVED";
+                        }).length !== 1 ? "s" : ""}
                       </p>
                     </div>
                     <Link
@@ -1218,7 +1254,10 @@ export default async function FacilityDashboard() {
                   </div>
                 </div>
                 <ul className="divide-y divide-slate-100">
-                  {provs.slice(0, 4).map((p, i) => (
+                  {provs.filter(p => {
+                    const status = (p.status || p.verification_status || "").toUpperCase();
+                    return p.is_active && !p.is_sacked && status === "APPROVED";
+                  }).slice(0, 4).map((p, i) => (
                     <li
                       key={p.id || i}
                       className="flex items-center justify-between p-4 transition hover:bg-slate-50"

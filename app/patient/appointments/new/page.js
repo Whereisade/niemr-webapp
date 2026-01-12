@@ -223,15 +223,24 @@ export default function PatientNewAppointmentPage() {
       return;
     }
 
+    // Only fetch if a provider is selected
+    if (!providerId) {
+      setLabTests([]);
+      setSelectedLabTests([]);
+      setLabTestsError("Please select a lab scientist to view their available tests.");
+      return;
+    }
+
     let cancelled = false;
 
     async function fetchLabTests() {
       try {
         setLoadingLabTests(true);
         setLabTestsError("");
-        console.log("Fetching lab tests catalog...");
+        console.log("Fetching lab tests catalog for provider:", providerId);
         
-        const res = await apiFetch("/labs/catalog/?page=1&limit=200");
+        // ✅ FIX: Filter by the selected provider's catalog using created_by parameter
+        const res = await apiFetch(`/labs/catalog/?page=1&limit=200&created_by=${providerId}`);
         console.log("Lab tests response:", res);
 
         if (cancelled) return;
@@ -256,7 +265,7 @@ export default function PatientNewAppointmentPage() {
         setLabTests(items);
         
         if (items.length === 0) {
-          setLabTestsError("No lab tests available in catalog. You can still proceed with your appointment.");
+          setLabTestsError("This lab scientist has no tests in their catalog yet. You can still proceed with your appointment.");
         }
       } catch (err) {
         console.error("Failed to load lab tests", err);
@@ -274,7 +283,7 @@ export default function PatientNewAppointmentPage() {
     return () => {
       cancelled = true;
     };
-  }, [bookingMode, providerType]);
+  }, [bookingMode, providerType, providerId]);
 
   // Load pharmacy drugs when PHARMACIST provider type is selected
   useEffect(() => {
@@ -285,15 +294,24 @@ export default function PatientNewAppointmentPage() {
       return;
     }
 
+    // Only fetch if a provider is selected
+    if (!providerId) {
+      setPharmacyDrugs([]);
+      setSelectedPharmacyDrugs([]);
+      setPharmacyDrugsError("Please select a pharmacist to view their available medications.");
+      return;
+    }
+
     let cancelled = false;
 
     async function fetchPharmacyDrugs() {
       try {
         setLoadingPharmacyDrugs(true);
         setPharmacyDrugsError("");
-        console.log("Fetching pharmacy drugs catalog...");
+        console.log("Fetching pharmacy drugs catalog for provider:", providerId);
         
-        const res = await apiFetch("/pharmacy/catalog/?page=1&limit=200");
+        // ✅ FIX: Filter by the selected provider's catalog using created_by parameter
+        const res = await apiFetch(`/pharmacy/catalog/?page=1&limit=200&created_by=${providerId}`);
         console.log("Pharmacy drugs response:", res);
 
         if (cancelled) return;
@@ -318,7 +336,7 @@ export default function PatientNewAppointmentPage() {
         setPharmacyDrugs(items);
         
         if (items.length === 0) {
-          setPharmacyDrugsError("No drugs available in catalog. You can still proceed with your appointment.");
+          setPharmacyDrugsError("This pharmacist has no drugs in their catalog yet. You can still proceed with your appointment.");
         }
       } catch (err) {
         console.error("Failed to load pharmacy drugs", err);
@@ -336,7 +354,7 @@ export default function PatientNewAppointmentPage() {
     return () => {
       cancelled = true;
     };
-  }, [bookingMode, providerType]);
+  }, [bookingMode, providerType, providerId]);
 
   // Load dependents once on mount
   useEffect(() => {

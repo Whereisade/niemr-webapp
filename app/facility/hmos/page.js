@@ -561,7 +561,7 @@ export default function EnhancedHMOPage() {
           onClick={() => setActiveTab("appointments")}
           icon={Calendar}
         >
-          Appointments
+          Services
         </TabButton>
       </div>
 
