@@ -48,7 +48,8 @@ function ProviderAppointmentsPageInner() {
   const page = Number(sp.get("page") || 1);
   const limit = Number(sp.get("limit") || 10);
   const status = sp.get("status") || "";
-  const date = sp.get("date") || "today";
+  // ✅ FIX: Changed default from "today" to "all" so all appointments show
+  const date = sp.get("date") || "all";
   const q = sp.get("q") || "";
 
   const { data, error, isLoading, mutate } = useAppointments({
@@ -69,6 +70,12 @@ function ProviderAppointmentsPageInner() {
         const meData = await apiFetch("/accounts/me/");
         if (!cancelled) {
           setMe(meData);
+          console.log("Loaded user:", {
+            id: meData?.id,
+            role: meData?.role,
+            hasFacility: Boolean(meData?.facility_id || meData?.facility),
+            facilityId: meData?.facility_id || meData?.facility?.id || meData?.facility,
+          });
         }
       } catch (err) {
         console.error("Failed to load user", err);
@@ -87,6 +94,18 @@ function ProviderAppointmentsPageInner() {
   const rowsRaw = data?.results ?? (Array.isArray(data) ? data : []);
   const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
   const total = Number(data?.count ?? rows.length);
+
+  // Debug logging
+  useEffect(() => {
+    if (!isLoading && data) {
+      console.log("Appointments data:", {
+        total,
+        rowsCount: rows.length,
+        filters: { status, date, q },
+        sampleRow: rows[0],
+      });
+    }
+  }, [data, isLoading, total, rows, status, date, q]);
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -122,10 +141,10 @@ function ProviderAppointmentsPageInner() {
   };
   const dateLabel = dateLabelMap[date] || "Custom";
 
-  const hasActiveFilters = Boolean(status || q || date !== "today");
+  const hasActiveFilters = Boolean(status || q || date !== "all");
 
   // Check if user has facility (to show/hide facility column)
-  const userHasFacility = Boolean(me?.facility);
+  const userHasFacility = Boolean(me?.facility_id || me?.facility);
 
   return (
     <main className="relative mx-auto max-w-7xl p-6 md:p-10 space-y-6">
@@ -143,8 +162,9 @@ function ProviderAppointmentsPageInner() {
             Appointments
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Filter, search, and manage visits across{" "}
-            <span className="font-medium">{dateLabel.toLowerCase()}</span>.
+            {userHasFacility 
+              ? `Manage visits at your facility across ${dateLabel.toLowerCase()}.`
+              : `Manage your appointments across ${dateLabel.toLowerCase()}.`}
           </p>
         </div>
 
@@ -227,11 +247,11 @@ function ProviderAppointmentsPageInner() {
               onChange={(e) => updateQuery({ date: e.target.value })}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             >
+              <option value="all">All dates</option>
               <option value="today">Today</option>
               <option value="tomorrow">Tomorrow</option>
               <option value="this_week">This week</option>
               <option value="next_7d">Next 7 days</option>
-              <option value="all">All dates</option>
             </select>
 
             <select
@@ -247,6 +267,23 @@ function ProviderAppointmentsPageInner() {
         </div>
       </section>
 
+      {/* Debug info (remove in production) */}
+      {/* {process.env.NODE_ENV === 'development' && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs">
+          <div className="font-semibold text-amber-900 mb-1">Debug Info:</div>
+          <div className="text-amber-800 space-y-0.5">
+            <div>User ID: {me?.id || "loading..."}</div>
+            <div>Role: {me?.role || "loading..."}</div>
+            <div>Has Facility: {userHasFacility ? "Yes" : "No"}</div>
+            <div>Facility ID: {me?.facility_id || me?.facility?.id || me?.facility || "none"}</div>
+            <div>Date Filter: {date}</div>
+            <div>Status Filter: {status || "none"}</div>
+            <div>Total Results: {total}</div>
+            <div>API Error: {error ? String(error) : "none"}</div>
+          </div>
+        </div>
+      )} */}
+
       {/* Table card */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <CardHead
@@ -259,7 +296,14 @@ function ProviderAppointmentsPageInner() {
           </div>
         ) : error ? (
           <div className="p-6 text-sm text-rose-700 bg-rose-50 border-t border-rose-100">
-            Failed to load: {String(error?.message || error)}
+            <div className="font-semibold mb-1">Failed to load appointments</div>
+            <div>{String(error?.message || error)}</div>
+            <button 
+              onClick={() => mutate()} 
+              className="mt-3 text-sm text-blue-700 hover:underline"
+            >
+              Try again
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -279,7 +323,7 @@ function ProviderAppointmentsPageInner() {
                 {rows.length ? (
                   rows.map((a) => {
                     const time =
-                      a.scheduled_for || a.start_time || a.date || a.time || "—";
+                      a.start_at || a.scheduled_for || a.start_time || a.date || a.time || "—";
                     const apptStatus = (a.status || "SCHEDULED").toUpperCase();
                     const isTerminal = TERMINAL_STATUSES.includes(apptStatus);
 
@@ -335,7 +379,7 @@ function ProviderAppointmentsPageInner() {
                         <Td>
                           <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                             <CalendarRange className="h-3.5 w-3.5 text-slate-400" />
-                            {time}
+                            {formatDateTime(time)}
                           </span>
                         </Td>
                         <Td>
@@ -410,8 +454,12 @@ function ProviderAppointmentsPageInner() {
                   <tr>
                     <td colSpan={userHasFacility ? 7 : 6}>
                       <EmptyState
-                        title="No appointments"
-                        subtitle="When you're booked, visits will appear here automatically."
+                        title="No appointments found"
+                        subtitle={
+                          hasActiveFilters 
+                            ? "Try adjusting your filters or date range to see more results."
+                            : "When you book appointments, they'll appear here automatically."
+                        }
                         icon={CalendarRange}
                         ctaHref="/provider/appointments/new"
                         ctaLabel="Create appointment"
@@ -456,6 +504,23 @@ function ProviderAppointmentsPageInner() {
 }
 
 /* ─────────────── UI helpers ─────────────── */
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return String(value);
+  }
+}
 
 function CardHead({ title, subtitle }) {
   return (

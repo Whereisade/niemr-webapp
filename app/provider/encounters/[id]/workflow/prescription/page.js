@@ -1,5 +1,6 @@
-// app/provider/encounters/[id]/workflow/prescription/page.js - UPDATED VERSION
-// ✨ Shows outsourced pharmacist's drug catalog when selected
+// app/provider/encounters/[id]/workflow/prescription/page.js - FIXED VERSION
+// ✅ Shows independent pharmacist business name, address, and phone
+// ✅ Properly loads their catalog when selected
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,6 +20,8 @@ import {
   Info,
   UserRound,
   AlertTriangle,
+  MapPin,
+  Phone,
 } from "lucide-react";
 
 function normalizeList(body) {
@@ -36,9 +39,20 @@ function normalizeList(body) {
   return [];
 }
 
-function fullName(p) {
+// ✅ FIXED: Get provider display name with business name priority
+function getProviderDisplayName(p) {
+  // Priority: business_name > full_name > email > ID
+  if (p?.business_name) return p.business_name;
   const n = [p?.first_name, p?.last_name].filter(Boolean).join(" ").trim();
-  return n || p?.email || `#${p?.id || "—"}`;
+  return n || p?.email || `Provider #${p?.user || p?.id || "—"}`;
+}
+
+// ✅ NEW: Get provider contact details
+function getProviderDetails(p) {
+  const parts = [];
+  if (p?.address) parts.push(p.address);
+  if (p?.phone) parts.push(`📞 ${p.phone}`);
+  return parts.join(" • ");
 }
 
 export default function ProviderEncounterPrescriptionPage() {
@@ -95,7 +109,7 @@ export default function ProviderEncounterPrescriptionPage() {
     setEncounter(data);
   }
 
-  // ✨ UPDATED: Load catalog from outsourced pharmacist if selected
+  // ✅ FIXED: Load catalog from outsourced pharmacist if selected
   async function loadCatalog(search = "") {
     setCatalogError("");
     setCatalogLoading(true);
@@ -105,7 +119,7 @@ export default function ProviderEncounterPrescriptionPage() {
         params.set("s", search.trim());
       }
       
-      // ✨ NEW: If outsourced pharmacist is selected, fetch their catalog
+      // ✅ If outsourced pharmacist is selected, fetch their catalog
       if (outsourcedToUserId) {
         params.set("created_by", outsourcedToUserId);
       }
@@ -162,7 +176,7 @@ export default function ProviderEncounterPrescriptionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
-  // ✨ UPDATED: Reload catalog when outsourced pharmacist changes
+  // ✅ Reload catalog when outsourced pharmacist changes
   useEffect(() => {
     loadCatalog(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -255,7 +269,7 @@ export default function ProviderEncounterPrescriptionPage() {
       return;
     }
 
-    // ✨ Validate outsourcing for independent providers
+    // ✅ Validate outsourcing for independent providers
     if (isIndependentProvider && !outsourcedToUserId && items.some(it => it.drug_code)) {
       setError("Independent providers should outsource prescriptions to a pharmacist when using catalog drugs.");
       return;
@@ -379,7 +393,7 @@ export default function ProviderEncounterPrescriptionPage() {
         </button>
       </div>
 
-      {/* ✨ NEW: Independent provider hint banner */}
+      {/* ✅ Independent provider hint banner */}
       {isIndependentProvider && (
         <div className="mb-4 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
           <div className="flex items-start gap-3">
@@ -431,7 +445,7 @@ export default function ProviderEncounterPrescriptionPage() {
             <div className="flex items-center gap-2">
               <Pill className="h-5 w-5 text-slate-700" />
               <h2 className="text-sm font-semibold text-slate-900">
-                {selectedProvider ? `${fullName(selectedProvider)}'s Drug Catalog` : "Drug Catalog"}
+                {selectedProvider ? `${getProviderDisplayName(selectedProvider)}'s Drug Catalog` : "Drug Catalog"}
               </h2>
             </div>
 
@@ -446,12 +460,21 @@ export default function ProviderEncounterPrescriptionPage() {
             </div>
           </div>
 
-          {/* ✨ NEW: Catalog source indicator */}
+          {/* ✅ Catalog source indicator with full provider details */}
           {selectedProvider && (
-            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-              <div className="flex items-center gap-2">
-                <Info className="h-3.5 w-3.5" />
-                Showing drugs from <strong>{fullName(selectedProvider)}</strong>'s catalog
+            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-700 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs font-semibold text-blue-900">
+                    Showing drugs from <strong>{getProviderDisplayName(selectedProvider)}</strong>'s catalog
+                  </div>
+                  {getProviderDetails(selectedProvider) && (
+                    <div className="mt-1 text-xs text-blue-800">
+                      {getProviderDetails(selectedProvider)}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -522,7 +545,7 @@ export default function ProviderEncounterPrescriptionPage() {
                     <tr>
                       <td colSpan={4} className="px-3 py-4 text-center text-slate-600">
                         {selectedProvider 
-                          ? `${fullName(selectedProvider)} has no drugs in their catalog yet.`
+                          ? `${getProviderDisplayName(selectedProvider)} has no drugs in their catalog yet.`
                           : isIndependentProvider
                           ? "Select a pharmacist to see their drug catalog."
                           : "No drugs found."}
@@ -569,7 +592,7 @@ export default function ProviderEncounterPrescriptionPage() {
           <h2 className="text-sm font-semibold text-slate-900">Prescription Builder</h2>
 
           <div className="mt-3 grid gap-3">
-            {/* ✨ UPDATED: Outsource section moved to top with emphasis */}
+            {/* ✅ Enhanced outsource section with full provider details */}
             <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
@@ -598,19 +621,32 @@ export default function ProviderEncounterPrescriptionPage() {
                   <option value="">— Select pharmacist —</option>
                   {pharmProviders.map((p) => (
                     <option key={String(p?.user)} value={String(p?.user)}>
-                      {fullName(p)} (User #{p?.user})
+                      {getProviderDisplayName(p)}
                     </option>
                   ))}
                 </select>
 
-                {selectedProvider ? (
-                  <div className="mt-2 text-xs text-slate-600">
-                    Selected:{" "}
-                    <span className="font-medium text-slate-800">
-                      {fullName(selectedProvider)}
-                    </span>
+                {/* ✅ Show full provider details when selected */}
+                {selectedProvider && (
+                  <div className="mt-2 space-y-1 rounded-lg border border-blue-100 bg-white p-2 text-xs">
+                    <div className="flex items-center gap-1.5 font-semibold text-blue-900">
+                      <Building2 className="h-3.5 w-3.5" />
+                      {getProviderDisplayName(selectedProvider)}
+                    </div>
+                    {selectedProvider.address && (
+                      <div className="flex items-start gap-1.5 text-blue-800">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                        <span>{selectedProvider.address}</span>
+                      </div>
+                    )}
+                    {selectedProvider.phone && (
+                      <div className="flex items-center gap-1.5 text-blue-800">
+                        <Phone className="h-3.5 w-3.5" />
+                        <span>{selectedProvider.phone}</span>
+                      </div>
+                    )}
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
 

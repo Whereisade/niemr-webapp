@@ -1,5 +1,6 @@
-// app/provider/encounters/[id]/workflow/labs/page.js - UPDATED VERSION
-// ✨ Shows outsourced lab scientist's catalog when selected
+// app/provider/encounters/[id]/workflow/labs/page.js - FIXED VERSION
+// ✅ Shows independent lab provider business name, address, and phone
+// ✅ Properly loads their catalog when selected
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,6 +20,8 @@ import {
   Building2,
   Info,
   UserRound,
+  MapPin,
+  Phone,
 } from "lucide-react";
 
 const PRIORITY_OPTIONS = [
@@ -42,9 +45,20 @@ function normalizeList(body) {
   return [];
 }
 
-function fullName(p) {
+// ✅ FIXED: Get provider display name with business name priority
+function getProviderDisplayName(p) {
+  // Priority: business_name > full_name > email > ID
+  if (p?.business_name) return p.business_name;
   const n = [p?.first_name, p?.last_name].filter(Boolean).join(" ").trim();
-  return n || p?.email || `#${p?.id || "—"}`;
+  return n || p?.email || `Provider #${p?.user || p?.id || "—"}`;
+}
+
+// ✅ NEW: Get provider contact details
+function getProviderDetails(p) {
+  const parts = [];
+  if (p?.address) parts.push(p.address);
+  if (p?.phone) parts.push(`📞 ${p.phone}`);
+  return parts.join(" • ");
 }
 
 export default function ProviderEncounterLabsPage() {
@@ -110,7 +124,7 @@ export default function ProviderEncounterLabsPage() {
     }
   }
 
-  // ✨ UPDATED: Load catalog from outsourced lab if selected
+  // ✅ FIXED: Load catalog from outsourced lab if selected
   async function loadCatalog(search = "") {
     setCatalogError("");
     setCatalogLoading(true);
@@ -120,7 +134,7 @@ export default function ProviderEncounterLabsPage() {
         params.set("s", search.trim());
       }
       
-      // ✨ NEW: If outsourced lab is selected, fetch their catalog
+      // ✅ If outsourced lab is selected, fetch their catalog
       if (outsourcedToUserId) {
         params.set("created_by", outsourcedToUserId);
       }
@@ -141,7 +155,7 @@ export default function ProviderEncounterLabsPage() {
     try {
       // Providers list, independent only, filtered by LAB role
       const res = await apiFetch(
-        "/providers/?facility=none&type=LAB&page=1&limit=50",
+        "/providers/?facility=none&type=LAB_SCIENTIST&page=1&limit=50",
         { method: "GET" }
       );
       setLabsProviders(normalizeList(res));
@@ -159,7 +173,7 @@ export default function ProviderEncounterLabsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
-  // ✨ UPDATED: Reload catalog when outsourced lab changes
+  // ✅ Reload catalog when outsourced lab changes
   useEffect(() => {
     loadCatalog(q);
     // Clear selections when switching catalogs
@@ -246,7 +260,7 @@ export default function ProviderEncounterLabsPage() {
       return;
     }
 
-    // ✨ Validate outsourcing for independent providers
+    // ✅ Validate outsourcing for independent providers
     if (isIndependentProvider && !outsourcedToUserId && selectedCodes.size > 0) {
       setError("Independent providers should outsource lab orders to a lab scientist.");
       return;
@@ -348,7 +362,7 @@ export default function ProviderEncounterLabsPage() {
         </button>
       </div>
 
-      {/* ✨ NEW: Independent provider hint banner */}
+      {/* ✅ Independent provider hint banner */}
       {isIndependentProvider && (
         <div className="mb-4 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
           <div className="flex items-start gap-3">
@@ -385,7 +399,7 @@ export default function ProviderEncounterLabsPage() {
             <div className="flex items-center gap-2">
               <Beaker className="h-5 w-5 text-slate-700" />
               <h2 className="text-sm font-semibold text-slate-900">
-                {selectedProvider ? `${fullName(selectedProvider)}'s Test Catalog` : "Test Catalog"}
+                {selectedProvider ? `${getProviderDisplayName(selectedProvider)}'s Test Catalog` : "Test Catalog"}
               </h2>
             </div>
 
@@ -400,12 +414,21 @@ export default function ProviderEncounterLabsPage() {
             </div>
           </div>
 
-          {/* ✨ NEW: Catalog source indicator */}
+          {/* ✅ Catalog source indicator with full provider details */}
           {selectedProvider && (
-            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-              <div className="flex items-center gap-2">
-                <Info className="h-3.5 w-3.5" />
-                Showing tests from <strong>{fullName(selectedProvider)}</strong>'s catalog
+            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-700 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="text-xs font-semibold text-blue-900">
+                    Showing tests from <strong>{getProviderDisplayName(selectedProvider)}</strong>'s catalog
+                  </div>
+                  {getProviderDetails(selectedProvider) && (
+                    <div className="mt-1 text-xs text-blue-800">
+                      {getProviderDetails(selectedProvider)}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -470,7 +493,7 @@ export default function ProviderEncounterLabsPage() {
                     <tr>
                       <td colSpan={4} className="px-3 py-4 text-center text-slate-600">
                         {selectedProvider 
-                          ? `${fullName(selectedProvider)} has no tests in their catalog yet.`
+                          ? `${getProviderDisplayName(selectedProvider)} has no tests in their catalog yet.`
                           : isIndependentProvider
                           ? "Select a lab scientist to see their test catalog."
                           : "No tests found."}
@@ -531,7 +554,7 @@ export default function ProviderEncounterLabsPage() {
           <h2 className="text-sm font-semibold text-slate-900">Order Details</h2>
 
           <div className="mt-3 grid gap-3">
-            {/* ✨ UPDATED: Outsource section moved to top with emphasis */}
+            {/* ✅ Enhanced outsource section with full provider details */}
             <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
@@ -560,19 +583,32 @@ export default function ProviderEncounterLabsPage() {
                   <option value="">— Select lab scientist —</option>
                   {labsProviders.map((p) => (
                     <option key={String(p?.user)} value={String(p?.user)}>
-                      {fullName(p)} (User #{p?.user})
+                      {getProviderDisplayName(p)}
                     </option>
                   ))}
                 </select>
 
-                {selectedProvider ? (
-                  <div className="mt-2 text-xs text-slate-600">
-                    Selected:{" "}
-                    <span className="font-medium text-slate-800">
-                      {fullName(selectedProvider)}
-                    </span>
+                {/* ✅ Show full provider details when selected */}
+                {selectedProvider && (
+                  <div className="mt-2 space-y-1 rounded-lg border border-blue-100 bg-white p-2 text-xs">
+                    <div className="flex items-center gap-1.5 font-semibold text-blue-900">
+                      <Building2 className="h-3.5 w-3.5" />
+                      {getProviderDisplayName(selectedProvider)}
+                    </div>
+                    {selectedProvider.address && (
+                      <div className="flex items-start gap-1.5 text-blue-800">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                        <span>{selectedProvider.address}</span>
+                      </div>
+                    )}
+                    {selectedProvider.phone && (
+                      <div className="flex items-center gap-1.5 text-blue-800">
+                        <Phone className="h-3.5 w-3.5" />
+                        <span>{selectedProvider.phone}</span>
+                      </div>
+                    )}
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
 
@@ -612,7 +648,7 @@ export default function ProviderEncounterLabsPage() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Beaker className="h-4 w-4" />}
-              Order Labs (Pause Encounter)
+              Order Labs
             </button>
 
             <button
@@ -621,7 +657,7 @@ export default function ProviderEncounterLabsPage() {
               disabled={submitting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
             >
-              Skip Labs → SOAP Note
+              SOAP Note
             </button>
           </div>
         </div>

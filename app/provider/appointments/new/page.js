@@ -10,6 +10,7 @@ import {
   UsersRound,
   Mail,
   ArrowLeft,
+  Building2,
 } from "lucide-react";
 
 function combineDateTime(date, time) {
@@ -25,7 +26,7 @@ export default function ProviderNewAppointmentPage() {
 
   // Form state
   const [patientId, setPatientId] = useState("");
-  const [apptType, setApptType] = useState("CONSULT");
+  const [apptType, setApptType] = useState("CONSULTATION");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [durationMins, setDurationMins] = useState("30");
@@ -42,9 +43,11 @@ export default function ProviderNewAppointmentPage() {
   const [me, setMe] = useState(null);
   const [loadingMe, setLoadingMe] = useState(true);
 
-  const [facilities, setFacilities] = useState([]);
   const [facilityId, setFacilityId] = useState("");
-  const [loadingFacilities, setLoadingFacilities] = useState(true);
+
+  // Check if user is facility-based or independent
+  const isFacilityBased = Boolean(me?.facility_id || me?.facility);
+  const userFacilityId = me?.facility_id || me?.facility?.id || me?.facility;
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +58,12 @@ export default function ProviderNewAppointmentPage() {
         const meData = await apiFetch("/accounts/me/");
         if (cancelled) return;
         setMe(meData);
+        
+        // Auto-set facility for facility-based providers only
+        if (meData?.facility_id || meData?.facility) {
+          const facId = meData.facility_id || meData.facility?.id || meData.facility;
+          setFacilityId(String(facId));
+        }
       } catch (err) {
         console.error("Failed to load me", err);
       } finally {
@@ -62,24 +71,9 @@ export default function ProviderNewAppointmentPage() {
       }
     }
 
-    async function fetchFacilities() {
-      try {
-        setLoadingFacilities(true);
-        const res = await apiFetch("/facilities/?page=1&limit=200");
-        if (cancelled) return;
-        const items = Array.isArray(res) ? res : res?.results || [];
-        setFacilities(items);
-      } catch (err) {
-        console.error("Failed to load facilities", err);
-      } finally {
-        if (!cancelled) setLoadingFacilities(false);
-      }
-    }
-
     async function fetchPatients() {
       try {
         setLoadingPatients(true);
-        // simple paginated list; later we can filter to facility
         const res = await apiFetch("/patients/?page=1&limit=50");
         if (cancelled) return;
         const items = Array.isArray(res) ? res : res?.results || [];
@@ -95,7 +89,6 @@ export default function ProviderNewAppointmentPage() {
     }
 
     fetchMe();
-    fetchFacilities();
     fetchPatients();
 
     return () => {
@@ -108,17 +101,6 @@ export default function ProviderNewAppointmentPage() {
     (p) => String(p.id) === String(patientId)
   );
 
-  useEffect(() => {
-    if (!selectedPatient) return;
-    const fac = selectedPatient?.facility;
-    const inferred =
-      (fac && typeof fac === "object" && fac.id) ? String(fac.id) :
-      (typeof fac === "number") ? String(fac) :
-      (selectedPatient?.facility_id ? String(selectedPatient.facility_id) : "");
-    if (inferred) setFacilityId(inferred);
-  }, [selectedPatient]);
-
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
@@ -127,16 +109,17 @@ export default function ProviderNewAppointmentPage() {
     if (!patient || Number.isNaN(patient)) {
       setError("Please select a patient.");
       return;
+    }
 
     if (!me?.id) {
       setError("Could not determine the logged-in provider. Please re-login.");
       return;
     }
 
-    if (!facilityId) {
-      setError("Please select a facility for this appointment.");
+    // Facility-based providers must have facility
+    if (isFacilityBased && !facilityId) {
+      setError("Facility is required for facility-based providers.");
       return;
-    }
     }
 
     const startAt = combineDateTime(date, time);
@@ -153,19 +136,21 @@ export default function ProviderNewAppointmentPage() {
     const payload = {
       patient: selectedPatient?.id,
       appt_type: apptType,
-      start_at: startAtIso,
-      end_at: endAtIso,
+      start_at: startAt,
+      end_at: endAt,
       reason: reason.trim() || "",
-      // Independent providers must pick a facility (appointments are facility-scoped in backend)
-      facility: facilityId ? Number(facilityId) : undefined,
-      // Default provider to the logged-in independent provider user
+      // Facility-based providers: include facility (required)
+      // Independent providers: NO facility - provider-only appointments
+      ...(isFacilityBased ? { facility: Number(facilityId) } : {}),
+      // Provider is always the logged-in user
       provider: me?.id,
       // Backend expects a boolean
       notify_email: !!sendEmail,
     };
 
-    // remove undefined keys (DRF is happier)
+    // remove undefined keys
     Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
+    
     setIsSubmitting(true);
     try {
       await createAppointment(payload);
@@ -195,6 +180,11 @@ export default function ProviderNewAppointmentPage() {
         .join(" ")
     : "";
 
+  // Get facility name for display
+  const facilityName = isFacilityBased
+    ? me?.facility?.name || "Your facility"
+    : selectedPatient?.facility?.name || "—";
+
   return (
     <main className="relative mx-auto max-w-5xl p-6 md:p-10 space-y-6">
       {/* soft background accents for parity with other provider pages */}
@@ -212,8 +202,9 @@ export default function ProviderNewAppointmentPage() {
             Schedule a visit
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Pick a patient, choose the slot, and optionally add a brief reason
-            or email notification.
+            {isFacilityBased 
+              ? "Book a patient appointment at your facility." 
+              : "Book a patient appointment directly with you as the provider."}
           </p>
         </div>
 
@@ -243,34 +234,27 @@ export default function ProviderNewAppointmentPage() {
               </div>
             )}
 
+            {/* Role-based facility display - ONLY for facility-based providers */}
+            {isFacilityBased && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                  <Building2 className="h-4 w-4" />
+                  Facility
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-slate-900 border border-slate-200">
+                    {me?.facility?.name || "Your facility"}
+                  </span>
+                  <span className="text-xs text-slate-500">(Auto-set)</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  All your appointments are automatically created at your facility.
+                </p>
+              </div>
+            )}
+
             {/* Patient select */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <UsersRound className="h-4 w-4" />
-            Facility
-          </div>
-
-          <div className="mt-3">
-            <select
-              value={facilityId}
-              onChange={(e) => setFacilityId(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:ring-2 focus:ring-slate-300"
-              disabled={loadingFacilities}
-            >
-              <option value="">{loadingFacilities ? "Loading facilities…" : "Select facility"}</option>
-              {facilities.map((f) => (
-                <option key={f.id} value={String(f.id)}>
-                  {f.name || f.facility_name || `Facility #${f.id}`}
-                </option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs text-slate-500">
-              Appointments are facility-scoped. Choose where this appointment will take place.
-            </p>
-          </div>
-        </div>
-
-<div>
+            <div>
               <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
                 <UsersRound className="h-4 w-4 text-slate-500" />
                 Patient
@@ -353,7 +337,7 @@ export default function ProviderNewAppointmentPage() {
                 />
               </div>
 
-              <div>
+              {/* <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
                   Duration (minutes)
                 </label>
@@ -368,7 +352,7 @@ export default function ProviderNewAppointmentPage() {
                 <p className="mt-1 text-xs text-slate-500">
                   Used to calculate the end time automatically.
                 </p>
-              </div>
+              </div> */}
             </div>
 
             {/* Reason */}
@@ -400,10 +384,10 @@ export default function ProviderNewAppointmentPage() {
                   checked={!!sendEmail}
                   onChange={(e) => setSendEmail(e.target.checked)}
                 />
-                Send email notifications (reminders/updates) to the patient’s account email
+                Send email notifications (reminders/updates) to the patient's account email
               </label>
               <p className="mt-1 text-xs text-slate-500">
-                Emails are sent to the patient\'s registered email (custom emails are not supported).
+                Emails are sent to the patient's registered email (custom emails are not supported).
               </p>
             </div>
           </div>
@@ -444,6 +428,20 @@ export default function ProviderNewAppointmentPage() {
 
               <dl className="mt-4 space-y-2 text-xs">
                 <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">Provider type</dt>
+                  <dd className="text-right text-slate-900">
+                    {isFacilityBased ? "Facility-based" : "Independent"}
+                  </dd>
+                </div>
+                {isFacilityBased && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">Facility</dt>
+                    <dd className="text-right text-slate-900">
+                      {me?.facility?.name || "Your facility"}
+                    </dd>
+                  </div>
+                )}
+                <div className="flex justify-between gap-3">
                   <dt className="text-slate-500">Patient</dt>
                   <dd className="text-right text-slate-900">
                     {selectedName || "Not selected"}
@@ -473,16 +471,22 @@ export default function ProviderNewAppointmentPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
             <h3 className="mb-1 text-xs font-semibold text-slate-900">
-              Tips
+              {isFacilityBased ? "Facility-based booking" : "Independent provider"}
             </h3>
-            <ul className="space-y-1 list-disc pl-4">
-              <li>Use clear, concise reasons to help triage.</li>
-              <li>Confirm contact details before adding notify email.</li>
-              <li>
-                If you need recurring visits, create this one first, then clone
-                it from the appointment details screen.
-              </li>
-            </ul>
+            {isFacilityBased ? (
+              <ul className="space-y-1 list-disc pl-4">
+                <li>All appointments are created at your facility.</li>
+                <li>Patient billing is managed by your facility.</li>
+                <li>Use clear, concise reasons to help with triage.</li>
+              </ul>
+            ) : (
+              <ul className="space-y-1 list-disc pl-4">
+                <li>You operate independently - no facility association.</li>
+                <li>Appointments are booked directly with you as the provider.</li>
+                <li>Consider scheduling follow-ups before patients leave.</li>
+                <li>Use clear reasons to help manage your own patient flow.</li>
+              </ul>
+            )}
           </div>
         </aside>
       </div>
