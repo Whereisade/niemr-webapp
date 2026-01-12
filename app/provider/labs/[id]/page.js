@@ -17,9 +17,14 @@ import {
   Clock,
   Save,
   RefreshCw,
+  Upload,
+  X,
+  Droplet,
+  TestTube,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { submitLabResult, markLabOrderCollected } from "@/lib/labsStatusActions";
+import { uploadLabOrderAttachment } from "@/lib/labAttachments";
 import DownloadReportButton from "@/components/DownloadReportButton";
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
@@ -80,9 +85,14 @@ export default function IndependentLabOrderDetailPage() {
   const [submittingItemId, setSubmittingItemId] = useState(null);
   const [resultError, setResultError] = useState("");
   const [resultSuccess, setResultSuccess] = useState("");
+  
+  // File attachment state for result entry
+  const [resultFiles, setResultFiles] = useState({});
+  const [uploadingFiles, setUploadingFiles] = useState({});
 
-  // Collect samples state
-  const [collecting, setCollecting] = useState(false);
+  // Sample collection state
+  const [collectingItems, setCollectingItems] = useState(new Set());
+  const [collectingAll, setCollectingAll] = useState(false);
 
   // Load current user
   useEffect(() => {
@@ -142,32 +152,27 @@ export default function IndependentLabOrderDetailPage() {
   }, [id]);
 
   // Load attachments
-  useEffect(() => {
+  async function loadAttachments() {
     if (!id) return;
-    let cancelled = false;
-
-    async function loadAttachments() {
-      try {
-        setAttachmentsLoading(true);
-        setAttachmentsError("");
-        const qs = new URLSearchParams();
-        qs.set("owner_type", "lab_order");
-        qs.set("owner_id", String(id));
-        const body = await apiFetch(`/attachments/?${qs.toString()}`, { method: "GET" });
-        if (cancelled) return;
-        setAttachments(normalizeAttachmentsPayload(body));
-      } catch (err) {
-        if (!cancelled) {
-          setAttachmentsError(err?.message || "Attachments could not be loaded.");
-          setAttachments([]);
-        }
-      } finally {
-        if (!cancelled) setAttachmentsLoading(false);
-      }
+    try {
+      setAttachmentsLoading(true);
+      setAttachmentsError("");
+      const qs = new URLSearchParams();
+      qs.set("owner_type", "lab_order");
+      qs.set("owner_id", String(id));
+      const body = await apiFetch(`/attachments/?${qs.toString()}`, { method: "GET" });
+      setAttachments(normalizeAttachmentsPayload(body));
+    } catch (err) {
+      setAttachmentsError(err?.message || "Attachments could not be loaded.");
+      setAttachments([]);
+    } finally {
+      setAttachmentsLoading(false);
     }
+  }
 
+  useEffect(() => {
     loadAttachments();
-    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Handle form changes for a specific item
@@ -181,16 +186,73 @@ export default function IndependentLabOrderDetailPage() {
     }));
   }
 
-  // Submit result for a single item
+  // Handle file selection for a specific item
+  function handleFileChange(itemId, file) {
+    setResultFiles((prev) => ({
+      ...prev,
+      [itemId]: file,
+    }));
+  }
+
+  // Remove selected file for a specific item
+  function handleRemoveFile(itemId) {
+    setResultFiles((prev) => {
+      const updated = { ...prev };
+      delete updated[itemId];
+      return updated;
+    });
+  }
+
+  // Collect sample for a single item
+  async function handleCollectSample(itemId) {
+    if (!id || !itemId) return;
+    
+    setCollectingItems((prev) => new Set(prev).add(itemId));
+    setResultError("");
+    
+    try {
+      await markLabOrderCollected(id, [itemId]);
+      setResultSuccess(`Sample collected for test item #${itemId}`);
+      await loadOrder();
+    } catch (err) {
+      setResultError(err?.message || "Failed to mark sample collected.");
+    } finally {
+      setCollectingItems((prev) => {
+        const updated = new Set(prev);
+        updated.delete(itemId);
+        return updated;
+      });
+    }
+  }
+
+  // Collect all samples at once
+  async function handleCollectAllSamples() {
+    if (!id) return;
+    setCollectingAll(true);
+    setResultError("");
+    try {
+      await markLabOrderCollected(id);
+      setResultSuccess("All samples marked as collected.");
+      await loadOrder();
+    } catch (err) {
+      setResultError(err?.message || "Failed to mark samples collected.");
+    } finally {
+      setCollectingAll(false);
+    }
+  }
+
+  // Submit result for a single item (including optional file attachment)
   async function handleSubmitResult(itemId) {
     if (!id || !itemId) return;
 
     const form = resultForms[itemId];
     if (!form) return;
 
-    // Validate
-    if (!form.result_value && !form.result_text?.trim()) {
-      setResultError("Please enter a result value or text for this test.");
+    const file = resultFiles[itemId];
+
+    // Validate - need at least result_value, result_text, OR a file attachment
+    if (!form.result_value && !form.result_text?.trim() && !file) {
+      setResultError("Please enter a result value/text OR attach a result document.");
       return;
     }
 
@@ -199,6 +261,7 @@ export default function IndependentLabOrderDetailPage() {
     setSubmittingItemId(itemId);
 
     try {
+      // Submit the result data (can be empty if only file is provided)
       const payload = {
         item_id: itemId,
         result_value: form.result_value || null,
@@ -208,30 +271,40 @@ export default function IndependentLabOrderDetailPage() {
       };
 
       await submitLabResult(id, payload);
-      setResultSuccess(`Result saved for test item #${itemId}`);
 
-      // Reload order
+      // Upload file attachment if one was selected
+      if (file) {
+        try {
+          setUploadingFiles((prev) => ({ ...prev, [itemId]: true }));
+          
+          const item = order?.items?.find(i => i.id === itemId);
+          const testName = item?.display_name || item?.test?.name || item?.requested_name || `Test item #${itemId}`;
+          const description = form.result_value || form.result_text 
+            ? `Supporting document for ${testName}`
+            : `Lab result for ${testName}`;
+
+          await uploadLabOrderAttachment(id, file, description);
+          
+          handleRemoveFile(itemId);
+          await loadAttachments();
+        } catch (fileErr) {
+          console.error("File upload failed:", fileErr);
+          setResultError(`Result saved, but file upload failed: ${fileErr?.message || "Unknown error"}`);
+        } finally {
+          setUploadingFiles((prev) => ({ ...prev, [itemId]: false }));
+        }
+      }
+
+      const successMsg = file 
+        ? `Result recorded with attached document`
+        : `Result saved for test item #${itemId}`;
+      setResultSuccess(successMsg);
+
       await loadOrder();
     } catch (err) {
       setResultError(err?.message || "Failed to submit result.");
     } finally {
       setSubmittingItemId(null);
-    }
-  }
-
-  // Handle collect all samples
-  async function handleCollectSamples() {
-    if (!id) return;
-    setCollecting(true);
-    setResultError("");
-    try {
-      await markLabOrderCollected(id);
-      setResultSuccess("Samples marked as collected.");
-      await loadOrder();
-    } catch (err) {
-      setResultError(err?.message || "Failed to mark samples collected.");
-    } finally {
-      setCollecting(false);
     }
   }
 
@@ -280,16 +353,16 @@ export default function IndependentLabOrderDetailPage() {
     (order?.patient_first_name || order?.patient_last_name
       ? `${order?.patient_first_name || ""} ${order?.patient_last_name || ""}`.trim()
       : "") ||
-    `Patient #${order?.patient}` ||
+    order?.patient ||
     "—";
 
-  const facilityName = order?.facility_name || order?.facility?.name || `Facility #${order?.facility}` || "—";
+  const facilityName = order?.facility_name || order?.facility?.name || "—";
   const orderedBy =
     order?.ordered_by_name ||
     (order?.ordered_by_first_name || order?.ordered_by_last_name
       ? `${order?.ordered_by_first_name || ""} ${order?.ordered_by_last_name || ""}`.trim()
       : "") ||
-    `User #${order?.ordered_by}` ||
+    order?.ordered_by ||
     "—";
 
   const priority = order?.priority || "—";
@@ -298,21 +371,26 @@ export default function IndependentLabOrderDetailPage() {
   const { label: statusLabel, badgeClass: statusBadgeClass } = getLabStatusMeta(status);
 
   const items = Array.isArray(order?.items) ? order.items : [];
-  const allItemsCompleted = items.length > 0 && items.every((i) => i.completed_at);
-  const pendingItems = items.filter((i) => !i.completed_at);
+  
+  // Categorize items by workflow stage
+  const awaitingCollection = items.filter((i) => !i.sample_collected_at && !i.completed_at);
+  const awaitingResults = items.filter((i) => i.sample_collected_at && !i.completed_at);
   const completedItems = items.filter((i) => i.completed_at);
+  
+  const allItemsCompleted = items.length > 0 && items.every((i) => i.completed_at);
+  const allSamplesCollected = items.length > 0 && items.every((i) => i.sample_collected_at || i.completed_at);
 
   return (
     <main className="relative mx-auto max-w-5xl space-y-6 p-6 md:p-10">
-      {/* Background accents */}
+      {/* Soft background accents */}
       <div className="pointer-events-none absolute -top-28 -left-32 h-52 w-52 rounded-full bg-teal-100/60 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-28 -right-32 h-56 w-56 rounded-full bg-cyan-100/50 blur-3xl" />
 
-      {/* Header */}
+      {/* Page header */}
       <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-3">
           <Link
-            href="/lab/orders"
+            href="/provider/labs"
             className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -325,10 +403,10 @@ export default function IndependentLabOrderDetailPage() {
               Lab Order #{id}
             </div>
             <h1 className="mt-2 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-              Enter Lab Results
+              Lab Order Workflow
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Process this lab order and enter test results.
+              Collect samples → Enter results → Complete order
             </p>
           </div>
         </div>
@@ -425,11 +503,15 @@ export default function IndependentLabOrderDetailPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Priority</p>
                 <p className="text-sm text-slate-900">{priority}</p>
               </div>
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">External lab</p>
+                <p className="text-sm text-slate-900">{order.external_lab_name || "—"}</p>
+              </div>
             </div>
 
             {order.note && (
               <div className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clinical Note</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clinical note</p>
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
                   {order.note}
                 </div>
@@ -437,66 +519,163 @@ export default function IndependentLabOrderDetailPage() {
             )}
           </section>
 
-          {/* Results entry section */}
+          {/* Workflow progress indicator */}
           <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-lime-500" />
-
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <FlaskConical className="h-5 w-5 text-slate-700" />
-                <h2 className="text-sm font-semibold text-slate-900">Test Results</h2>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                  allSamplesCollected ? "bg-emerald-100" : "bg-teal-100"
+                }`}>
+                  <Droplet className={`h-5 w-5 ${
+                    allSamplesCollected ? "text-emerald-700" : "text-teal-700"
+                  }`} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Step 1: Sample Collection
+                  </p>
+                  <p className="text-sm text-slate-900">
+                    {allSamplesCollected ? "✅ All samples collected" : `${awaitingCollection.length} awaiting collection`}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {statusNorm === "PENDING" && (
-                  <button
-                    type="button"
-                    onClick={handleCollectSamples}
-                    disabled={collecting}
-                    className="inline-flex items-center gap-1 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-                  >
-                    {collecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                    Mark All Samples Collected
-                  </button>
-                )}
+              <div className="h-px flex-1 bg-slate-200" />
 
-                {allItemsCompleted && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    All results completed
-                  </span>
-                )}
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                  allItemsCompleted ? "bg-emerald-100" : allSamplesCollected ? "bg-cyan-100" : "bg-slate-100"
+                }`}>
+                  <TestTube className={`h-5 w-5 ${
+                    allItemsCompleted ? "text-emerald-700" : allSamplesCollected ? "text-cyan-700" : "text-slate-400"
+                  }`} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Step 2: Enter Results
+                  </p>
+                  <p className="text-sm text-slate-900">
+                    {allItemsCompleted 
+                      ? "✅ All results recorded" 
+                      : awaitingResults.length > 0 
+                        ? `${awaitingResults.length} ready for results`
+                        : "Awaiting sample collection"}
+                  </p>
+                </div>
               </div>
             </div>
+          </section>
 
-            {/* Status messages */}
-            {resultError && (
-              <div className="mb-4 flex gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{resultError}</span>
+          {/* Status messages */}
+          {resultError && (
+            <div className="flex gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{resultError}</span>
+            </div>
+          )}
+
+          {resultSuccess && (
+            <div className="flex gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{resultSuccess}</span>
+            </div>
+          )}
+
+          {/* STEP 1: Sample Collection */}
+          {awaitingCollection.length > 0 && (
+            <section className="relative rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+              <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500" />
+
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Droplet className="h-5 w-5 text-amber-700" />
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Step 1: Collect Samples ({awaitingCollection.length})
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCollectAllSamples}
+                  disabled={collectingAll}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {collectingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  Collect All Samples
+                </button>
               </div>
-            )}
 
-            {resultSuccess && (
-              <div className="mb-4 flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{resultSuccess}</span>
-              </div>
-            )}
+              <div className="space-y-2">
+                {awaitingCollection.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white border border-amber-200">
+                        <TestTube className="h-4 w-4 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">
+                          {item.display_name || item.test?.name || item.requested_name || "Unknown Test"}
+                        </p>
+                        {item.test?.code && (
+                          <p className="text-xs text-slate-500 font-mono">{item.test.code}</p>
+                        )}
+                      </div>
+                    </div>
 
-            {/* Pending items - editable */}
-            {pendingItems.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                  Pending Results ({pendingItems.length})
-                </h3>
-                <div className="space-y-3">
-                  {pendingItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-xl border border-amber-200 bg-amber-50/50 p-4"
+                    <button
+                      type="button"
+                      onClick={() => handleCollectSample(item.id)}
+                      disabled={collectingItems.has(item.id)}
+                      className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
                     >
-                      <div className="flex items-start justify-between gap-3 mb-3">
+                      {collectingItems.has(item.id) ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Collecting...
+                        </>
+                      ) : (
+                        <>
+                          <Droplet className="h-3.5 w-3.5" />
+                          Mark Sample Collected
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-3 text-xs text-slate-600 italic">
+                💡 Collect samples before entering results. You can collect all at once or individually.
+              </p>
+            </section>
+          )}
+
+          {/* STEP 2: Enter Results */}
+          {awaitingResults.length > 0 && (
+            <section className="relative rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
+              <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500" />
+
+              <div className="flex items-center gap-2 mb-4">
+                <TestTube className="h-5 w-5 text-sky-700" />
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Step 2: Enter Results ({awaitingResults.length})
+                </h2>
+              </div>
+
+              <div className="space-y-4">
+                {awaitingResults.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-sky-200 bg-sky-50/50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-white border border-sky-200">
+                          <FlaskConical className="h-4 w-4 text-sky-600" />
+                        </div>
                         <div>
                           <p className="text-sm font-medium text-slate-900">
                             {item.display_name || item.test?.name || item.requested_name || "Unknown Test"}
@@ -504,182 +683,246 @@ export default function IndependentLabOrderDetailPage() {
                           {item.test?.code && (
                             <p className="text-xs text-slate-500 font-mono">{item.test.code}</p>
                           )}
-                        </div>
-                        {item.sample_collected_at ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
-                            <Clock className="h-3 w-3" />
-                            Collected {formatDateTime(item.sample_collected_at)}
+                          <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Sample collected {formatDateTime(item.sample_collected_at)}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                            Awaiting collection
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-5">
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Result Value
-                          </label>
-                          <input
-                            type="number"
-                            step="0.0001"
-                            value={resultForms[item.id]?.result_value ?? ""}
-                            onChange={(e) => handleFormChange(item.id, "result_value", e.target.value)}
-                            placeholder="e.g. 12.5"
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                          />
                         </div>
-
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Unit
-                          </label>
-                          <input
-                            type="text"
-                            value={item.test?.unit || item.result_unit || "—"}
-                            disabled
-                            className="w-full rounded-lg border border-slate-200 bg-slate-100 px-2 py-1.5 text-sm text-slate-600"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Ref Low
-                          </label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={resultForms[item.id]?.ref_low ?? ""}
-                            onChange={(e) => handleFormChange(item.id, "ref_low", e.target.value)}
-                            placeholder={item.test?.ref_low ?? "—"}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Ref High
-                          </label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={resultForms[item.id]?.ref_high ?? ""}
-                            onChange={(e) => handleFormChange(item.id, "ref_high", e.target.value)}
-                            placeholder={item.test?.ref_high ?? "—"}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                          />
-                        </div>
-
-                        <div className="flex items-end">
-                          <button
-                            type="button"
-                            onClick={() => handleSubmitResult(item.id)}
-                            disabled={submittingItemId === item.id}
-                            className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-                          >
-                            {submittingItemId === item.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Save className="h-3.5 w-3.5" />
-                            )}
-                            Save Result
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Optional text result */}
-                      <div className="mt-3">
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Result Text (optional - for qualitative results)
-                        </label>
-                        <textarea
-                          value={resultForms[item.id]?.result_text ?? ""}
-                          onChange={(e) => handleFormChange(item.id, "result_text", e.target.value)}
-                          placeholder="e.g. Positive, Negative, or descriptive findings..."
-                          rows={2}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                        />
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {/* Completed items */}
-            {completedItems.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                  Completed Results ({completedItems.length})
-                </h3>
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2">Test</th>
-                        <th className="px-3 py-2">Result</th>
-                        <th className="px-3 py-2">Reference Range</th>
-                        <th className="px-3 py-2">Flag</th>
-                        <th className="px-3 py-2">Completed</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {completedItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50">
-                          <td className="px-3 py-2">
-                            <div className="font-medium text-slate-900">
-                              {item.display_name || item.test?.name || item.requested_name || "—"}
-                            </div>
-                            {item.test?.code && (
-                              <div className="text-xs text-slate-500 font-mono">{item.test.code}</div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="font-medium text-slate-900">
-                              {item.result_value != null
-                                ? `${item.result_value} ${item.result_unit || ""}`
-                                : item.result_text || "—"}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-slate-700">
-                            {item.ref_low != null && item.ref_high != null
-                              ? `${item.ref_low} – ${item.ref_high}`
-                              : "—"}
-                          </td>
-                          <td className="px-3 py-2">
-                            {item.flag ? (
-                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${flagBadgeClass(item.flag)}`}>
-                                {item.flag}
+                    {/* Result entry options */}
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-slate-700">
+                        Choose one or both methods to record results:
+                      </p>
+
+                      {/* Option 1: Manual entry */}
+                      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Option A: Enter Result Values
+                        </p>
+                        
+                        <div className="grid gap-3 md:grid-cols-4">
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Result Value
+                            </label>
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={resultForms[item.id]?.result_value ?? ""}
+                              onChange={(e) => handleFormChange(item.id, "result_value", e.target.value)}
+                              placeholder="e.g. 12.5"
+                              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Unit
+                            </label>
+                            <input
+                              type="text"
+                              value={item.test?.unit || item.result_unit || "—"}
+                              disabled
+                              className="w-full rounded-lg border border-slate-200 bg-slate-100 px-2 py-1.5 text-sm text-slate-600"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Ref Low
+                            </label>
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={resultForms[item.id]?.ref_low ?? ""}
+                              onChange={(e) => handleFormChange(item.id, "ref_low", e.target.value)}
+                              placeholder={item.test?.ref_low ?? "—"}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Ref High
+                            </label>
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={resultForms[item.id]?.ref_high ?? ""}
+                              onChange={(e) => handleFormChange(item.id, "ref_high", e.target.value)}
+                              placeholder={item.test?.ref_high ?? "—"}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                            Result Text (optional - for qualitative results)
+                          </label>
+                          <textarea
+                            value={resultForms[item.id]?.result_text ?? ""}
+                            onChange={(e) => handleFormChange(item.id, "result_text", e.target.value)}
+                            placeholder="e.g. Positive, Negative, or descriptive findings..."
+                            rows={2}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Option 2: File attachment */}
+                      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Option B: Attach Result Document
+                        </p>
+                        
+                        {resultFiles[item.id] ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                            <FileText className="h-4 w-4 text-emerald-700 shrink-0" />
+                            <span className="flex-1 truncate text-sm text-emerald-900 font-medium">
+                              {resultFiles[item.id].name}
+                            </span>
+                            <span className="text-xs text-emerald-700">
+                              {(resultFiles[item.id].size / 1024).toFixed(1)} KB
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFile(item.id)}
+                              className="inline-flex items-center justify-center rounded-full p-1 text-emerald-600 hover:bg-emerald-100"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex cursor-pointer items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-600 transition hover:border-sky-400 hover:bg-sky-50">
+                            <Upload className="h-5 w-5 text-slate-400" />
+                            <div className="flex-1">
+                              <span className="font-medium text-slate-900">
+                                Upload lab report or result document
                               </span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-slate-600 text-xs">
-                            {formatDateTime(item.completed_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                PDF, image, or scanned document (max 20MB)
+                              </p>
+                            </div>
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.gif"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  handleFileChange(item.id, file);
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                          </label>
+                        )}
+                        
+                        <p className="text-[10px] text-slate-500 italic">
+                          💡 If you're using an external lab, you can just upload their report without entering values manually.
+                        </p>
+                      </div>
 
-            {items.length === 0 && (
-              <div className="text-center py-8 text-sm text-slate-500">
-                No test items in this order.
+                      {/* Save button */}
+                      <button
+                        type="button"
+                        onClick={() => handleSubmitResult(item.id)}
+                        disabled={submittingItemId === item.id || uploadingFiles[item.id]}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                      >
+                        {(submittingItemId === item.id || uploadingFiles[item.id]) ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            {uploadingFiles[item.id] ? "Uploading document..." : "Saving result..."}
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4" />
+                            Record Result
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
-          </section>
+            </section>
+          )}
+
+          {/* Completed items */}
+          {completedItems.length > 0 && (
+            <section className="relative rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
+              <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-lime-500" />
+
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle2 className="h-5 w-5 text-emerald-700" />
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Completed Results ({completedItems.length})
+                </h2>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Test</th>
+                      <th className="px-3 py-2">Result</th>
+                      <th className="px-3 py-2">Reference Range</th>
+                      <th className="px-3 py-2">Flag</th>
+                      <th className="px-3 py-2">Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {completedItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2">
+                          <div className="font-medium text-slate-900">
+                            {item.display_name || item.test?.name || item.requested_name || "—"}
+                          </div>
+                          {item.test?.code && (
+                            <div className="text-xs text-slate-500 font-mono">{item.test.code}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-medium text-slate-900">
+                            {item.result_value != null
+                              ? `${item.result_value} ${item.result_unit || ""}`
+                              : item.result_text || "See attached document"}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-slate-700">
+                          {item.ref_low != null && item.ref_high != null
+                            ? `${item.ref_low} – ${item.ref_high}`
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-2">
+                          {item.flag ? (
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${flagBadgeClass(item.flag)}`}>
+                              {item.flag}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 text-xs">
+                          {formatDateTime(item.completed_at)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Attachments section */}
           <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Paperclip className="h-4 w-4 text-slate-500" />
-              <h2 className="text-sm font-semibold text-slate-900">Attachments</h2>
+              <h2 className="text-sm font-semibold text-slate-900">All Attachments</h2>
             </div>
 
             {attachmentsLoading && (
@@ -735,7 +978,7 @@ export default function IndependentLabOrderDetailPage() {
           {/* Footer nav */}
           <div className="flex items-center justify-between text-xs">
             <Link
-              href="/lab/orders"
+              href="/provider/labs"
               className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900"
             >
               <ArrowLeft className="h-3.5 w-3.5" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,12 +10,18 @@ import {
   Building2,
   Stethoscope,
   FileText,
+  Paperclip,
   Loader2,
   CheckCircle2,
   AlertTriangle,
   Clock,
   Save,
   RefreshCw,
+  Microscope,
+  Download,
+  Eye,
+  FileImage,
+  Image as ImageIcon,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { submitLabResult, markLabOrderCollected } from "@/lib/labsStatusActions";
@@ -32,6 +38,48 @@ function formatDateTime(value) {
   }
 }
 
+function normalizeAttachmentsPayload(body) {
+  if (!body) return [];
+  if (Array.isArray(body.results)) return body.results;
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === "object") {
+    const numericKeys = Object.keys(body).filter((k) => /^\d+$/.test(k));
+    if (numericKeys.length) {
+      return numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => body[k]);
+    }
+  }
+  return [];
+}
+
+function resolveFileUrl(att) {
+  return att.file_url || att.url || att.file || "#";
+}
+
+function getFileExtension(filename) {
+  if (!filename) return "";
+  const parts = filename.split(".");
+  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
+}
+
+function isImageFile(filename) {
+  const ext = getFileExtension(filename);
+  return ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext);
+}
+
+function isPdfFile(filename) {
+  const ext = getFileExtension(filename);
+  return ext === "pdf";
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function flagBadgeClass(flag) {
   const f = String(flag || "").toUpperCase();
   if (f === "CRIT") return "bg-rose-100 text-rose-800 border-rose-200";
@@ -41,7 +89,106 @@ function flagBadgeClass(flag) {
   return "bg-slate-100 text-slate-600 border-slate-200";
 }
 
-export default function IndependentLabOrderDetailPage() {
+function AttachmentPreviewModal({ attachment, onClose }) {
+  const fileUrl = resolveFileUrl(attachment);
+  const filename = attachment.filename || attachment.name || attachment.original_name || "Document";
+  const isImage = isImageFile(filename);
+  const isPdf = isPdfFile(filename);
+
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) onClose?.();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={handleBackdropClick}
+    >
+      <div className="relative w-full max-w-5xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+          <div className="flex items-center gap-2">
+            {isImage ? (
+              <ImageIcon className="h-5 w-5 text-slate-600" />
+            ) : (
+              <FileText className="h-5 w-5 text-slate-600" />
+            )}
+            <div>
+              <p className="text-sm font-medium text-slate-900">{filename}</p>
+              {attachment.description && (
+                <p className="text-xs text-slate-500">{attachment.description}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              download
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-auto bg-slate-50" style={{ maxHeight: "calc(90vh - 60px)" }}>
+          {isImage && (
+            <div className="flex items-center justify-center p-4">
+              <img
+                src={fileUrl}
+                alt={filename}
+                className="max-w-full h-auto rounded-lg shadow-lg"
+              />
+            </div>
+          )}
+
+          {isPdf && (
+            <iframe
+              src={fileUrl}
+              title={filename}
+              className="w-full h-full min-h-[600px]"
+            />
+          )}
+
+          {!isImage && !isPdf && (
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              <FileText className="h-16 w-16 text-slate-400 mb-4" />
+              <p className="text-sm font-medium text-slate-700 mb-2">
+                Preview not available for this file type
+              </p>
+              <p className="text-xs text-slate-500 mb-4">
+                Click download to view this file
+              </p>
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <Download className="h-4 w-4" />
+                Download File
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ProviderLabOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id;
@@ -50,20 +197,20 @@ export default function IndependentLabOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Current user
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+
   const [me, setMe] = useState(null);
   const [meLoading, setMeLoading] = useState(true);
 
-  // Result entry state
   const [resultForms, setResultForms] = useState({});
   const [submittingItemId, setSubmittingItemId] = useState(null);
   const [resultError, setResultError] = useState("");
   const [resultSuccess, setResultSuccess] = useState("");
 
-  // Collect samples state
   const [collecting, setCollecting] = useState(false);
 
-  // Load current user
   useEffect(() => {
     let cancelled = false;
     async function loadMe() {
@@ -87,8 +234,8 @@ export default function IndependentLabOrderDetailPage() {
 
   const meRole = (me?.role || "").toUpperCase();
   const isLabRole = meRole === "LAB";
+  const isDoctorRole = meRole === "DOCTOR" || meRole === "NURSE";
 
-  // Load lab order
   async function loadOrder() {
     if (!id) return;
     try {
@@ -97,7 +244,6 @@ export default function IndependentLabOrderDetailPage() {
       const data = await apiFetch(`/labs/orders/${id}/`, { method: "GET" });
       setOrder(data);
 
-      // Initialize result forms for items
       const forms = {};
       (data?.items || []).forEach((item) => {
         forms[item.id] = {
@@ -120,7 +266,31 @@ export default function IndependentLabOrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Handle form changes for a specific item
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+
+    async function loadAttachments() {
+      try {
+        setAttachmentsLoading(true);
+        const qs = new URLSearchParams();
+        qs.set("lab_order", String(id));
+        const body = await apiFetch(`/attachments/?${qs.toString()}`, { method: "GET" });
+        if (cancelled) return;
+        setAttachments(normalizeAttachmentsPayload(body));
+      } catch (err) {
+        if (!cancelled) {
+          setAttachments([]);
+        }
+      } finally {
+        if (!cancelled) setAttachmentsLoading(false);
+      }
+    }
+
+    loadAttachments();
+    return () => { cancelled = true; };
+  }, [id]);
+
   function handleFormChange(itemId, field, value) {
     setResultForms((prev) => ({
       ...prev,
@@ -131,14 +301,12 @@ export default function IndependentLabOrderDetailPage() {
     }));
   }
 
-  // Submit result for a single item
   async function handleSubmitResult(itemId) {
     if (!id || !itemId) return;
 
     const form = resultForms[itemId];
     if (!form) return;
 
-    // Validate
     if (!form.result_value && !form.result_text?.trim()) {
       setResultError("Please enter a result value or text for this test.");
       return;
@@ -159,8 +327,6 @@ export default function IndependentLabOrderDetailPage() {
 
       await submitLabResult(id, payload);
       setResultSuccess(`Result saved for test item #${itemId}`);
-
-      // Reload order
       await loadOrder();
     } catch (err) {
       setResultError(err?.message || "Failed to submit result.");
@@ -169,7 +335,6 @@ export default function IndependentLabOrderDetailPage() {
     }
   }
 
-  // Handle collect all samples
   async function handleCollectSamples() {
     if (!id) return;
     setCollecting(true);
@@ -206,16 +371,16 @@ export default function IndependentLabOrderDetailPage() {
     );
   }
 
-  if (!isLabRole) {
+  if (!isLabRole && !isDoctorRole) {
     return (
       <main className="mx-auto max-w-4xl p-6 md:p-10">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h1 className="text-lg font-semibold text-amber-900">Access Restricted</h1>
           <p className="mt-2 text-sm text-amber-800">
-            This page is for independent lab scientists. Your current role is: <strong>{me?.role || "Unknown"}</strong>
+            This page is for independent lab scientists and doctors. Your current role is: <strong>{me?.role || "Unknown"}</strong>
           </p>
           <Link
-            href="/"
+            href="/provider"
             className="mt-4 inline-flex items-center gap-1 rounded-full bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
           >
             Go to Dashboard
@@ -225,22 +390,10 @@ export default function IndependentLabOrderDetailPage() {
     );
   }
 
-  const patientName =
-    order?.patient_name ||
-    (order?.patient_first_name || order?.patient_last_name
-      ? `${order?.patient_first_name || ""} ${order?.patient_last_name || ""}`.trim()
-      : "") ||
-    `Patient #${order?.patient}` ||
-    "—";
-
-  const facilityName = order?.facility_name || order?.facility?.name || `Facility #${order?.facility}` || "—";
-  const orderedBy =
-    order?.ordered_by_name ||
-    (order?.ordered_by_first_name || order?.ordered_by_last_name
-      ? `${order?.ordered_by_first_name || ""} ${order?.ordered_by_last_name || ""}`.trim()
-      : "") ||
-    `User #${order?.ordered_by}` ||
-    "—";
+  const patientName = order?.patient_name || `Patient #${order?.patient}` || "—";
+  const facilityName = order?.facility_name || order?.facility?.name || (order?.facility ? `Facility #${order?.facility}` : "Walk-in") || "—";
+  const labName = order?.outsourced_to_name || order?.external_lab_name || "External Lab";
+  const orderedBy = order?.ordered_by_name || `User #${order?.ordered_by}` || "—";
 
   const priority = order?.priority || "—";
   const status = order?.status || "—";
@@ -252,17 +405,31 @@ export default function IndependentLabOrderDetailPage() {
   const pendingItems = items.filter((i) => !i.completed_at);
   const completedItems = items.filter((i) => i.completed_at);
 
+  const workspaceConfig = isLabRole
+    ? {
+        title: "Enter Lab Results",
+        badge: "Lab Order",
+        icon: Microscope,
+        backLink: "/provider/labs",
+      }
+    : {
+        title: "Lab Request Details",
+        badge: "Lab Request",
+        icon: FlaskConical,
+        backLink: "/provider/labs",
+      };
+
+  const WorkspaceIcon = workspaceConfig.icon;
+
   return (
     <main className="relative mx-auto max-w-5xl space-y-6 p-6 md:p-10">
-      {/* Background accents */}
       <div className="pointer-events-none absolute -top-28 -left-32 h-52 w-52 rounded-full bg-teal-100/60 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-28 -right-32 h-56 w-56 rounded-full bg-cyan-100/50 blur-3xl" />
 
-      {/* Header */}
       <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-3">
           <Link
-            href="/lab/orders"
+            href={workspaceConfig.backLink}
             className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -271,14 +438,14 @@ export default function IndependentLabOrderDetailPage() {
 
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-teal-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-teal-700">
-              <FlaskConical className="h-3.5 w-3.5" />
-              Lab Order #{id}
+              <WorkspaceIcon className="h-3.5 w-3.5" />
+              {workspaceConfig.badge} #{id}
             </div>
             <h1 className="mt-2 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-              Enter Lab Results
+              {workspaceConfig.title}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Process this lab order and enter test results.
+              {isLabRole ? "Process this lab order and enter test results." : "View lab request details and results."}
             </p>
           </div>
         </div>
@@ -302,13 +469,14 @@ export default function IndependentLabOrderDetailPage() {
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="relative rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {loading && !order && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="-mx-5 -mt-5 mb-4 h-1.5 bg-gradient-to-r from-teal-600 via-cyan-500 to-sky-500" />
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading lab order…</span>
@@ -317,15 +485,14 @@ export default function IndependentLabOrderDetailPage() {
       )}
 
       {!loading && !error && !order && (
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
+        <div className="relative rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
           Lab order not found or you don't have access.
         </div>
       )}
 
       {order && (
         <>
-          {/* Order summary */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="relative space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-teal-600 via-cyan-500 to-sky-500" />
 
             <div className="grid gap-4 md:grid-cols-3">
@@ -339,15 +506,31 @@ export default function IndependentLabOrderDetailPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
-                  <Building2 className="h-4 w-4 text-emerald-600" />
+              {isLabRole && (
+                <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                  <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
+                    <Building2 className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {order.facility ? "Requesting Facility" : "Source"}
+                    </p>
+                    <p className="text-sm font-medium text-slate-900">{facilityName}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Requesting Facility</p>
-                  <p className="text-sm font-medium text-slate-900">{facilityName}</p>
+              )}
+
+              {isDoctorRole && (
+                <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                  <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-purple-50">
+                    <Microscope className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">External Lab</p>
+                    <p className="text-sm font-medium text-slate-900">{labName}</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
                 <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50">
@@ -360,7 +543,7 @@ export default function IndependentLabOrderDetailPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ordered at</p>
                 <p className="text-sm text-slate-900">{formatDateTime(order.ordered_at || order.created_at)}</p>
@@ -372,7 +555,7 @@ export default function IndependentLabOrderDetailPage() {
             </div>
 
             {order.note && (
-              <div className="mt-4 space-y-2">
+              <div className="space-y-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clinical Note</p>
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
                   {order.note}
@@ -381,183 +564,249 @@ export default function IndependentLabOrderDetailPage() {
             )}
           </section>
 
-          {/* Results entry section */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-lime-500" />
+          {isLabRole ? (
+            <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-lime-500" />
 
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <FlaskConical className="h-5 w-5 text-slate-700" />
+                  <h2 className="text-sm font-semibold text-slate-900">Test Results</h2>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {statusNorm === "PENDING" && (
+                    <button
+                      type="button"
+                      onClick={handleCollectSamples}
+                      disabled={collecting}
+                      className="inline-flex items-center gap-1 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                    >
+                      {collecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Mark All Samples Collected
+                    </button>
+                  )}
+
+                  {allItemsCompleted && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      All results completed
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {resultError && (
+                <div className="mb-4 flex gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{resultError}</span>
+                </div>
+              )}
+
+              {resultSuccess && (
+                <div className="mb-4 flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{resultSuccess}</span>
+                </div>
+              )}
+
+              {pendingItems.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
+                    Pending Results ({pendingItems.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {pendingItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-amber-200 bg-amber-50/50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">
+                              {item.display_name || item.test?.name || item.requested_name || "Unknown Test"}
+                            </p>
+                            {item.test?.code && (
+                              <p className="text-xs text-slate-500 font-mono">{item.test.code}</p>
+                            )}
+                          </div>
+                          {item.sample_collected_at ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                              <Clock className="h-3 w-3" />
+                              Collected {formatDateTime(item.sample_collected_at)}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                              Awaiting collection
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-5">
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Result Value
+                            </label>
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={resultForms[item.id]?.result_value ?? ""}
+                              onChange={(e) => handleFormChange(item.id, "result_value", e.target.value)}
+                              placeholder="e.g. 12.5"
+                              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Unit
+                            </label>
+                            <input
+                              type="text"
+                              value={item.test?.unit || item.result_unit || "—"}
+                              disabled
+                              className="w-full rounded-lg border border-slate-200 bg-slate-100 px-2 py-1.5 text-sm text-slate-600"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Ref Low
+                            </label>
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={resultForms[item.id]?.ref_low ?? ""}
+                              onChange={(e) => handleFormChange(item.id, "ref_low", e.target.value)}
+                              placeholder={item.test?.ref_low ?? "—"}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Ref High
+                            </label>
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={resultForms[item.id]?.ref_high ?? ""}
+                              onChange={(e) => handleFormChange(item.id, "ref_high", e.target.value)}
+                              placeholder={item.test?.ref_high ?? "—"}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+
+                          <div className="flex items-end">
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitResult(item.id)}
+                              disabled={submittingItemId === item.id}
+                              className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                              {submittingItemId === item.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Save className="h-3.5 w-3.5" />
+                              )}
+                              Save Result
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="mt-3">
+                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                            Result Text (optional - for qualitative results)
+                          </label>
+                          <textarea
+                            value={resultForms[item.id]?.result_text ?? ""}
+                            onChange={(e) => handleFormChange(item.id, "result_text", e.target.value)}
+                            placeholder="e.g. Positive, Negative, or descriptive findings..."
+                            rows={2}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {completedItems.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
+                    Completed Results ({completedItems.length})
+                  </h3>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2">Test</th>
+                          <th className="px-3 py-2">Result</th>
+                          <th className="px-3 py-2">Reference Range</th>
+                          <th className="px-3 py-2">Flag</th>
+                          <th className="px-3 py-2">Completed</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {completedItems.map((item) => (
+                          <tr key={item.id} className="hover:bg-slate-50">
+                            <td className="px-3 py-2">
+                              <div className="font-medium text-slate-900">
+                                {item.display_name || item.test?.name || item.requested_name || "—"}
+                              </div>
+                              {item.test?.code && (
+                                <div className="text-xs text-slate-500 font-mono">{item.test.code}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="font-medium text-slate-900">
+                                {item.result_value != null
+                                  ? `${item.result_value} ${item.result_unit || ""}`
+                                  : item.result_text || "—"}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-slate-700">
+                              {item.ref_low != null && item.ref_high != null
+                                ? `${item.ref_low} – ${item.ref_high}`
+                                : "—"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {item.flag ? (
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${flagBadgeClass(item.flag)}`}>
+                                  {item.flag}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600 text-xs">
+                              {formatDateTime(item.completed_at)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {items.length === 0 && (
+                <div className="text-center py-8 text-sm text-slate-500">
+                  No test items in this order.
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+
+              <div className="flex items-center gap-2 mb-4">
                 <FlaskConical className="h-5 w-5 text-slate-700" />
                 <h2 className="text-sm font-semibold text-slate-900">Test Results</h2>
               </div>
 
-              <div className="flex items-center gap-2">
-                {statusNorm === "PENDING" && (
-                  <button
-                    type="button"
-                    onClick={handleCollectSamples}
-                    disabled={collecting}
-                    className="inline-flex items-center gap-1 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-                  >
-                    {collecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                    Mark All Samples Collected
-                  </button>
-                )}
-
-                {allItemsCompleted && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    All results completed
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Status messages */}
-            {resultError && (
-              <div className="mb-4 flex gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{resultError}</span>
-              </div>
-            )}
-
-            {resultSuccess && (
-              <div className="mb-4 flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{resultSuccess}</span>
-              </div>
-            )}
-
-            {/* Pending items - editable */}
-            {pendingItems.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                  Pending Results ({pendingItems.length})
-                </h3>
-                <div className="space-y-3">
-                  {pendingItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-xl border border-amber-200 bg-amber-50/50 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">
-                            {item.display_name || item.test?.name || item.requested_name || "Unknown Test"}
-                          </p>
-                          {item.test?.code && (
-                            <p className="text-xs text-slate-500 font-mono">{item.test.code}</p>
-                          )}
-                        </div>
-                        {item.sample_collected_at ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
-                            <Clock className="h-3 w-3" />
-                            Collected {formatDateTime(item.sample_collected_at)}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                            Awaiting collection
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-5">
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Result Value
-                          </label>
-                          <input
-                            type="number"
-                            step="0.0001"
-                            value={resultForms[item.id]?.result_value ?? ""}
-                            onChange={(e) => handleFormChange(item.id, "result_value", e.target.value)}
-                            placeholder="e.g. 12.5"
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Unit
-                          </label>
-                          <input
-                            type="text"
-                            value={item.test?.unit || item.result_unit || "—"}
-                            disabled
-                            className="w-full rounded-lg border border-slate-200 bg-slate-100 px-2 py-1.5 text-sm text-slate-600"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Ref Low
-                          </label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={resultForms[item.id]?.ref_low ?? ""}
-                            onChange={(e) => handleFormChange(item.id, "ref_low", e.target.value)}
-                            placeholder={item.test?.ref_low ?? "—"}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                            Ref High
-                          </label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={resultForms[item.id]?.ref_high ?? ""}
-                            onChange={(e) => handleFormChange(item.id, "ref_high", e.target.value)}
-                            placeholder={item.test?.ref_high ?? "—"}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                          />
-                        </div>
-
-                        <div className="flex items-end">
-                          <button
-                            type="button"
-                            onClick={() => handleSubmitResult(item.id)}
-                            disabled={submittingItemId === item.id}
-                            className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-                          >
-                            {submittingItemId === item.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Save className="h-3.5 w-3.5" />
-                            )}
-                            Save Result
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Optional text result */}
-                      <div className="mt-3">
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Result Text (optional - for qualitative results)
-                        </label>
-                        <textarea
-                          value={resultForms[item.id]?.result_text ?? ""}
-                          onChange={(e) => handleFormChange(item.id, "result_text", e.target.value)}
-                          placeholder="e.g. Positive, Negative, or descriptive findings..."
-                          rows={2}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Completed items */}
-            {completedItems.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                  Completed Results ({completedItems.length})
-                </h3>
+              {items.length > 0 ? (
                 <div className="overflow-x-auto rounded-xl border border-slate-200">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -566,11 +815,11 @@ export default function IndependentLabOrderDetailPage() {
                         <th className="px-3 py-2">Result</th>
                         <th className="px-3 py-2">Reference Range</th>
                         <th className="px-3 py-2">Flag</th>
-                        <th className="px-3 py-2">Completed</th>
+                        <th className="px-3 py-2">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {completedItems.map((item) => (
+                      {items.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50">
                           <td className="px-3 py-2">
                             <div className="font-medium text-slate-900">
@@ -582,9 +831,13 @@ export default function IndependentLabOrderDetailPage() {
                           </td>
                           <td className="px-3 py-2">
                             <div className="font-medium text-slate-900">
-                              {item.result_value != null
-                                ? `${item.result_value} ${item.result_unit || ""}`
-                                : item.result_text || "—"}
+                              {item.completed_at ? (
+                                item.result_value != null
+                                  ? `${item.result_value} ${item.result_unit || ""}`
+                                  : item.result_text || "—"
+                              ) : (
+                                <span className="text-slate-500">Pending</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-3 py-2 text-slate-700">
@@ -601,28 +854,144 @@ export default function IndependentLabOrderDetailPage() {
                               "—"
                             )}
                           </td>
-                          <td className="px-3 py-2 text-slate-600 text-xs">
-                            {formatDateTime(item.completed_at)}
+                          <td className="px-3 py-2">
+                            {item.completed_at ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Completed
+                              </span>
+                            ) : item.sample_collected_at ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                                <Clock className="h-3 w-3" />
+                                In Progress
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                Pending
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              ) : (
+                <div className="text-center py-8 text-sm text-slate-500">
+                  {order.note || "No test details available."}
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Paperclip className="h-4 w-4 text-slate-500" />
+              <h2 className="text-sm font-semibold text-slate-900">Attachments</h2>
+            </div>
+
+            {attachmentsLoading && (
+              <p className="flex items-center gap-2 text-xs text-slate-500">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Loading attachments…</span>
+              </p>
             )}
 
-            {items.length === 0 && (
-              <div className="text-center py-8 text-sm text-slate-500">
-                No test items in this order.
+            {!attachmentsLoading && attachments.length === 0 && (
+              <p className="text-xs text-slate-500">No files attached to this lab order.</p>
+            )}
+
+            {!attachmentsLoading && attachments.length > 0 && (
+              <div className="space-y-2">
+                {attachments.map((att) => {
+                  const fileUrl = resolveFileUrl(att);
+                  const filename = att.filename || att.name || att.original_name || `Attachment #${att.id}`;
+                  const isImage = isImageFile(filename);
+                  const isPdf = isPdfFile(filename);
+                  const canPreview = isImage || isPdf;
+
+                  return (
+                    <div
+                      key={att.id}
+                      className="group rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition"
+                    >
+                      <div className="flex items-start gap-3 p-3">
+                        <div className="shrink-0">
+                          {isImage && fileUrl !== "#" ? (
+                            <div className="h-12 w-12 rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                              <img
+                                src={fileUrl}
+                                alt={filename}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="grid h-12 w-12 place-items-center rounded-lg bg-slate-50 border border-slate-200">
+                              {isImage ? (
+                                <FileImage className="h-5 w-5 text-sky-600" />
+                              ) : isPdf ? (
+                                <FileText className="h-5 w-5 text-red-600" />
+                              ) : (
+                                <FileText className="h-5 w-5 text-slate-500" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">
+                            {filename}
+                          </p>
+                          {att.description && (
+                            <p className="mt-0.5 text-xs text-slate-600 line-clamp-2">
+                              {att.description}
+                            </p>
+                          )}
+                          <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                            {att.uploaded_at && (
+                              <span>
+                                {new Date(att.uploaded_at).toLocaleDateString()}
+                              </span>
+                            )}
+                            {att.file_size && (
+                              <span>{formatFileSize(att.file_size)}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1 shrink-0">
+                          {canPreview && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachment(att)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View
+                            </button>
+                          )}
+                          <a
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            download
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Download
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
 
-          {/* Footer nav */}
           <div className="flex items-center justify-between text-xs">
             <Link
-              href="/lab/orders"
+              href={workspaceConfig.backLink}
               className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
@@ -630,6 +999,13 @@ export default function IndependentLabOrderDetailPage() {
             </Link>
           </div>
         </>
+      )}
+
+      {previewAttachment && (
+        <AttachmentPreviewModal
+          attachment={previewAttachment}
+          onClose={() => setPreviewAttachment(null)}
+        />
       )}
     </main>
   );

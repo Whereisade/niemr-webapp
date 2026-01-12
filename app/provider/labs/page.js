@@ -444,7 +444,7 @@ function IndependentLabOrdersPageInner() {
                       <Td>
                         <div className="flex flex-wrap gap-2">
                           <Link
-                            href={`/lab/orders/${order.id}`}
+                            href={`/provider/labs/${order.id}`}
                             className="text-xs font-medium text-blue-600 hover:underline"
                           >
                             View
