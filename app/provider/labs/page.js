@@ -114,6 +114,8 @@ function IndependentLabOrdersPageInner() {
 
   const meRole = (me?.role || "").toUpperCase();
   const isLabRole = meRole === "LAB";
+  const isDoctorRole = meRole === "DOCTOR";
+  const canAccessPage = isLabRole || isDoctorRole;
 
   // Load orders
   async function loadOrders() {
@@ -125,6 +127,11 @@ function IndependentLabOrdersPageInner() {
       qs.set("limit", String(limit));
       if (status) qs.set("status", status);
       if (s) qs.set("s", s);
+      
+      // Filter orders by created_by (current user's ID) for doctors
+      if (isDoctorRole && me?.id) {
+        qs.set("created_by", me.id);
+      }
 
       const res = await apiFetch(`/labs/orders/?${qs.toString()}`, { method: "GET" });
       const items = normalizeList(res);
@@ -201,13 +208,13 @@ function IndependentLabOrdersPageInner() {
     );
   }
 
-  if (!isLabRole) {
+  if (!canAccessPage) {
     return (
       <main className="mx-auto max-w-7xl p-6 md:p-10">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h1 className="text-lg font-semibold text-amber-900">Access Restricted</h1>
           <p className="mt-2 text-sm text-amber-800">
-            This page is for independent lab scientists. Your current role is: <strong>{me?.role || "Unknown"}</strong>
+            This page is for independent lab scientists and doctors. Your current role is: <strong>{me?.role || "Unknown"}</strong>
           </p>
           <Link
             href="/"
@@ -231,14 +238,15 @@ function IndependentLabOrdersPageInner() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-teal-700">
             <FlaskConical className="h-3.5 w-3.5" />
-            Independent Lab Worklist
+            {isDoctorRole ? "Doctor Lab Orders" : "Independent Lab Worklist"}
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Lab Orders Assigned to You
+            {isDoctorRole ? "Your Lab Orders" : "Lab Orders Assigned to You"}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            View and process lab orders outsourced to your independent lab
-            practice.
+            {isDoctorRole
+              ? "View and manage lab orders you have created."
+              : "View and process lab orders outsourced to your independent lab practice."}
           </p>
         </div>
 
@@ -260,12 +268,14 @@ function IndependentLabOrdersPageInner() {
             Refresh
           </button>
 
-          <Link
-            href="/provider/labs/catalog"
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Lab Catalog
-          </Link>
+          {!isDoctorRole && (
+            <Link
+              href="/provider/labs/catalog"
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Lab Catalog
+            </Link>
+          )}
         </div>
       </header>
 
