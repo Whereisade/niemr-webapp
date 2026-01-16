@@ -27,6 +27,11 @@ import {
   TrendingDown,
   Calendar,
   Eye,
+  Award,
+  Star,
+  Building2,
+  FileCheck,
+  Handshake,
 } from "lucide-react";
 import AddHMOModal from "@/components/AddHMOModal";
 
@@ -42,11 +47,45 @@ function normalizeList(payload) {
   return [];
 }
 
+// Tier badge component
+function TierBadge({ tier }) {
+  const config = {
+    GOLD: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", icon: "🥇" },
+    SILVER: { bg: "bg-slate-50", border: "border-slate-300", text: "text-slate-600", icon: "🥈" },
+    BRONZE: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", icon: "🥉" },
+  };
+  const c = config[tier] || config.BRONZE;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${c.bg} ${c.border} ${c.text}`}>
+      <span>{c.icon}</span>
+      {tier}
+    </span>
+  );
+}
+
+// Relationship status badge
+function RelationshipBadge({ status }) {
+  const config = {
+    EXCELLENT: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700" },
+    GOOD: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700" },
+    AVERAGE: { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700" },
+    POOR: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700" },
+    BAD: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700" },
+  };
+  const c = config[status] || config.AVERAGE;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${c.bg} ${c.border} ${c.text}`}>
+      <Handshake className="h-3 w-3" />
+      {status?.replace("_", " ") || "N/A"}
+    </span>
+  );
+}
+
 export default function EnhancedHMOPage() {
   const [me, setMe] = useState(null);
   const [activeTab, setActiveTab] = useState("hmos"); // hmos | pharmacy | labs | appointments
 
-  // HMO management state
+  // HMO management state - now stores FacilityHMO records
   const [hmos, setHmos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -71,7 +110,7 @@ export default function EnhancedHMOPage() {
   const [editTestPrice, setEditTestPrice] = useState("");
   const [updatingTest, setUpdatingTest] = useState(false);
 
-  // Appointment pricing state (new)
+  // Appointment pricing state
   const [selectedApptHMO, setSelectedApptHMO] = useState("");
   const [apptCatalog, setApptCatalog] = useState([]);
   const [apptLoading, setApptLoading] = useState(false);
@@ -90,7 +129,20 @@ export default function EnhancedHMOPage() {
   const [importError, setImportError] = useState("");
 
   const isSuperAdmin = useMemo(() => (me?.role || "").toUpperCase() === "SUPER_ADMIN", [me]);
-  const activeHMOs = useMemo(() => hmos.filter((h) => h.is_active), [hmos]);
+  
+  // Active HMOs for pricing tabs - use system_hmo.id for API calls
+  const activeHMOs = useMemo(() => {
+    return hmos
+      .filter((h) => h.is_active)
+      .map((h) => ({
+        // Use system_hmo.id for pricing API calls
+        id: h.system_hmo?.id || h.id,
+        facilityHmoId: h.id,
+        name: h.system_hmo?.name || h.name,
+        tier: h.system_hmo?.tier,
+        nhis_number: h.system_hmo?.nhis_number,
+      }));
+  }, [hmos]);
 
   // Load current user and HMOs
   useEffect(() => {
@@ -101,7 +153,8 @@ export default function EnhancedHMOPage() {
         const meRes = await apiFetch("/accounts/me/");
         setMe(meRes);
 
-        const res = await apiFetch("/facilities/hmos/");
+        // Use new endpoint for facility HMOs
+        const res = await apiFetch("/patients/hmo/facility/");
         setHmos(normalizeList(res));
       } catch (e) {
         setError(e?.message || "Failed to load HMOs");
@@ -166,16 +219,17 @@ export default function EnhancedHMOPage() {
     loadAppt();
   }, [selectedApptHMO, activeTab]);
 
+  // Toggle active status for FacilityHMO
   async function toggleActive(hmo) {
     if (!hmo?.id) return;
     setBusy(true);
     setError("");
     try {
-      await apiFetch(`/facilities/hmos/${hmo.id}/`, {
+      await apiFetch(`/patients/hmo/facility/${hmo.id}/`, {
         method: "PATCH",
         body: JSON.stringify({ is_active: !hmo.is_active }),
       });
-      const res = await apiFetch("/facilities/hmos/");
+      const res = await apiFetch("/patients/hmo/facility/");
       setHmos(normalizeList(res));
     } catch (e) {
       setError(e?.message || "Failed to update HMO");
@@ -184,18 +238,22 @@ export default function EnhancedHMOPage() {
     }
   }
 
-  async function deleteHmo(hmo) {
+  // Disable (remove) FacilityHMO relationship
+  async function disableHmo(hmo) {
     if (!hmo?.id) return;
-    const ok = window.confirm(`Delete HMO "${hmo.name}"? This will remove all HMO pricing overrides.`);
+    const hmoName = hmo.system_hmo?.name || hmo.name || "this HMO";
+    const ok = window.confirm(
+      `Disable "${hmoName}" for this facility?\n\nThis will remove the HMO relationship and all facility-specific pricing. Patients enrolled in this HMO will need to be reassigned.`
+    );
     if (!ok) return;
     setBusy(true);
     setError("");
     try {
-      await apiFetch(`/facilities/hmos/${hmo.id}/`, { method: "DELETE" });
-      const res = await apiFetch("/facilities/hmos/");
+      await apiFetch(`/patients/hmo/facility/${hmo.id}/`, { method: "DELETE" });
+      const res = await apiFetch("/patients/hmo/facility/");
       setHmos(normalizeList(res));
     } catch (e) {
-      setError(e?.message || "Failed to delete HMO");
+      setError(e?.message || "Failed to disable HMO");
     } finally {
       setBusy(false);
     }
@@ -203,7 +261,7 @@ export default function EnhancedHMOPage() {
 
   async function handleModalSuccess() {
     setShowAddModal(false);
-    const res = await apiFetch("/facilities/hmos/");
+    const res = await apiFetch("/patients/hmo/facility/");
     setHmos(normalizeList(res));
   }
 
@@ -295,7 +353,7 @@ export default function EnhancedHMOPage() {
     }
   }
 
-  // Appointment pricing functions (new)
+  // Appointment pricing functions
   function startApptEdit(service) {
     setEditingApptId(service.service_id);
     setEditApptPrice(String(service.hmo_price || service.catalog_price || ""));
@@ -399,7 +457,7 @@ export default function EnhancedHMOPage() {
     }
   }
 
-  // Appointment import (new) - uses proxy like others
+  // Appointment import
   async function handleApptImport(e) {
     e.preventDefault();
     if (!apptImportFile) {
@@ -501,13 +559,13 @@ export default function EnhancedHMOPage() {
             <h1 className="text-2xl font-bold text-slate-900">HMO Management</h1>
           </div>
           <p className="mt-1 text-sm text-slate-600">
-            Manage health insurance plans and configure HMO-specific pricing for pharmacy and lab services.
+            Enable and manage health insurance plans from the system catalog. Configure HMO-specific pricing for services.
           </p>
         </div>
 
         <button
           onClick={async () => {
-            const res = await apiFetch("/facilities/hmos/");
+            const res = await apiFetch("/patients/hmo/facility/");
             setHmos(normalizeList(res));
           }}
           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm hover:bg-slate-50 disabled:opacity-50"
@@ -573,7 +631,7 @@ export default function EnhancedHMOPage() {
           isSuperAdmin={isSuperAdmin}
           busy={busy}
           toggleActive={toggleActive}
-          deleteHmo={deleteHmo}
+          disableHmo={disableHmo}
           onAddClick={() => setShowAddModal(true)}
         />
       )}
@@ -665,7 +723,6 @@ export default function EnhancedHMOPage() {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSuccess={handleModalSuccess}
-        busy={busy}
       />
     </div>
   );
@@ -689,15 +746,22 @@ function TabButton({ active, onClick, icon: Icon, children }) {
   );
 }
 
-function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, onAddClick }) {
+function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, onAddClick }) {
   // Calculate stats
   const activeCount = hmos.filter(h => h.is_active).length;
   const inactiveCount = hmos.length - activeCount;
+  
+  // Count by tier
+  const tierCounts = hmos.reduce((acc, h) => {
+    const tier = h.system_hmo?.tier || "BRONZE";
+    acc[tier] = (acc[tier] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-blue-50 to-white p-5 transition hover:shadow-md">
           <div className="mb-3 flex items-center justify-between">
             <div className="grid h-12 w-12 place-items-center rounded-xl bg-blue-100">
@@ -705,7 +769,7 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, o
             </div>
           </div>
           <div className="text-3xl font-bold text-blue-900">{hmos.length}</div>
-          <div className="text-sm font-medium text-blue-700">Total HMOs</div>
+          <div className="text-sm font-medium text-blue-700">Enabled HMOs</div>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 transition hover:shadow-md">
@@ -716,6 +780,16 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, o
           </div>
           <div className="text-3xl font-bold text-emerald-900">{activeCount}</div>
           <div className="text-sm font-medium text-emerald-700">Active Plans</div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 transition hover:shadow-md">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-amber-100">
+              <Award className="h-6 w-6 text-amber-700" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-amber-900">{tierCounts.GOLD || 0}</div>
+          <div className="text-sm font-medium text-amber-700">Gold Tier</div>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 transition hover:shadow-md">
@@ -736,23 +810,23 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, o
             <Info className="h-4 w-4 text-blue-700" />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-blue-900">HMO Workflow</h3>
+            <h3 className="text-sm font-semibold text-blue-900">System HMO Workflow</h3>
             <div className="mt-2 space-y-1 text-xs text-blue-800">
               <div className="flex items-start gap-2">
                 <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">1</div>
-                <div>Create an HMO plan (e.g., NHIS, Hygeia, AXA Mansard)</div>
+                <div>Enable HMO plans from the system-wide catalog (NHIS, Hygeia, AXA Mansard, etc.)</div>
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">2</div>
-                <div>Set HMO-specific prices in Pharmacy, Lab, and Appointments tabs</div>
+                <div>Configure facility-specific pricing in Pharmacy, Lab, and Services tabs</div>
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">3</div>
-                <div>Attach patients to HMO plans via Patient Details → Insurance tab</div>
+                <div>Enroll patients to HMO plans via Patient Details → Insurance tab</div>
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">4</div>
-                <div>Billing automatically applies HMO prices for attached patients</div>
+                <div>Billing automatically applies HMO-negotiated prices for enrolled patients</div>
               </div>
             </div>
           </div>
@@ -764,9 +838,11 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, o
         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Facility HMOs</h2>
+              <h2 className="text-sm font-bold text-slate-900">Enabled HMOs</h2>
               <p className="text-xs text-slate-600">
-                {isSuperAdmin ? "Create, disable, or delete HMO plans" : "View HMO plans (Admin access required for editing)"}
+                {isSuperAdmin 
+                  ? "Enable HMOs from the system catalog or manage existing relationships" 
+                  : "View enabled HMO plans (Admin access required for editing)"}
               </p>
             </div>
 
@@ -777,7 +853,7 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, o
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-500/40 disabled:opacity-60 disabled:shadow-none"
               >
                 <Plus className="h-4 w-4" />
-                Add HMO
+                Enable HMO
               </button>
             )}
           </div>
@@ -787,16 +863,18 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, o
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-100 bg-slate-50/50 text-xs font-semibold uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">HMO</th>
+                <th className="px-4 py-3">Tier</th>
+                <th className="px-4 py-3">Relationship</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Created</th>
+                <th className="px-4 py-3">Contract</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center">
+                  <td colSpan={6} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                       <p className="text-sm text-slate-500">Loading HMOs...</p>
@@ -804,95 +882,139 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, deleteHmo, o
                   </td>
                 </tr>
               ) : hmos.length ? (
-                hmos.map((h) => (
-                  <tr key={h.id} className="group transition hover:bg-slate-50">
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`grid h-10 w-10 place-items-center rounded-xl ${
+                hmos.map((h) => {
+                  const systemHmo = h.system_hmo || {};
+                  const hmoName = systemHmo.name || h.name || "Unknown HMO";
+                  const tier = systemHmo.tier || "BRONZE";
+                  const nhisNumber = systemHmo.nhis_number;
+                  const hmoCode = systemHmo.hmo_code;
+                  
+                  return (
+                    <tr key={h.id} className="group transition hover:bg-slate-50">
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`grid h-10 w-10 place-items-center rounded-xl ${
+                            h.is_active 
+                              ? "bg-blue-100 text-blue-700" 
+                              : "bg-slate-100 text-slate-600"
+                          }`}>
+                            <Shield className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-900">{hmoName}</div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              {hmoCode && <span className="font-mono">{hmoCode}</span>}
+                              {nhisNumber && (
+                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px]">
+                                  NHIS: {nhisNumber}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <TierBadge tier={tier} />
+                      </td>
+                      <td className="px-4 py-4">
+                        <RelationshipBadge status={h.relationship_status} />
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
                           h.is_active 
-                            ? "bg-blue-100 text-blue-700" 
-                            : "bg-slate-100 text-slate-600"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700" 
+                            : "border-slate-200 bg-slate-100 text-slate-700"
                         }`}>
-                          <Shield className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-900">{h.name}</div>
-                          <div className="text-xs text-slate-500">ID: {h.id}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
-                        h.is_active 
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700" 
-                          : "border-slate-200 bg-slate-100 text-slate-700"
-                      }`}>
-                        {h.is_active ? (
-                          <CheckCircle2 className="h-3 w-3" />
-                        ) : (
-                          <AlertCircle className="h-3 w-3" />
-                        )}
-                        {h.is_active ? "Active" : "Disabled"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-xs text-slate-600">
-                      {h.created_at ? new Date(h.created_at).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric"
-                      }) : "—"}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex justify-end gap-2">
-                        <a
-                          href={`/facility/hmos/${h.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
-                        >
-                          <Eye className="h-4 w-4" />
-                          View Details
-                        </a>
-                        <button
-                          onClick={() => toggleActive(h)}
-                          disabled={!isSuperAdmin || busy}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
-                        >
                           {h.is_active ? (
-                            <>
-                              <ToggleRight className="h-4 w-4" />
-                              Disable
-                            </>
+                            <CheckCircle2 className="h-3 w-3" />
                           ) : (
-                            <>
-                              <ToggleLeft className="h-4 w-4" />
-                              Enable
-                            </>
+                            <AlertCircle className="h-3 w-3" />
                           )}
-                        </button>
-                        <button
-                          onClick={() => deleteHmo(h)}
-                          disabled={!isSuperAdmin || busy}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50 disabled:opacity-60"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {h.is_active ? "Active" : "Disabled"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        {h.contract_reference ? (
+                          <div className="text-xs">
+                            <div className="flex items-center gap-1 font-medium text-slate-700">
+                              <FileCheck className="h-3 w-3" />
+                              {h.contract_reference}
+                            </div>
+                            {(h.contract_start_date || h.contract_end_date) && (
+                              <div className="mt-0.5 text-slate-500">
+                                {h.contract_start_date && new Date(h.contract_start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                {h.contract_start_date && h.contract_end_date && " – "}
+                                {h.contract_end_date && new Date(h.contract_end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">No contract</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex justify-end gap-2">
+                          <a
+                            href={`/facility/hmos/${h.id}`}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
+                          >
+                            <Eye className="h-4 w-4" />
+                            Details
+                          </a>
+                          <button
+                            onClick={() => toggleActive(h)}
+                            disabled={!isSuperAdmin || busy}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            {h.is_active ? (
+                              <>
+                                <ToggleRight className="h-4 w-4" />
+                                Disable
+                              </>
+                            ) : (
+                              <>
+                                <ToggleLeft className="h-4 w-4" />
+                                Enable
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => disableHmo(h)}
+                            disabled={!isSuperAdmin || busy}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50 disabled:opacity-60"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-12">
+                  <td colSpan={6} className="py-12">
                     <div className="flex flex-col items-center gap-3">
                       <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100">
                         <Shield className="h-8 w-8 text-slate-400" />
                       </div>
                       <div className="text-center">
-                        <h3 className="text-sm font-semibold text-slate-900">No HMOs yet</h3>
+                        <h3 className="text-sm font-semibold text-slate-900">No HMOs enabled</h3>
                         <p className="mt-1 text-sm text-slate-500">
-                          {isSuperAdmin ? "Create your first HMO plan to get started" : "Contact your admin to add HMO plans"}
+                          {isSuperAdmin 
+                            ? "Enable HMOs from the system catalog to get started" 
+                            : "Contact your admin to enable HMO plans"}
                         </p>
                       </div>
+                      {isSuperAdmin && (
+                        <button
+                          onClick={onAddClick}
+                          className="mt-2 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-700"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Enable HMO
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1029,7 +1151,7 @@ function LabPricingTab({
           fileExtension={fileExtension}
           disabled={!selectedHMO}
           requiredColumns={["code", "price"]}
-          optionalColumns={["name", "unit", "ref_low", "ref_high"]}
+          optionalColumns={["name", "unit", "category"]}
         />
 
         <InfoPanel
@@ -1038,9 +1160,8 @@ function LabPricingTab({
             { label: "code", desc: "Test code (required)" },
             { label: "price", desc: "HMO price (required)" },
             { label: "name", desc: "Test name (optional)" },
-            { label: "unit", desc: "e.g., g/dL (optional)" },
-            { label: "ref_low", desc: "Reference low (optional)" },
-            { label: "ref_high", desc: "Reference high (optional)" },
+            { label: "unit", desc: "e.g., per test (optional)" },
+            { label: "category", desc: "e.g., Hematology (optional)" },
           ]}
         />
       </div>
@@ -1067,7 +1188,6 @@ function LabPricingTab({
   );
 }
 
-// Appointment Pricing Tab (new)
 function AppointmentPricingTab({
   activeHMOs,
   selectedHMO,
@@ -1092,216 +1212,210 @@ function AppointmentPricingTab({
   handleImport,
 }) {
   return (
-    <div className="space-y-6">
-      {/* HMO Selection */}
-      <div className="bg-white rounded-lg border p-6">
-        <label className="block text-sm font-medium mb-2">Select HMO</label>
-        <select
-          value={selectedHMO || ""}
-          onChange={(e) => setSelectedHMO(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="">Choose an HMO...</option>
-          {activeHMOs.map((hmo) => (
-            <option key={hmo.id} value={hmo.id}>
-              {hmo.name}
-            </option>
-          ))}
-        </select>
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)]">
+      {/* Left column: Import */}
+      <div className="space-y-4">
+        <ImportSection
+          title="Import Service Prices"
+          subtitle="Upload CSV/Excel with appointment prices for selected HMO"
+          importFile={importFile}
+          setImportFile={setImportFile}
+          importing={importing}
+          importResult={importResult}
+          importError={null}
+          setImportError={() => {}}
+          handleImport={handleImport}
+          isValidFile={isValidFile}
+          fileExtension={fileExtension}
+          disabled={!selectedHMO}
+          requiredColumns={["code", "price"]}
+          optionalColumns={["name", "duration", "category"]}
+        />
+
+        <InfoPanel
+          title="File Format - Services"
+          items={[
+            { label: "code", desc: "Service code (required)" },
+            { label: "price", desc: "HMO price (required)" },
+            { label: "name", desc: "Service name (optional)" },
+            { label: "duration", desc: "e.g., 30 mins (optional)" },
+            { label: "category", desc: "e.g., Consultation (optional)" },
+          ]}
+        />
       </div>
 
-      {selectedHMO && (
-        <>
-          {/* Info Panel */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-900 mb-2">HMO Pricing Information</h3>
-            <div className="text-sm text-blue-800 space-y-1">
-              <p><strong>Selected HMO:</strong> {activeHMOs.find(h => String(h.id) === String(selectedHMO))?.name}</p>
-              <p><strong>Total Services:</strong> {catalog.length}</p>
-              <p className="text-xs mt-2">
-                Set custom prices for this HMO. If no HMO price is set, the catalog price will be used.
-              </p>
-            </div>
+      {/* Right column: Catalog */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Services Catalog</h2>
+            <p className="text-xs text-slate-500">
+              {catalog.length} service{catalog.length !== 1 ? "s" : ""} · Set HMO-specific prices
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Import Panel */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg border p-6">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Bulk Import HMO Prices
-                </h3>
-
-                <form onSubmit={handleImport} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Upload CSV or Excel file
-                    </label>
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={(e) => setImportFile(e.target.files[0])}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    />
-                    <p className="text-xs text-gray-500 mt-2">
-                      Required columns: <code className="bg-gray-100 px-1 rounded">code</code>, <code className="bg-gray-100 px-1 rounded">price</code>
-                    </p>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={!importFile || importing}
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {importing ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" />
-                        Import Prices
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                {importResult && (
-                  <div className={`mt-4 p-4 rounded-lg ${importResult.errors && importResult.errors.length > 0 ? 'bg-yellow-50 border border-yellow-200' : 'bg-green-50 border border-green-200'}`}>
-                    {importResult.created !== undefined && (
-                      <div className="flex items-center gap-2 text-green-700 mb-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span className="text-sm font-medium">
-                          Created: {importResult.created}, Updated: {importResult.updated}
-                        </span>
-                      </div>
-                    )}
-                    {importResult.errors && importResult.errors.length > 0 && (
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-yellow-700 mb-2">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-sm font-medium">Errors:</span>
-                        </div>
-                        <div className="max-h-32 overflow-y-auto">
-                          {importResult.errors.map((error, idx) => (
-                            <p key={idx} className="text-xs text-yellow-700">{error}</p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search services…"
+                className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 md:w-48"
+              />
             </div>
 
-            {/* Catalog Table */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-lg border p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Service Catalog</h3>
-                  <div className="relative w-64">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search services..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                {catalogLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" />
-                  </div>
-                ) : catalog.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
-                    No services found. Select an HMO to view pricing.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b">
-                        <tr>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Service Name</th>
-                          <th className="text-right py-3 px-4 font-medium text-gray-700">Catalog Price</th>
-                          <th className="text-right py-3 px-4 font-medium text-gray-700">HMO Price</th>
-                          <th className="text-right py-3 px-4 font-medium text-gray-700">Discount</th>
-                          <th className="text-center py-3 px-4 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {catalog.map((item) => (
-                          <tr key={item.service_id} className="hover:bg-gray-50">
-                            <td className="py-3 px-4">{item.service_name}</td>
-                            <td className="py-3 px-4 text-right">₦{parseFloat(item.catalog_price || 0).toLocaleString()}</td>
-                            <td className="py-3 px-4 text-right">
-                              {editingId === item.service_id ? (
-                                <input
-                                  type="number"
-                                  value={editPrice}
-                                  onChange={(e) => setEditPrice(e.target.value)}
-                                  className="w-24 px-2 py-1 border rounded text-right"
-                                  step="0.01"
-                                  min="0"
-                                />
-                              ) : (
-                                `₦${parseFloat(item.hmo_price || item.catalog_price || 0).toLocaleString()}`
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                (item.discount_percent || 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {item.discount_percent || 0}%
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              {editingId === item.service_id ? (
-                                <div className="flex items-center justify-center gap-2">
-                                  <button
-                                    onClick={() => savePrice(item.service_id)}
-                                    disabled={updating}
-                                    className="text-green-600 hover:text-green-700 disabled:text-gray-400"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={cancelEdit}
-                                    disabled={updating}
-                                    className="text-red-600 hover:text-red-700 disabled:text-gray-400"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => startEdit(item)}
-                                  className="text-blue-600 hover:text-blue-700"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
+            <select
+              value={selectedHMO}
+              onChange={(e) => setSelectedHMO(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            >
+              <option value="">Select HMO…</option>
+              {activeHMOs.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name} {h.tier && `(${h.tier})`}
+                </option>
+              ))}
+            </select>
           </div>
-        </>
-      )}
+        </div>
+
+        {!selectedHMO ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+            Please select an HMO to view and edit pricing
+          </div>
+        ) : catalogLoading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading catalog…
+          </div>
+        ) : catalog.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+            No services in catalog. Add appointment service types first.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
+                <tr>
+                  <th className="px-3 py-2">Service</th>
+                  <th className="px-3 py-2">Duration</th>
+                  <th className="px-3 py-2 text-right">Catalog Price</th>
+                  <th className="px-3 py-2 text-right">HMO Price</th>
+                  <th className="px-3 py-2 text-center">Discount</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {catalog.map((item) => {
+                  const itemId = item.service_id;
+                  const code = item.service_code;
+                  const name = item.service_name;
+                  const catalogPrice = Number(item.catalog_price || 0);
+                  const hmoPrice = Number(item.hmo_price || catalogPrice);
+                  const discount = catalogPrice > 0 
+                    ? Math.round(((catalogPrice - hmoPrice) / catalogPrice) * 100)
+                    : 0;
+
+                  return (
+                    <tr key={itemId} className="hover:bg-slate-50">
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-900">{name || code}</div>
+                        <div className="text-[11px] font-mono text-slate-500">{code}</div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">{item.duration || "—"}</td>
+                      <td className="px-3 py-2 text-right font-medium text-slate-900">
+                        ₦{catalogPrice.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {editingId === itemId ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") savePrice(itemId);
+                                if (e.key === "Escape") cancelEdit();
+                              }}
+                              className="w-24 rounded border border-sky-300 bg-sky-50 px-2 py-1 text-xs text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              autoFocus
+                              disabled={updating}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => savePrice(itemId)}
+                              disabled={updating}
+                              className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 p-1 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                              title="Save"
+                            >
+                              {updating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              disabled={updating}
+                              className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                              title="Cancel"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="font-medium text-slate-900">
+                              ₦{hmoPrice.toLocaleString()}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(item)}
+                              className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-400 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+                              title="Edit price"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {discount !== 0 ? (
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            discount > 0 
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700"
+                          }`}>
+                            {discount > 0 ? <TrendingDown className="h-3 w-3" /> : null}
+                            {discount > 0 ? "-" : "+"}{Math.abs(discount)}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
+                        >
+                          <DollarSign className="h-3 w-3" />
+                          Edit Price
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
-// Shared Components
 function ImportSection({
   title,
   subtitle,
@@ -1315,104 +1429,112 @@ function ImportSection({
   isValidFile,
   fileExtension,
   disabled,
+  requiredColumns,
+  optionalColumns,
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50">
-          <Upload className="h-4 w-4 text-emerald-700" />
-        </div>
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-          <p className="text-[11px] text-slate-500">{subtitle}</p>
-        </div>
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        <p className="text-xs text-slate-500">{subtitle}</p>
       </div>
 
-      <form onSubmit={handleImport} className="space-y-3 text-xs">
-        <div>
-          <label className="mb-1 block text-[11px] font-medium text-slate-600">
-            Select File
-          </label>
-          <div className="flex items-center gap-2">
-            <label className="relative flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs transition hover:border-emerald-500 hover:bg-emerald-50">
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={(e) => {
-                  setImportFile(e.target.files?.[0] || null);
-                  setImportError("");
-                }}
-                className="sr-only"
-                disabled={disabled}
-              />
-              {importFile ? (
-                <div className="flex items-center gap-2">
-                  {fileExtension === 'csv' ? (
-                    <FileText className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                  )}
-                  <span className="truncate text-slate-700">{importFile.name}</span>
-                </div>
-              ) : (
-                <span className="text-slate-500">Choose file…</span>
-              )}
-            </label>
-            {importFile && (
-              <button
-                type="button"
-                onClick={() => setImportFile(null)}
-                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
-              >
-                Clear
-              </button>
+      <form onSubmit={handleImport} className="space-y-3">
+        <div className="relative">
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={(e) => {
+              setImportFile(e.target.files?.[0] || null);
+              setImportError && setImportError("");
+            }}
+            className="sr-only"
+            id={`import-file-${title.replace(/\s/g, "-")}`}
+            disabled={disabled || importing}
+          />
+          <label
+            htmlFor={`import-file-${title.replace(/\s/g, "-")}`}
+            className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-sm transition ${
+              disabled
+                ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+                : importFile
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50"
+            }`}
+          >
+            {importFile ? (
+              <>
+                <FileSpreadsheet className="h-5 w-5" />
+                <span className="font-medium">{importFile.name}</span>
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase">
+                  {fileExtension}
+                </span>
+              </>
+            ) : (
+              <>
+                <Upload className="h-5 w-5" />
+                <span>Choose CSV or Excel file</span>
+              </>
             )}
-          </div>
-          {disabled && (
-            <p className="mt-1 text-[11px] text-amber-600">
-              Please select an HMO first
-            </p>
-          )}
-          {importFile && !isValidFile && (
-            <p className="mt-1 text-[11px] text-amber-600">
-              Warning: Use .csv, .xlsx, or .xls files
-            </p>
-          )}
+          </label>
         </div>
 
+        {disabled && (
+          <p className="text-xs text-amber-600">Please select an HMO first</p>
+        )}
+
         {importError && (
-          <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
-            <p className="text-[11px] text-rose-800">{importError}</p>
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            {importError}
           </div>
         )}
 
         {importResult && (
-          <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <div className="flex-1">
-                <p className="text-[11px] font-medium text-emerald-900">
-                  {importResult.message || 'Import successful'}
-                </p>
-                <p className="mt-0.5 text-[11px] text-emerald-700">
-                  Created: {importResult.created}, Updated: {importResult.updated}
-                </p>
+          <div className={`rounded-lg border p-2 text-xs ${
+            importResult.errors?.length
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}>
+            {importResult.created !== undefined && (
+              <p><strong>{importResult.created}</strong> created</p>
+            )}
+            {importResult.updated !== undefined && (
+              <p><strong>{importResult.updated}</strong> updated</p>
+            )}
+            {importResult.skipped !== undefined && (
+              <p><strong>{importResult.skipped}</strong> skipped</p>
+            )}
+            {importResult.errors?.length > 0 && (
+              <div className="mt-1">
+                <p className="font-semibold">Errors:</p>
+                <ul className="ml-3 list-disc">
+                  {importResult.errors.slice(0, 5).map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                  {importResult.errors.length > 5 && (
+                    <li>...and {importResult.errors.length - 5} more</li>
+                  )}
+                </ul>
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        <div className="flex items-center justify-end pt-1">
-          <button
-            type="submit"
-            disabled={importing || !importFile || disabled}
-            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
-          >
-            {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-            {importing ? "Importing…" : "Import File"}
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={disabled || !importFile || !isValidFile || importing}
+          className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-700 disabled:bg-slate-300 disabled:shadow-none"
+        >
+          {importing ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Importing…
+            </span>
+          ) : (
+            "Import Prices"
+          )}
+        </button>
       </form>
     </section>
   );
@@ -1420,24 +1542,20 @@ function ImportSection({
 
 function InfoPanel({ title, items }) {
   return (
-    <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
-      <div className="flex items-start gap-3">
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-100">
-          <Info className="h-4 w-4 text-blue-700" />
-        </div>
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold text-blue-900">{title}</h3>
-          <div className="mt-2 space-y-1">
-            {items.map((item, idx) => (
-              <div key={idx} className="text-xs text-blue-800">
-                <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">
-                  {item.label}
-                </code>
-                <span className="ml-1">- {item.desc}</span>
-              </div>
-            ))}
+    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <FileText className="h-4 w-4 text-slate-600" />
+        <h3 className="text-xs font-semibold text-slate-700">{title}</h3>
+      </div>
+      <div className="space-y-1 text-[11px]">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <code className="rounded bg-white px-1 py-0.5 font-mono text-slate-700 border border-slate-200">
+              {item.label}
+            </code>
+            <span className="text-slate-600">{item.desc}</span>
           </div>
-        </div>
+        ))}
       </div>
     </section>
   );
@@ -1494,7 +1612,7 @@ function CatalogSection({
             <option value="">Select HMO…</option>
             {activeHMOs.map((h) => (
               <option key={h.id} value={h.id}>
-                {h.name}
+                {h.name} {h.tier && `(${h.tier})`}
               </option>
             ))}
           </select>
