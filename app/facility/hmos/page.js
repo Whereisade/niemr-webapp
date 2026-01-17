@@ -723,7 +723,6 @@ export default function EnhancedHMOPage() {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSuccess={handleModalSuccess}
-        canCreateSystemHMO={isSuperAdmin || me?.is_staff}
       />
     </div>
   );

@@ -21,10 +21,16 @@ import {
   RefreshCcw,
   User,
   CreditCard,
-  Plus, // added Plus
+  Plus,
+  Phone,
+  Mail,
+  MapPin,
+  Building2,
+  FileCheck,
+  Contact,
 } from "lucide-react";
 
-// New imports
+// Existing imports
 import { useHMOOutstanding } from "@/lib/useHMOOutstanding";
 import { usePayments } from "@/lib/usePayments";
 import { useRecordHMOPayment } from "@/lib/useRecordHMOPayment";
@@ -98,6 +104,172 @@ function StatCard({ icon: Icon, label, value, trend, trendLabel, colorClass = "b
       <div className={`mb-1 text-2xl font-bold ${color.value}`}>{value}</div>
       <div className={`text-xs font-medium ${color.text}`}>{label}</div>
       {trendLabel && <div className="mt-1 text-[10px] text-slate-500">{trendLabel}</div>}
+    </div>
+  );
+}
+
+function ContactInfoCard({ hmo }) {
+  if (!hmo) return null;
+
+  const hasContactPerson = hmo.contact_person_name || hmo.contact_person_phone || hmo.contact_person_email;
+  const hasAddresses = hmo.addresses && hmo.addresses.length > 0;
+  const hasContactNumbers = hmo.contact_numbers && hmo.contact_numbers.length > 0;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-100">
+            <Contact className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Contact Information</h2>
+            <p className="text-xs text-slate-600">HMO contact details and office information</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Primary Contact Details */}
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Building2 className="h-4 w-4 text-slate-600" />
+            Primary Contact
+          </h3>
+          <div className="space-y-3">
+            {/* Email */}
+            {hmo.email && (
+              <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <Mail className="h-4 w-4 text-slate-500 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-slate-600">Email Address</div>
+                  <a
+                    href={`mailto:${hmo.email}`}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    {hmo.email}
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* NHIS Number */}
+            {hmo.nhis_number && (
+              <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <FileCheck className="h-4 w-4 text-slate-500 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-slate-600">NHIS Registration Number</div>
+                  <div className="text-sm font-semibold text-slate-900">{hmo.nhis_number}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Contact Numbers */}
+            {hasContactNumbers && (
+              <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <Phone className="h-4 w-4 text-slate-500 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-slate-600 mb-1">Contact Numbers</div>
+                  <div className="space-y-1">
+                    {hmo.contact_numbers.map((number, idx) => (
+                      <a
+                        key={idx}
+                        href={`tel:${number}`}
+                        className="block text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        {number}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Addresses */}
+            {hasAddresses && (
+              <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <MapPin className="h-4 w-4 text-slate-500 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-slate-600 mb-1">Office Addresses</div>
+                  <div className="space-y-2">
+                    {hmo.addresses.map((address, idx) => (
+                      <div key={idx} className="text-sm text-slate-700">
+                        <span className="font-medium text-slate-900">Office {idx + 1}:</span> {address}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Contact Person */}
+        {hasContactPerson && (
+          <div className="border-t border-slate-200 pt-6">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <User className="h-4 w-4 text-slate-600" />
+              Contact Person
+            </h3>
+            <div className="space-y-3">
+              {/* Name */}
+              {hmo.contact_person_name && (
+                <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <User className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-xs font-medium text-blue-700">Name</div>
+                    <div className="text-sm font-semibold text-blue-900">{hmo.contact_person_name}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Phone */}
+              {hmo.contact_person_phone && (
+                <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <Phone className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-xs font-medium text-blue-700">Phone Number</div>
+                    <a
+                      href={`tel:${hmo.contact_person_phone}`}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      {hmo.contact_person_phone}
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Email */}
+              {hmo.contact_person_email && (
+                <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <Mail className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-xs font-medium text-blue-700">Email Address</div>
+                    <a
+                      href={`mailto:${hmo.contact_person_email}`}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      {hmo.contact_person_email}
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!hmo.email && !hasContactNumbers && !hasAddresses && !hasContactPerson && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
+            <Contact className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+            <p className="text-sm font-medium text-slate-600">No contact information available</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Contact details will appear here once added
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -195,11 +367,38 @@ export default function HMODetailPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [statusFilter, setStatusFilter] = useState("");
-
-  // New state variables
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [activeTab, setActiveTab] = useState("charges"); // "charges" or "payments"
-  const [me, setMe] = useState(null); // Current user
+  const [activeTab, setActiveTab] = useState("overview"); // "overview", "charges", "payments"
+  const [me, setMe] = useState(null);
+  const [facilityId, setFacilityId] = useState(null);
+
+  // Load user and facility context
+  useEffect(() => {
+    async function loadMe() {
+      try {
+        const res = await apiFetch("/accounts/me/");
+        setMe(res);
+        
+        // Get facility ID from user's facility or context
+        // Handle both object {id: 1} and direct ID 1
+        let fId = null;
+        if (res?.facility) {
+          fId = typeof res.facility === 'object' ? res.facility.id : res.facility;
+        } else if (res?.current_facility) {
+          fId = typeof res.current_facility === 'object' ? res.current_facility.id : res.current_facility;
+        } else if (res?.facility_id) {
+          fId = res.facility_id;
+        }
+        
+        if (fId) {
+          setFacilityId(fId);
+        }
+      } catch (err) {
+        console.error("Failed to load user:", err);
+      }
+    }
+    loadMe();
+  }, []);
 
   const queryParams = useMemo(() => {
     const p = {};
@@ -210,13 +409,36 @@ export default function HMODetailPage() {
     return p;
   }, [selectedPatientId, dateRange, statusFilter]);
 
-  const { data, error, isLoading, mutate } = useHMOFinancials(hmoId, queryParams);
+  const { data, error, isLoading, mutate } = useHMOFinancials(facilityId, hmoId, queryParams);
 
-  // New hooks (must be called at top level)
-  // Fetch outstanding charges (for payment modal)
-  const { data: outstandingData, mutate: mutateOutstanding } = useHMOOutstanding(hmoId, dateRange);
+  // Debug logging - Remove this after fixing the issue
+  useEffect(() => {
+    if (data) {
+      console.log('=== HMO Data Loaded ===');
+      console.log('Full data:', data);
+      console.log('HMO object:', data.hmo);
+      console.log('Summary object:', data.summary);
+      console.log('Charges:', data.charges?.length || 0, 'items');
+      console.log('Patients:', data.patients?.length || 0, 'items');
+      console.log('======================');
+    }
+    if (error) {
+      console.error('=== HMO Data Error ===');
+      console.error('Error:', error);
+      console.error('=====================');
+    }
+  }, [data, error]);
 
-  // Fetch payment history
+  useEffect(() => {
+    console.log('=== Facility Context ===');
+    console.log('Facility ID:', facilityId, 'Type:', typeof facilityId);
+    console.log('HMO ID:', hmoId);
+    console.log('User:', me?.email || 'loading...');
+    console.log('=======================');
+  }, [facilityId, hmoId, me]);
+
+  const { data: outstandingData, mutate: mutateOutstanding } = useHMOOutstanding(facilityId, hmoId, dateRange);
+
   const paymentsQuery = useMemo(
     () => ({
       hmo: hmoId,
@@ -234,57 +456,41 @@ export default function HMODetailPage() {
     mutate: mutatePayments,
   } = usePayments(paymentsQuery);
 
-  // Record payment hook
   const { recordPayment, isLoading: isRecordingPayment } = useRecordHMOPayment();
 
-  // 🆕 Fetch current user
-  useEffect(() => {
-    async function loadMe() {
-      try {
-        const res = await apiFetch("/accounts/me/");
-        setMe(res);
-      } catch (err) {
-        console.error("Failed to load user:", err);
-      }
-    }
-    loadMe();
-  }, []);
-
-  // Handlers for payment
   const handlePaymentSubmit = async (paymentData) => {
     try {
       await recordPayment(paymentData);
-      // Refresh all data
       mutate();
       mutateOutstanding();
       mutatePayments();
     } catch (err) {
-      // Error handling assumed inside hook; rethrow so modal can display it if needed
       throw err;
     }
   };
 
   const handlePaymentSuccess = () => {
-    // Additional actions after successful payment
     setShowPaymentModal(false);
   };
 
-  // 🆕 Handler for relationship status update
   const handleRelationshipStatusUpdate = async ({ status, notes }) => {
+    if (!facilityId) {
+      console.error("Facility ID not available");
+      return;
+    }
+    
     try {
-      await apiFetch(`/facilities/hmos/${hmoId}/relationship-status/`, {
+      await apiFetch(`/facilities/${facilityId}/hmos/${hmoId}/update_relationship/`, {
         method: "POST",
         body: JSON.stringify({ status, notes }),
       });
       
-      // Refresh HMO data
       mutate();
     } catch (err) {
       throw err;
     }
   };
 
-  // Check if user is admin (can edit relationship status)
   const isAdmin = useMemo(() => {
     if (!me) return false;
     const role = (me?.role || "").toUpperCase();
@@ -306,16 +512,18 @@ export default function HMODetailPage() {
 
   const collectionRate = useMemo(() => {
     if (!data?.summary) return 0;
-    const { charges_total, payments_total } = data.summary;
+    const { charges_total = 0, payments_total = 0 } = data.summary;
     return charges_total > 0 ? (payments_total / charges_total) * 100 : 0;
   }, [data?.summary]);
 
-  if (isLoading && !data) {
+  if (!facilityId || (isLoading && !data)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-blue-600" />
-          <p className="text-sm text-slate-600">Loading HMO details...</p>
+          <p className="text-sm text-slate-600">
+            {!facilityId ? "Loading facility context..." : "Loading HMO details..."}
+          </p>
         </div>
       </div>
     );
@@ -328,6 +536,11 @@ export default function HMODetailPage() {
           <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-600" />
           <h2 className="mb-2 text-lg font-bold text-rose-900">Failed to Load HMO</h2>
           <p className="text-sm text-rose-700">{error?.message || "Unknown error occurred"}</p>
+          {error?.response?.status === 404 && (
+            <p className="mt-2 text-xs text-rose-600">
+              This HMO might not exist or you don't have permission to view it.
+            </p>
+          )}
           <button
             onClick={() => router.back()}
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
@@ -340,11 +553,20 @@ export default function HMODetailPage() {
     );
   }
 
-  if (!data) return null;
+  if (!data || !facilityId) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-blue-600" />
+          <p className="text-sm text-slate-600">
+            {!facilityId ? "Loading facility context..." : "Loading HMO details..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  const { hmo, summary, charges, patients } = data;
-
-  // New variables in render
+  const { hmo = {}, summary = {}, charges = [], patients = [] } = data || {};
   const outstandingBalance = outstandingData?.summary?.total_outstanding || summary?.outstanding || 0;
   const payments = paymentsData?.results || paymentsData || [];
 
@@ -373,7 +595,6 @@ export default function HMODetailPage() {
             </div>
           </div>
 
-          {/* Updated Header Section: Make Payment + Refresh */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowPaymentModal(true)}
@@ -397,47 +618,49 @@ export default function HMODetailPage() {
           </div>
         </div>
       </div>
-      {/* 🆕 Relationship Status Card */}
-      <div className="mb-6">
-        <RelationshipStatusCard
-          hmo={hmo}
-          onUpdate={handleRelationshipStatusUpdate}
-          isAdmin={isAdmin}
-        />
-      </div>
 
       {/* Stats Overview */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={Users}
           label="Total Patients"
-          value={summary.total_patients}
+          value={summary?.total_patients || 0}
           colorClass="blue"
         />
         <StatCard
           icon={FileText}
           label="Total Charges"
-          value={formatMoney(summary.charges_total)}
+          value={formatMoney(summary?.charges_total || 0)}
           colorClass="slate"
-          trendLabel={`${summary.charges_count} charge items`}
+          trendLabel={`${summary?.charges_count || 0} charge items`}
         />
         <StatCard
           icon={CreditCard}
           label="Payments Collected"
-          value={formatMoney(summary.payments_total)}
+          value={formatMoney(summary?.payments_total || 0)}
           colorClass="emerald"
           trendLabel={`${collectionRate.toFixed(1)}% collection rate`}
         />
         <StatCard
           icon={DollarSign}
           label="Outstanding Balance"
-          value={formatMoney(summary.outstanding)}
+          value={formatMoney(summary?.outstanding || 0)}
           colorClass="amber"
         />
       </div>
 
       {/* Tab Navigation */}
       <div className="mb-6 flex items-center gap-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-3 text-sm font-semibold transition ${
+            activeTab === "overview"
+              ? "border-b-2 border-blue-600 text-blue-600"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Overview
+        </button>
         <button
           onClick={() => setActiveTab("charges")}
           className={`px-4 py-3 text-sm font-semibold transition ${
@@ -460,6 +683,21 @@ export default function HMODetailPage() {
         </button>
       </div>
 
+      {/* Overview Tab */}
+      {activeTab === "overview" && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Relationship Status */}
+          <RelationshipStatusCard
+            hmo={hmo}
+            onUpdate={handleRelationshipStatusUpdate}
+            isAdmin={isAdmin}
+          />
+
+          {/* Contact Information */}
+          <ContactInfoCard hmo={hmo} />
+        </div>
+      )}
+
       {/* Charges Tab */}
       {activeTab === "charges" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[350px_1fr]">
@@ -481,7 +719,6 @@ export default function HMODetailPage() {
                 )}
               </div>
 
-              {/* Search */}
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <input
@@ -494,7 +731,6 @@ export default function HMODetailPage() {
               </div>
             </div>
 
-            {/* Patients List */}
             <div className="max-h-[600px] overflow-auto divide-y divide-slate-100">
               {filteredPatients.length > 0 ? (
                 filteredPatients.map((p) => (
@@ -539,7 +775,6 @@ export default function HMODetailPage() {
                 </div>
               </div>
 
-              {/* Filters */}
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative flex-1 min-w-[200px]">
                   <Calendar className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-slate-400" />
@@ -586,7 +821,6 @@ export default function HMODetailPage() {
               </div>
             </div>
 
-            {/* Charges Table */}
             <div className="overflow-auto">
               {charges && charges.length > 0 ? (
                 <table className="min-w-full">
