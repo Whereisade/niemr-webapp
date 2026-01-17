@@ -32,6 +32,7 @@ import {
   Building2,
   FileCheck,
   Handshake,
+  Layers,
 } from "lucide-react";
 import AddHMOModal from "@/components/AddHMOModal";
 
@@ -60,6 +61,29 @@ function TierBadge({ tier }) {
       <span>{c.icon}</span>
       {tier}
     </span>
+  );
+}
+
+// Multi-tier badges component - shows all tiers for an HMO
+function MultiTierBadges({ tiers }) {
+  if (!tiers || !Array.isArray(tiers) || tiers.length === 0) {
+    return <span className="text-xs text-slate-400 italic">No tiers</span>;
+  }
+
+  // Sort tiers by level (GOLD=1, SILVER=2, BRONZE=3)
+  const tierLevelMap = { 'GOLD': 1, 'SILVER': 2, 'BRONZE': 3 };
+  const sortedTiers = [...tiers].sort((a, b) => {
+    const levelA = tierLevelMap[a.name?.toUpperCase()] || 999;
+    const levelB = tierLevelMap[b.name?.toUpperCase()] || 999;
+    return levelA - levelB;
+  });
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {sortedTiers.map((tier) => (
+        <TierBadge key={tier.id} tier={tier.name?.toUpperCase() || 'UNKNOWN'} />
+      ))}
+    </div>
   );
 }
 
@@ -94,6 +118,7 @@ export default function EnhancedHMOPage() {
 
   // Pharmacy pricing state
   const [selectedPharmacyHMO, setSelectedPharmacyHMO] = useState("");
+  const [selectedPharmacyTier, setSelectedPharmacyTier] = useState("");
   const [pharmacyCatalog, setPharmacyCatalog] = useState([]);
   const [pharmacyLoading, setPharmacyLoading] = useState(false);
   const [pharmacySearch, setPharmacySearch] = useState("");
@@ -103,6 +128,7 @@ export default function EnhancedHMOPage() {
 
   // Lab pricing state
   const [selectedLabHMO, setSelectedLabHMO] = useState("");
+  const [selectedLabTier, setSelectedLabTier] = useState("");
   const [labCatalog, setLabCatalog] = useState([]);
   const [labLoading, setLabLoading] = useState(false);
   const [labSearch, setLabSearch] = useState("");
@@ -112,6 +138,7 @@ export default function EnhancedHMOPage() {
 
   // Appointment pricing state
   const [selectedApptHMO, setSelectedApptHMO] = useState("");
+  const [selectedApptTier, setSelectedApptTier] = useState("");
   const [apptCatalog, setApptCatalog] = useState([]);
   const [apptLoading, setApptLoading] = useState(false);
   const [apptSearch, setApptSearch] = useState("");
@@ -139,7 +166,8 @@ export default function EnhancedHMOPage() {
         id: h.system_hmo?.id || h.id,
         facilityHmoId: h.id,
         name: h.system_hmo?.name || h.name,
-        tier: h.system_hmo?.tier,
+        tiers: h.system_hmo?.tiers || [],
+        tier_count: h.system_hmo?.tier_count || 0,
         nhis_number: h.system_hmo?.nhis_number,
       }));
   }, [hmos]);
@@ -172,7 +200,10 @@ export default function EnhancedHMOPage() {
     async function loadPharmacy() {
       setPharmacyLoading(true);
       try {
-        const res = await apiFetch(`/pharmacy/catalog/hmo-catalog/?hmo_id=${selectedPharmacyHMO}`);
+        const url = selectedPharmacyTier
+          ? `/pharmacy/catalog/hmo-catalog/?hmo_id=${selectedPharmacyHMO}&tier_id=${selectedPharmacyTier}`
+          : `/pharmacy/catalog/hmo-catalog/?hmo_id=${selectedPharmacyHMO}`;
+        const res = await apiFetch(url);
         setPharmacyCatalog(normalizeList(res));
       } catch (e) {
         setError(e?.message || "Failed to load pharmacy catalog");
@@ -181,7 +212,7 @@ export default function EnhancedHMOPage() {
       }
     }
     loadPharmacy();
-  }, [selectedPharmacyHMO, activeTab]);
+  }, [selectedPharmacyHMO, selectedPharmacyTier, activeTab]);
 
   // Load lab catalog when HMO selected
   useEffect(() => {
@@ -190,7 +221,10 @@ export default function EnhancedHMOPage() {
     async function loadLab() {
       setLabLoading(true);
       try {
-        const res = await apiFetch(`/labs/catalog/hmo-catalog/?hmo_id=${selectedLabHMO}`);
+        const url = selectedLabTier
+          ? `/labs/catalog/hmo-catalog/?hmo_id=${selectedLabHMO}&tier_id=${selectedLabTier}`
+          : `/labs/catalog/hmo-catalog/?hmo_id=${selectedLabHMO}`;
+        const res = await apiFetch(url);
         setLabCatalog(normalizeList(res));
       } catch (e) {
         setError(e?.message || "Failed to load lab catalog");
@@ -199,7 +233,7 @@ export default function EnhancedHMOPage() {
       }
     }
     loadLab();
-  }, [selectedLabHMO, activeTab]);
+  }, [selectedLabHMO, selectedLabTier, activeTab]);
 
   // Load appointments catalog when HMO selected and tab active
   useEffect(() => {
@@ -208,7 +242,10 @@ export default function EnhancedHMOPage() {
     async function loadAppt() {
       setApptLoading(true);
       try {
-        const res = await apiFetch(`/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`);
+        const url = selectedApptTier
+          ? `/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}&tier_id=${selectedApptTier}`
+          : `/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`;
+        const res = await apiFetch(url);
         setApptCatalog(normalizeList(res));
       } catch (e) {
         setError(e?.message || "Failed to load appointment catalog");
@@ -217,7 +254,7 @@ export default function EnhancedHMOPage() {
       }
     }
     loadAppt();
-  }, [selectedApptHMO, activeTab]);
+  }, [selectedApptHMO, selectedApptTier, activeTab]);
 
   // Toggle active status for FacilityHMO
   async function toggleActive(hmo) {
@@ -291,13 +328,17 @@ export default function EnhancedHMOPage() {
         method: "POST",
         body: JSON.stringify({
           hmo_id: Number(selectedPharmacyHMO),
+          tier_id: selectedPharmacyTier || null,
           drug_id: drugId,
           amount: priceValue,
         }),
       });
 
       // Reload catalog
-      const res = await apiFetch(`/pharmacy/catalog/hmo-catalog/?hmo_id=${selectedPharmacyHMO}`);
+      const url = selectedPharmacyTier
+        ? `/pharmacy/catalog/hmo-catalog/?hmo_id=${selectedPharmacyHMO}&tier_id=${selectedPharmacyTier}`
+        : `/pharmacy/catalog/hmo-catalog/?hmo_id=${selectedPharmacyHMO}`;
+      const res = await apiFetch(url);
       setPharmacyCatalog(normalizeList(res));
       
       setEditingDrugId(null);
@@ -335,13 +376,17 @@ export default function EnhancedHMOPage() {
         method: "POST",
         body: JSON.stringify({
           hmo_id: Number(selectedLabHMO),
+          tier_id: selectedLabTier || null,
           test_id: testId,
           amount: priceValue,
         }),
       });
 
       // Reload catalog
-      const res = await apiFetch(`/labs/catalog/hmo-catalog/?hmo_id=${selectedLabHMO}`);
+      const url = selectedLabTier
+        ? `/labs/catalog/hmo-catalog/?hmo_id=${selectedLabHMO}&tier_id=${selectedLabTier}`
+        : `/labs/catalog/hmo-catalog/?hmo_id=${selectedLabHMO}`;
+      const res = await apiFetch(url);
       setLabCatalog(normalizeList(res));
       
       setEditingTestId(null);
@@ -379,13 +424,17 @@ export default function EnhancedHMOPage() {
         method: "POST",
         body: JSON.stringify({
           hmo_id: Number(selectedApptHMO),
+          tier_id: selectedApptTier || null,
           service_id: serviceId,
           amount: priceValue,
         }),
       });
 
       // Reload catalog
-      const res = await apiFetch(`/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`);
+      const url = selectedApptTier
+        ? `/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}&tier_id=${selectedApptTier}`
+        : `/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`;
+      const res = await apiFetch(url);
       setApptCatalog(normalizeList(res));
       
       setEditingApptId(null);
@@ -406,6 +455,7 @@ export default function EnhancedHMOPage() {
     }
 
     const hmoId = type === "pharmacy" ? selectedPharmacyHMO : selectedLabHMO;
+    const tierId = type === "pharmacy" ? selectedPharmacyTier : selectedLabTier;
     if (!hmoId) {
       setImportError("Please select an HMO first.");
       return;
@@ -420,8 +470,8 @@ export default function EnhancedHMOPage() {
       formData.append("file", importFile);
 
       const endpoint = type === "pharmacy" 
-        ? `/pharmacy/catalog/import-hmo-file/?hmo_id=${hmoId}`
-        : `/labs/catalog/import-hmo-file/?hmo_id=${hmoId}`;
+        ? `/pharmacy/catalog/import-hmo-file/?hmo_id=${hmoId}${tierId ? `&tier_id=${tierId}` : ""}`
+        : `/labs/catalog/import-hmo-file/?hmo_id=${hmoId}${tierId ? `&tier_id=${tierId}` : ""}`;
 
       const res = await fetch(`/api/proxy${endpoint}`, {
         method: "POST",
@@ -442,10 +492,16 @@ export default function EnhancedHMOPage() {
       
       // Reload catalog
       if (type === "pharmacy") {
-        const catalog = await apiFetch(`/pharmacy/catalog/hmo-catalog/?hmo_id=${hmoId}`);
+        const url = selectedPharmacyTier
+          ? `/pharmacy/catalog/hmo-catalog/?hmo_id=${hmoId}&tier_id=${selectedPharmacyTier}`
+          : `/pharmacy/catalog/hmo-catalog/?hmo_id=${hmoId}`;
+        const catalog = await apiFetch(url);
         setPharmacyCatalog(normalizeList(catalog));
       } else {
-        const catalog = await apiFetch(`/labs/catalog/hmo-catalog/?hmo_id=${hmoId}`);
+        const url = selectedLabTier
+          ? `/labs/catalog/hmo-catalog/?hmo_id=${hmoId}&tier_id=${selectedLabTier}`
+          : `/labs/catalog/hmo-catalog/?hmo_id=${hmoId}`;
+        const catalog = await apiFetch(url);
         setLabCatalog(normalizeList(catalog));
       }
       
@@ -479,7 +535,7 @@ export default function EnhancedHMOPage() {
       const formData = new FormData();
       formData.append("file", apptImportFile);
 
-      const endpoint = `/appointments/import-hmo-file/?hmo_id=${selectedApptHMO}`;
+      const endpoint = `/appointments/import-hmo-file/?hmo_id=${selectedApptHMO}${selectedApptTier ? `&tier_id=${selectedApptTier}` : ""}`;
       const res = await fetch(`/api/proxy${endpoint}`, {
         method: "POST",
         body: formData,
@@ -498,7 +554,10 @@ export default function EnhancedHMOPage() {
       setApptImportResult(result);
 
       // reload appt catalog
-      const catalog = await apiFetch(`/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`);
+      const url = selectedApptTier
+        ? `/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}&tier_id=${selectedApptTier}`
+        : `/appointments/hmo-catalog/?hmo_id=${selectedApptHMO}`;
+      const catalog = await apiFetch(url);
       setApptCatalog(normalizeList(catalog));
 
       setApptImportFile(null);
@@ -641,6 +700,8 @@ export default function EnhancedHMOPage() {
           activeHMOs={activeHMOs}
           selectedHMO={selectedPharmacyHMO}
           setSelectedHMO={setSelectedPharmacyHMO}
+          selectedTier={selectedPharmacyTier}
+          setSelectedTier={setSelectedPharmacyTier}
           catalog={filteredPharmacyCatalog}
           catalogLoading={pharmacyLoading}
           search={pharmacySearch}
@@ -669,6 +730,8 @@ export default function EnhancedHMOPage() {
           activeHMOs={activeHMOs}
           selectedHMO={selectedLabHMO}
           setSelectedHMO={setSelectedLabHMO}
+          selectedTier={selectedLabTier}
+          setSelectedTier={setSelectedLabTier}
           catalog={filteredLabCatalog}
           catalogLoading={labLoading}
           search={labSearch}
@@ -697,6 +760,8 @@ export default function EnhancedHMOPage() {
           activeHMOs={activeHMOs}
           selectedHMO={selectedApptHMO}
           setSelectedHMO={setSelectedApptHMO}
+          selectedTier={selectedApptTier}
+          setSelectedTier={setSelectedApptTier}
           catalog={filteredApptCatalog}
           catalogLoading={apptLoading}
           search={apptSearch}
@@ -751,12 +816,23 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
   const activeCount = hmos.filter(h => h.is_active).length;
   const inactiveCount = hmos.length - activeCount;
   
-  // Count by tier
-  const tierCounts = hmos.reduce((acc, h) => {
-    const tier = h.system_hmo?.tier || "BRONZE";
-    acc[tier] = (acc[tier] || 0) + 1;
-    return acc;
-  }, {});
+  // Count total tiers across all HMOs
+  const tierStats = useMemo(() => {
+    const stats = { total: 0, byType: { GOLD: 0, SILVER: 0, BRONZE: 0 } };
+    
+    hmos.forEach(h => {
+      const tiers = h.system_hmo?.tiers || [];
+      tiers.forEach(tier => {
+        stats.total++;
+        const tierName = tier.name?.toUpperCase();
+        if (tierName in stats.byType) {
+          stats.byType[tierName]++;
+        }
+      });
+    });
+    
+    return stats;
+  }, [hmos]);
 
   return (
     <div className="space-y-6">
@@ -782,14 +858,19 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
           <div className="text-sm font-medium text-emerald-700">Active Plans</div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 transition hover:shadow-md">
+        <div className="overflow-hidden rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white p-5 transition hover:shadow-md">
           <div className="mb-3 flex items-center justify-between">
-            <div className="grid h-12 w-12 place-items-center rounded-xl bg-amber-100">
-              <Award className="h-6 w-6 text-amber-700" />
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-purple-100">
+              <Layers className="h-6 w-6 text-purple-700" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-amber-900">{tierCounts.GOLD || 0}</div>
-          <div className="text-sm font-medium text-amber-700">Gold Tier</div>
+          <div className="text-3xl font-bold text-purple-900">{tierStats.total}</div>
+          <div className="text-sm font-medium text-purple-700">Total Tiers</div>
+          <div className="mt-2 flex items-center gap-2 text-[10px] text-purple-600">
+            <span>🥇 {tierStats.byType.GOLD}</span>
+            <span>🥈 {tierStats.byType.SILVER}</span>
+            <span>🥉 {tierStats.byType.BRONZE}</span>
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 transition hover:shadow-md">
@@ -864,7 +945,7 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
             <thead className="border-b border-slate-100 bg-slate-50/50 text-xs font-semibold uppercase tracking-wide text-slate-600">
               <tr>
                 <th className="px-4 py-3">HMO</th>
-                <th className="px-4 py-3">Tier</th>
+                <th className="px-4 py-3">Available Tiers</th>
                 <th className="px-4 py-3">Relationship</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Contract</th>
@@ -885,7 +966,7 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
                 hmos.map((h) => {
                   const systemHmo = h.system_hmo || {};
                   const hmoName = systemHmo.name || h.name || "Unknown HMO";
-                  const tier = systemHmo.tier || "BRONZE";
+                  const tiers = systemHmo.tiers || [];
                   const nhisNumber = systemHmo.nhis_number;
                   const hmoCode = systemHmo.hmo_code;
                   
@@ -914,7 +995,7 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <TierBadge tier={tier} />
+                        <MultiTierBadges tiers={tiers} />
                       </td>
                       <td className="px-4 py-4">
                         <RelationshipBadge status={h.relationship_status} />
@@ -1031,6 +1112,8 @@ function PharmacyPricingTab({
   activeHMOs,
   selectedHMO,
   setSelectedHMO,
+  selectedTier,
+  setSelectedTier,
   catalog,
   catalogLoading,
   search,
@@ -1091,6 +1174,8 @@ function PharmacyPricingTab({
         type="pharmacy"
         selectedHMO={selectedHMO}
         setSelectedHMO={setSelectedHMO}
+        selectedTier={selectedTier}
+        setSelectedTier={setSelectedTier}
         activeHMOs={activeHMOs}
         catalog={catalog}
         catalogLoading={catalogLoading}
@@ -1112,6 +1197,8 @@ function LabPricingTab({
   activeHMOs,
   selectedHMO,
   setSelectedHMO,
+  selectedTier,
+  setSelectedTier,
   catalog,
   catalogLoading,
   search,
@@ -1171,6 +1258,8 @@ function LabPricingTab({
         type="lab"
         selectedHMO={selectedHMO}
         setSelectedHMO={setSelectedHMO}
+        selectedTier={selectedTier}
+        setSelectedTier={setSelectedTier}
         activeHMOs={activeHMOs}
         catalog={catalog}
         catalogLoading={catalogLoading}
@@ -1192,6 +1281,8 @@ function AppointmentPricingTab({
   activeHMOs,
   selectedHMO,
   setSelectedHMO,
+  selectedTier,
+  setSelectedTier,
   catalog,
   catalogLoading,
   search,
@@ -1211,6 +1302,10 @@ function AppointmentPricingTab({
   fileExtension,
   handleImport,
 }) {
+  // Get selected HMO data to access tiers
+  const selectedHMOData = useMemo(() => {
+    return activeHMOs.find(h => h.id === Number(selectedHMO));
+  }, [selectedHMO, activeHMOs]);
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)]">
       {/* Left column: Import */}
@@ -1268,16 +1363,36 @@ function AppointmentPricingTab({
 
             <select
               value={selectedHMO}
-              onChange={(e) => setSelectedHMO(e.target.value)}
+              onChange={(e) => {
+                setSelectedHMO(e.target.value);
+                setSelectedTier(""); // Reset tier when HMO changes
+              }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             >
               <option value="">Select HMO…</option>
               {activeHMOs.map((h) => (
                 <option key={h.id} value={h.id}>
-                  {h.name} {h.tier && `(${h.tier})`}
+                  {h.name}
                 </option>
               ))}
             </select>
+
+            {/* Tier Selection - Shows when HMO has multiple tiers */}
+            {selectedHMO && selectedHMOData?.tiers?.length > 0 && (
+              <select
+                value={selectedTier}
+                onChange={(e) => setSelectedTier(e.target.value)}
+                className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                title="Optional - Select a specific tier or leave empty for all tiers"
+              >
+                <option value="">All Tiers (HMO Default)</option>
+                {selectedHMOData.tiers.map(tier => (
+                  <option key={tier.id} value={tier.id}>
+                    {tier.name} Tier
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -1565,6 +1680,8 @@ function CatalogSection({
   type,
   selectedHMO,
   setSelectedHMO,
+  selectedTier,
+  setSelectedTier,
   activeHMOs,
   catalog,
   catalogLoading,
@@ -1579,6 +1696,11 @@ function CatalogSection({
   updating,
 }) {
   const isPharmacy = type === "pharmacy";
+  
+  // Get selected HMO data to access tiers
+  const selectedHMOData = useMemo(() => {
+    return activeHMOs.find(h => h.id === Number(selectedHMO));
+  }, [selectedHMO, activeHMOs]);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1606,16 +1728,36 @@ function CatalogSection({
 
           <select
             value={selectedHMO}
-            onChange={(e) => setSelectedHMO(e.target.value)}
+            onChange={(e) => {
+              setSelectedHMO(e.target.value);
+              setSelectedTier(""); // Reset tier when HMO changes
+            }}
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           >
             <option value="">Select HMO…</option>
             {activeHMOs.map((h) => (
               <option key={h.id} value={h.id}>
-                {h.name} {h.tier && `(${h.tier})`}
+                {h.name}
               </option>
             ))}
           </select>
+
+          {/* Tier Selection - Shows when HMO has multiple tiers */}
+          {selectedHMO && selectedHMOData?.tiers?.length > 0 && (
+            <select
+              value={selectedTier}
+              onChange={(e) => setSelectedTier(e.target.value)}
+              className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              title="Optional - Select a specific tier or leave empty for all tiers"
+            >
+              <option value="">All Tiers (HMO Default)</option>
+              {selectedHMOData.tiers.map(tier => (
+                <option key={tier.id} value={tier.id}>
+                  {tier.name} Tier
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 

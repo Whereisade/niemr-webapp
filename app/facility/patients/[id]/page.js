@@ -23,7 +23,9 @@ import {
   UserRound,
   CalendarClock,
   Shield,
-  Building2
+  Building2,
+  Award,
+  Clock
 } from "lucide-react";
 
 export default function FacilityPatientDetailPage(props) {
@@ -203,163 +205,144 @@ function AddVitalsModal({ open, onClose, patientId, onSuccess }) {
             </div>
           )}
 
-          <div className="space-y-6">
-            {/* Measurement Time */}
+          {/* Measured At */}
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Measured At <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.measured_at}
+              onChange={(e) => handleChange("measured_at", e.target.value)}
+              required
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+          </div>
+
+          {/* Grid for vital fields */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Blood Pressure */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Measurement Time *
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Blood Pressure (mmHg)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Systolic"
+                  value={formData.systolic}
+                  onChange={(e) => handleChange("systolic", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                <span className="flex items-center text-slate-500">/</span>
+                <input
+                  type="number"
+                  placeholder="Diastolic"
+                  value={formData.diastolic}
+                  onChange={(e) => handleChange("diastolic", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+            </div>
+
+            {/* Heart Rate */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Heart Rate (bpm)
               </label>
               <input
-                type="datetime-local"
-                value={formData.measured_at}
-                onChange={(e) => handleChange("measured_at", e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                type="number"
+                value={formData.heart_rate}
+                onChange={(e) => handleChange("heart_rate", e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
-            {/* Blood Pressure */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Systolic (mmHg)
-                </label>
-                <input
-                  type="number"
-                  value={formData.systolic}
-                  onChange={(e) => handleChange("systolic", e.target.value)}
-                  min="40"
-                  max="300"
-                  placeholder="120"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Diastolic (mmHg)
-                </label>
-                <input
-                  type="number"
-                  value={formData.diastolic}
-                  onChange={(e) => handleChange("diastolic", e.target.value)}
-                  min="20"
-                  max="200"
-                  placeholder="80"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Heart Rate & Temperature */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Heart Rate (bpm)
-                </label>
-                <input
-                  type="number"
-                  value={formData.heart_rate}
-                  onChange={(e) => handleChange("heart_rate", e.target.value)}
-                  min="20"
-                  max="250"
-                  placeholder="72"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Temperature (°C)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formData.temp_c}
-                  onChange={(e) => handleChange("temp_c", e.target.value)}
-                  placeholder="36.5"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Respiratory Rate & SpO2 */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Respiratory Rate (breaths/min)
-                </label>
-                <input
-                  type="number"
-                  value={formData.resp_rate}
-                  onChange={(e) => handleChange("resp_rate", e.target.value)}
-                  min="5"
-                  max="80"
-                  placeholder="16"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  SpO2 (%)
-                </label>
-                <input
-                  type="number"
-                  value={formData.spo2}
-                  onChange={(e) => handleChange("spo2", e.target.value)}
-                  min="50"
-                  max="100"
-                  placeholder="98"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Weight & Height */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.weight_kg}
-                  onChange={(e) => handleChange("weight_kg", e.target.value)}
-                  placeholder="70.5"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Height (cm)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.height_cm}
-                  onChange={(e) => handleChange("height_cm", e.target.value)}
-                  placeholder="170"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Notes */}
+            {/* Temperature */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Notes
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Temperature (°C)
               </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => handleChange("notes", e.target.value)}
-                rows={3}
-                placeholder="Additional observations..."
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              <input
+                type="number"
+                step="0.1"
+                value={formData.temp_c}
+                onChange={(e) => handleChange("temp_c", e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Respiratory Rate */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Respiratory Rate (bpm)
+              </label>
+              <input
+                type="number"
+                value={formData.resp_rate}
+                onChange={(e) => handleChange("resp_rate", e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* SpO2 */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                SpO2 (%)
+              </label>
+              <input
+                type="number"
+                value={formData.spo2}
+                onChange={(e) => handleChange("spo2", e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Weight */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Weight (kg)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={formData.weight_kg}
+                onChange={(e) => handleChange("weight_kg", e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Height */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Height (cm)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={formData.height_cm}
+                onChange={(e) => handleChange("height_cm", e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
           </div>
 
+          {/* Notes */}
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Notes
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => handleChange("notes", e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              placeholder="Any additional observations..."
+            />
+          </div>
+
           {/* Actions */}
-          <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+          <div className="mt-6 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -390,21 +373,25 @@ function AddVitalsModal({ open, onClose, patientId, onSuccess }) {
 }
 
 function FacilityPatientDetailPageInner() {
+  const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const hideActions = searchParams.get('hide_actions') === 'true';
-  const fromEncounter = searchParams.get('from_encounter');
-  
-  const params = useParams();
+
   const patientId = params?.id;
+  const fromEncounter = searchParams?.get("from");
+  const hideActions = Boolean(fromEncounter);
 
   const [patient, setPatient] = useState(null);
   const [patientError, setPatientError] = useState("");
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [startingEncounter, setStartingEncounter] = useState(false);
   const [me, setMe] = useState(null);
+  
+  // HMO state - Updated for System HMO support
   const [hmoDetails, setHmoDetails] = useState(null);
+  const [systemHmoDetails, setSystemHmoDetails] = useState(null);
   const [loadingHMO, setLoadingHMO] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(null);
   
   // State for encounter history
   const [encounterPayload, setEncounterPayload] = useState(null);
@@ -441,11 +428,18 @@ function FacilityPatientDetailPageInner() {
         const data = await apiFetch(`/patients/${patientId}/`);
         setPatient(data);
         
-        // If patient has HMO, load HMO details to get relationship status
-        if (data?.hmo) {
-          loadHMODetails(data.hmo);
+        // Load HMO details based on which system is being used
+        if (data?.system_hmo) {
+          // New System HMO
+          loadSystemHMODetails(data.system_hmo, data.hmo_tier);
+          checkHMOApprovalStatus(patientId);
+        } else if (data?.hmo) {
+          // Legacy facility-scoped HMO
+          loadLegacyHMODetails(data.hmo);
         } else {
           setHmoDetails(null);
+          setSystemHmoDetails(null);
+          setPendingApproval(null);
         }
       } catch (err) {
         console.error("Failed to load patient", err);
@@ -458,8 +452,33 @@ function FacilityPatientDetailPageInner() {
     loadPatient();
   }, [patientId]);
 
-  // Load HMO details function
-  async function loadHMODetails(hmo) {
+  // Load System HMO details
+  async function loadSystemHMODetails(systemHmoId, tierId) {
+    try {
+      setLoadingHMO(true);
+      
+      // Fetch System HMO details
+      const systemHmoRes = await apiFetch(`/patients/hmo/system/${systemHmoId}/`);
+      setSystemHmoDetails(systemHmoRes);
+      
+      // Find the specific tier
+      const tier = systemHmoRes?.tiers?.find(t => t.id === tierId);
+      setHmoDetails({
+        ...systemHmoRes,
+        currentTier: tier,
+        isSystemHMO: true
+      });
+    } catch (err) {
+      console.error("Failed to load System HMO details", err);
+      setSystemHmoDetails(null);
+      setHmoDetails(null);
+    } finally {
+      setLoadingHMO(false);
+    }
+  }
+
+  // Load legacy facility-scoped HMO details
+  async function loadLegacyHMODetails(hmo) {
     try {
       setLoadingHMO(true);
       // Handle both cases: hmo as integer ID or as object {id, name}
@@ -470,12 +489,30 @@ function FacilityPatientDetailPageInner() {
       const hmosList = normalizeList(hmosRes);
       const matchedHmo = hmosList.find(h => h.id === hmoId);
       
-      setHmoDetails(matchedHmo || null);
+      setHmoDetails({
+        ...matchedHmo,
+        isSystemHMO: false
+      });
+      setSystemHmoDetails(null);
     } catch (err) {
       console.error("Failed to load HMO details", err);
       setHmoDetails(null);
+      setSystemHmoDetails(null);
     } finally {
       setLoadingHMO(false);
+    }
+  }
+
+  // Check for pending HMO approval
+  async function checkHMOApprovalStatus(patientId) {
+    try {
+      const approvalsRes = await apiFetch(`/patients/hmo-approvals/?patient=${patientId}`);
+      const approvals = normalizeList(approvalsRes);
+      const pending = approvals.find(a => a.status === 'PENDING');
+      setPendingApproval(pending || null);
+    } catch (err) {
+      console.error("Failed to check HMO approval status", err);
+      setPendingApproval(null);
     }
   }
 
@@ -568,7 +605,7 @@ function FacilityPatientDetailPageInner() {
     router.push(`/facility/encounters/${encounterId}/workflow/clinical`);
   };
 
-  // Get insurance status display with colors
+  // Get insurance status display with colors - Updated for System HMO
   const getInsuranceDisplay = () => {
     if (loadingHMO || loadingPatient) {
       return {
@@ -576,49 +613,83 @@ function FacilityPatientDetailPageInner() {
         bgColor: "bg-slate-100",
         textColor: "text-slate-600",
         icon: Loader2,
-        iconClass: "animate-spin"
+        iconClass: "animate-spin",
+        subtitle: null
       };
     }
 
-    if (!patient?.hmo) {
+    // Check for pending approval
+    if (pendingApproval) {
       return {
-        text: "Self Pay",
-        bgColor: "bg-slate-100",
-        textColor: "text-slate-700",
-        icon: Shield,
-        iconClass: ""
+        text: "Transfer Pending",
+        bgColor: "bg-amber-100",
+        textColor: "text-amber-700",
+        icon: Clock,
+        iconClass: "",
+        subtitle: "Approval Required"
       };
     }
 
-    // Patient has HMO
-    const hmoName = typeof patient.hmo === 'object' ? patient.hmo.name : null;
-    const displayText = hmoDetails?.name || hmoName || "HMO Patient";
-    
-    // Get colors based on relationship status
-    if (hmoDetails?.relationship_status) {
-      const colors = getHMOStatusColors(hmoDetails.relationship_status);
+    // Check for System HMO enrollment
+    if (patient?.system_hmo && hmoDetails?.isSystemHMO) {
+      const hmoName = patient.system_hmo_name || hmoDetails.name || "HMO Patient";
+      const tierInfo = hmoDetails.currentTier 
+        ? `${hmoDetails.currentTier.name} (L${hmoDetails.currentTier.level})`
+        : patient.hmo_tier_name || null;
+
       return {
-        text: displayText,
-        bgColor: colors.bgColor,
-        textColor: colors.textColor,
+        text: hmoName,
+        bgColor: "bg-blue-100",
+        textColor: "text-blue-700",
         icon: Building2,
         iconClass: "",
-        relationshipStatus: colors.label
+        subtitle: tierInfo,
+        tierIcon: Award
       };
     }
 
-    // Default if no relationship status
+    // Check for legacy HMO
+    if (patient?.hmo && hmoDetails && !hmoDetails.isSystemHMO) {
+      const hmoName = typeof patient.hmo === 'object' ? patient.hmo.name : null;
+      const displayText = hmoDetails.name || hmoName || "HMO Patient";
+      
+      // Get colors based on relationship status
+      if (hmoDetails.relationship_status) {
+        const colors = getHMOStatusColors(hmoDetails.relationship_status);
+        return {
+          text: displayText,
+          bgColor: colors.bgColor,
+          textColor: colors.textColor,
+          icon: Building2,
+          iconClass: "",
+          subtitle: `${colors.label} relationship`
+        };
+      }
+
+      return {
+        text: displayText,
+        bgColor: "bg-blue-100",
+        textColor: "text-blue-700",
+        icon: Building2,
+        iconClass: "",
+        subtitle: null
+      };
+    }
+
+    // No insurance (Self Pay)
     return {
-      text: displayText,
-      bgColor: "bg-blue-100",
-      textColor: "text-blue-700",
-      icon: Building2,
-      iconClass: ""
+      text: "Self Pay",
+      bgColor: "bg-slate-100",
+      textColor: "text-slate-700",
+      icon: Shield,
+      iconClass: "",
+      subtitle: null
     };
   };
 
   const insuranceDisplay = getInsuranceDisplay();
   const InsuranceIcon = insuranceDisplay.icon;
+  const TierIcon = insuranceDisplay.tierIcon;
 
   return (
     <main className="min-h-screen bg-slate-50/80">
@@ -761,7 +832,7 @@ function FacilityPatientDetailPageInner() {
                     {patient.phone || "N/A"}
                   </div>
                 </div>
-                {/* Insurance Status Card */}
+                {/* Insurance Status Card - Updated for System HMO */}
                 <div className={`rounded-xl border border-slate-100 px-3 py-2 ${insuranceDisplay.bgColor}`}>
                   <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                     Insurance
@@ -772,10 +843,13 @@ function FacilityPatientDetailPageInner() {
                       <span className={`text-sm font-semibold ${insuranceDisplay.textColor}`}>
                         {insuranceDisplay.text}
                       </span>
-                      {insuranceDisplay.relationshipStatus && (
-                        <span className="text-[9px] font-medium text-slate-500">
-                          {insuranceDisplay.relationshipStatus} relationship
-                        </span>
+                      {insuranceDisplay.subtitle && (
+                        <div className="flex items-center gap-1">
+                          {TierIcon && <TierIcon className="h-2.5 w-2.5 text-slate-500" />}
+                          <span className="text-[9px] font-medium text-slate-500">
+                            {insuranceDisplay.subtitle}
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -809,9 +883,9 @@ function FacilityPatientDetailPageInner() {
             </div>
           </section>
 
-          {/* Vitals History - Compact */}
+          {/* Vitals - Compact */}
           <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-sm">
-            <div className="h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500" />
+            <div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
             <div className="p-3 md:p-4">
               <div className="mb-3 flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50">
@@ -819,25 +893,25 @@ function FacilityPatientDetailPageInner() {
                 </div>
                 <div>
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-900">
-                    Vitals History
+                    Vital Signs
                   </h2>
                 </div>
               </div>
-              <PatientVitalsHistory key={vitalsRefreshKey} patientId={patientId} />
+              <PatientVitalsHistory patientId={patientId} refreshKey={vitalsRefreshKey} />
             </div>
           </section>
         </div>
 
-        {/* Encounter History Section - Using PatientEncounterListModal table structure */}
+        {/* Encounter History */}
         <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-sm">
-          <div className="h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-          <div className="p-4 md:p-5">
+          <div className="h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+          <div className="p-4">
             <div className="mb-4 flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-50 border border-slate-200">
-                <Stethoscope className="h-4 w-4 text-slate-700" />
-              </span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50">
+                <Stethoscope className="h-3.5 w-3.5 text-indigo-600" />
+              </div>
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-900">
                   Encounter History
                 </h2>
                 <p className="text-xs text-slate-500">
