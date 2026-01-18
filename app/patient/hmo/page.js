@@ -1,4 +1,5 @@
-// app/patient/hmo/page.js - WITH DETACH BUTTON
+// app/patient/hmo/page.js - UPDATED FOR NEW HMO SYSTEM
+// Supports SystemHMO + FacilityHMO + HMOTier architecture
 export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
@@ -16,12 +17,15 @@ import {
   User,
   AlertCircle,
   CheckCircle2,
-  ChevronLeft,
+  ArrowLeft,
   Heart,
   Clock,
-  ArrowLeft,
+  Award,
+  Star,
+  TrendingUp,
+  Info,
 } from "lucide-react";
-import { getHMOStatusColors } from "@/lib/hmoStatusColors";
+import { getHMOStatusColors, getTierColors } from "@/lib/hmoStatusColors";
 import DetachHMOButton from "@/components/patient/DetachHMOButton";
 
 const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
@@ -48,6 +52,7 @@ async function fetchPatientProfile(token) {
   if (!token) return null;
   
   try {
+    // Fetch patient data with expanded HMO fields
     const res = await fetch(`${BACKEND}/api/patients/`, {
       headers: { 
         Authorization: `Bearer ${token}`,
@@ -63,6 +68,7 @@ async function fetchPatientProfile(token) {
     
     const data = await res.json();
     
+    // Handle different response formats
     if (Array.isArray(data)) {
       return data[0] || null;
     }
@@ -149,12 +155,6 @@ export default async function PatientHMOPage() {
                   We couldn't load your patient profile at this time. Please try refreshing the page or contact support if the issue persists.
                 </p>
                 <div className="mt-4 flex gap-3">
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
-                  >
-                    Refresh Page
-                  </button>
                   <Link
                     href="/patient"
                     className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
@@ -170,7 +170,8 @@ export default async function PatientHMOPage() {
     );
   }
 
-  const hasHMO = patient.insurance_status === "INSURED" && patient.hmo;
+  // Check for HMO using the new system_hmo field
+  const hasHMO = patient.insurance_status === "INSURED" && patient.system_hmo;
 
   if (!hasHMO) {
     return (
@@ -223,21 +224,23 @@ export default async function PatientHMOPage() {
     );
   }
 
-  const hmo = patient.hmo;
+  // Extract HMO and tier data
+  const systemHMO = patient.system_hmo;
+  const hmoTier = patient.hmo_tier;
   const insuranceNumber = patient.insurance_number || "Not provided";
-  const plan = patient.hmo_plan || "Standard Plan";
   const expiryDate = patient.insurance_expiry;
+  const enrolledAt = patient.hmo_enrolled_at;
   const notes = patient.insurance_notes;
   
   const expiringSoon = isExpiringSoon(expiryDate);
   const expired = isExpired(expiryDate);
   
-  const statusColors = hmo.relationship_status 
-    ? getHMOStatusColors(hmo.relationship_status)
-    : null;
+  // Get tier colors
+  const tierColors = hmoTier ? getTierColors(hmoTier.level) : null;
 
-  const primaryAddress = hmo.primary_address || (hmo.addresses && hmo.addresses[0]) || "Not provided";
-  const primaryContact = hmo.primary_contact || (hmo.contact_numbers && hmo.contact_numbers[0]) || "Not provided";
+  // Get addresses and contact from facility-specific or system-wide data
+  const primaryAddress = systemHMO.primary_address || (systemHMO.addresses && systemHMO.addresses[0]) || "Not provided";
+  const primaryContact = systemHMO.primary_contact || (systemHMO.contact_numbers && systemHMO.contact_numbers[0]) || "Not provided";
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
@@ -271,7 +274,7 @@ export default async function PatientHMOPage() {
             <div className="flex-shrink-0">
               <DetachHMOButton 
                 patientId={patient.id} 
-                hmoName={hmo.name} 
+                hmoName={systemHMO.name} 
               />
             </div>
           </div>
@@ -287,7 +290,7 @@ export default async function PatientHMOPage() {
               <div className="flex-1">
                 <h3 className="font-semibold text-rose-900">Coverage Expired</h3>
                 <p className="mt-1 text-sm text-rose-700">
-                  Your insurance coverage expired on {formatDate(expiryDate)}. Please contact {hmo.name} or the facility to renew your coverage.
+                  Your insurance coverage expired on {formatDate(expiryDate)}. Please contact {systemHMO.name} or the facility to renew your coverage.
                 </p>
               </div>
             </div>
@@ -330,28 +333,24 @@ export default async function PatientHMOPage() {
               <div className="p-6 space-y-4">
                 <div>
                   <label className="text-xs font-medium text-slate-600">Provider Name</label>
-                  <p className="mt-1 text-lg font-bold text-slate-900">{hmo.name}</p>
-                  {statusColors && (
-                    <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusColors.bgColor} ${statusColors.textColor} ${statusColors.ringColor}`}>
-                      <Heart className="h-3 w-3" />
-                      {statusColors.label} Partnership
-                    </span>
-                  )}
+                  <p className="mt-1 text-lg font-bold text-slate-900">{systemHMO.name}</p>
                 </div>
 
-                {hmo.nhis_number && (
+                {systemHMO.nhis_number && (
                   <div>
                     <label className="text-xs font-medium text-slate-600">NHIS Registration</label>
-                    <p className="mt-1 font-mono text-sm font-semibold text-slate-900">{hmo.nhis_number}</p>
+                    <p className="mt-1 font-mono text-sm font-semibold text-slate-900">{systemHMO.nhis_number}</p>
                   </div>
                 )}
 
-                {hmo.email && (
+                {systemHMO.email && (
                   <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
                     <Mail className="h-5 w-5 text-slate-400" />
                     <div className="flex-1 min-w-0">
                       <label className="text-xs font-medium text-slate-600">Email</label>
-                      <p className="text-sm text-slate-900">{hmo.email}</p>
+                      <a href={`mailto:${systemHMO.email}`} className="text-sm text-blue-600 hover:text-blue-700 hover:underline">
+                        {systemHMO.email}
+                      </a>
                     </div>
                   </div>
                 )}
@@ -360,7 +359,9 @@ export default async function PatientHMOPage() {
                   <Phone className="h-5 w-5 text-slate-400" />
                   <div className="flex-1 min-w-0">
                     <label className="text-xs font-medium text-slate-600">Primary Contact</label>
-                    <p className="text-sm text-slate-900">{primaryContact}</p>
+                    <a href={`tel:${primaryContact}`} className="text-sm text-blue-600 hover:text-blue-700 hover:underline">
+                      {primaryContact}
+                    </a>
                   </div>
                 </div>
 
@@ -372,26 +373,30 @@ export default async function PatientHMOPage() {
                   </div>
                 </div>
 
-                {hmo.contact_person_name && (
+                {systemHMO.contact_person_name && (
                   <div>
                     <label className="mb-2 block text-xs font-medium text-slate-600">Contact Person</label>
                     <div className="space-y-2">
-                      <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
-                        <User className="h-5 w-5 text-slate-400" />
+                      <div className="flex items-center gap-3 rounded-lg bg-blue-50 p-3">
+                        <User className="h-5 w-5 text-blue-600" />
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-900">{hmo.contact_person_name}</p>
+                          <p className="text-sm font-medium text-slate-900">{systemHMO.contact_person_name}</p>
                         </div>
                       </div>
-                      {hmo.contact_person_phone && (
+                      {systemHMO.contact_person_phone && (
                         <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
                           <Phone className="h-5 w-5 text-slate-400" />
-                          <p className="text-sm text-slate-900">{hmo.contact_person_phone}</p>
+                          <a href={`tel:${systemHMO.contact_person_phone}`} className="text-sm text-blue-600 hover:text-blue-700 hover:underline">
+                            {systemHMO.contact_person_phone}
+                          </a>
                         </div>
                       )}
-                      {hmo.contact_person_email && (
+                      {systemHMO.contact_person_email && (
                         <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
                           <Mail className="h-5 w-5 text-slate-400" />
-                          <p className="text-sm text-slate-900">{hmo.contact_person_email}</p>
+                          <a href={`mailto:${systemHMO.contact_person_email}`} className="text-sm text-blue-600 hover:text-blue-700 hover:underline">
+                            {systemHMO.contact_person_email}
+                          </a>
                         </div>
                       )}
                     </div>
@@ -400,7 +405,116 @@ export default async function PatientHMOPage() {
               </div>
             </div>
 
-            {hmo.addresses && hmo.addresses.length > 1 && (
+            {/* Tier Benefits Card */}
+            {hmoTier && (
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className={`border-b ${tierColors.borderColor} ${tierColors.bgColor} p-5`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`grid h-10 w-10 place-items-center rounded-xl ${tierColors.iconBg}`}>
+                      <Award className={`h-5 w-5 ${tierColors.iconColor}`} />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-slate-900">Coverage Tier</h2>
+                      <p className="text-xs text-slate-600">Your plan benefits and coverage</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  {/* Tier Badge */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600">Current Tier</label>
+                      <div className="mt-2 inline-flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ring-2 ${tierColors.bgColor} ${tierColors.textColor} ${tierColors.ringColor}`}>
+                          {tierColors.icon}
+                          {hmoTier.name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tier Details */}
+                  {hmoTier.description && (
+                    <div>
+                      <label className="text-xs font-medium text-slate-600">Plan Description</label>
+                      <p className="mt-1 text-sm text-slate-700">{hmoTier.description}</p>
+                    </div>
+                  )}
+
+                  {/* Coverage Percentage */}
+                  {hmoTier.coverage_percentage !== null && (
+                    <div>
+                      <label className="text-xs font-medium text-slate-600">Coverage</label>
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-2xl font-bold text-slate-900">{hmoTier.coverage_percentage}%</span>
+                          <span className="text-xs text-slate-600">HMO covers</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                          <div 
+                            className={`h-full ${tierColors.progressBg}`}
+                            style={{ width: `${hmoTier.coverage_percentage}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-xs text-slate-600">
+                          You pay {100 - hmoTier.coverage_percentage}% of covered services
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Copay Amount */}
+                  {hmoTier.copay_amount && (
+                    <div>
+                      <label className="text-xs font-medium text-slate-600">Copay per Visit</label>
+                      <p className="mt-1 text-lg font-bold text-slate-900">₦{Number(hmoTier.copay_amount).toLocaleString()}</p>
+                    </div>
+                  )}
+
+                  {/* Annual Limit */}
+                  {hmoTier.annual_limit && (
+                    <div>
+                      <label className="text-xs font-medium text-slate-600">Annual Coverage Limit</label>
+                      <p className="mt-1 text-lg font-bold text-slate-900">₦{Number(hmoTier.annual_limit).toLocaleString()}</p>
+                    </div>
+                  )}
+
+                  {/* Benefits */}
+                  {hmoTier.benefits && hmoTier.benefits.length > 0 && (
+                    <div>
+                      <label className="mb-2 block text-xs font-medium text-slate-600">Included Benefits</label>
+                      <ul className="space-y-2">
+                        {hmoTier.benefits.map((benefit, idx) => (
+                          <li key={idx} className="flex items-start gap-2 rounded-lg bg-emerald-50 p-3">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                            <span className="text-sm text-slate-900">{benefit}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Exclusions */}
+                  {hmoTier.exclusions && hmoTier.exclusions.length > 0 && (
+                    <div>
+                      <label className="mb-2 block text-xs font-medium text-slate-600">Not Covered</label>
+                      <ul className="space-y-2">
+                        {hmoTier.exclusions.map((exclusion, idx) => (
+                          <li key={idx} className="flex items-start gap-2 rounded-lg bg-rose-50 p-3">
+                            <AlertCircle className="h-4 w-4 text-rose-600 mt-0.5 flex-shrink-0" />
+                            <span className="text-sm text-slate-900">{exclusion}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Additional Addresses */}
+            {systemHMO.addresses && systemHMO.addresses.length > 1 && (
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-5">
                   <div className="flex items-center gap-3">
@@ -410,7 +524,7 @@ export default async function PatientHMOPage() {
                 </div>
                 <div className="p-6">
                   <ul className="space-y-2">
-                    {hmo.addresses.map((address, idx) => (
+                    {systemHMO.addresses.map((address, idx) => (
                       <li key={idx} className="flex items-start gap-2 rounded-lg bg-slate-50 p-3">
                         <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
                         <span className="text-sm text-slate-900">{address}</span>
@@ -421,7 +535,8 @@ export default async function PatientHMOPage() {
               </div>
             )}
 
-            {hmo.contact_numbers && hmo.contact_numbers.length > 1 && (
+            {/* Additional Contact Numbers */}
+            {systemHMO.contact_numbers && systemHMO.contact_numbers.length > 1 && (
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-5">
                   <div className="flex items-center gap-3">
@@ -431,10 +546,12 @@ export default async function PatientHMOPage() {
                 </div>
                 <div className="p-6">
                   <ul className="space-y-2">
-                    {hmo.contact_numbers.map((number, idx) => (
+                    {systemHMO.contact_numbers.map((number, idx) => (
                       <li key={idx} className="flex items-center gap-2 rounded-lg bg-slate-50 p-3">
                         <Phone className="h-4 w-4 text-slate-400" />
-                        <span className="text-sm text-slate-900">{number}</span>
+                        <a href={`tel:${number}`} className="text-sm text-blue-600 hover:text-blue-700 hover:underline">
+                          {number}
+                        </a>
                       </li>
                     ))}
                   </ul>
@@ -460,10 +577,27 @@ export default async function PatientHMOPage() {
                   <p className="mt-1 font-mono text-sm font-bold text-slate-900">{insuranceNumber}</p>
                 </div>
 
-                <div>
-                  <label className="text-xs font-medium text-slate-600">Plan</label>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{plan}</p>
-                </div>
+                {hmoTier && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Plan Tier</label>
+                    <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      {tierColors?.icon}
+                      {hmoTier.name}
+                    </p>
+                  </div>
+                )}
+
+                {enrolledAt && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Enrolled Since</label>
+                    <div className="mt-1 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
+                      <Calendar className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-blue-900">
+                        {formatDate(enrolledAt)}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {expiryDate && (
                   <div>
@@ -530,19 +664,26 @@ export default async function PatientHMOPage() {
             {/* Help Card */}
             <div className="overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
               <div className="mb-3 grid h-12 w-12 place-items-center rounded-xl bg-white shadow-sm">
-                <FileText className="h-6 w-6 text-blue-600" />
+                <Info className="h-6 w-6 text-blue-600" />
               </div>
               <h3 className="font-semibold text-slate-900">Need Help?</h3>
               <p className="mt-1 text-sm text-slate-600">
-                If you have questions about your coverage or need to update your insurance information, please contact the facility's front desk.
+                If you have questions about your coverage, tier benefits, or need to update your insurance information, please contact the facility's front desk.
               </p>
-              <Link
-                href="/support"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50"
-              >
-                Contact Support
-                <ChevronLeft className="h-4 w-4 rotate-180" />
-              </Link>
+              <div className="mt-4 space-y-2 text-xs text-slate-600">
+                <p className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3 w-3 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span>Tier upgrades or downgrades</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3 w-3 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span>Coverage extension requests</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3 w-3 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span>Claim support and inquiries</span>
+                </p>
+              </div>
             </div>
           </aside>
         </div>

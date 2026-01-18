@@ -1,4 +1,5 @@
-// components/patient/HMOSummaryCard.js - FIXED VERSION
+// components/patient/HMOSummaryCard.js - UPDATED FOR NEW HMO SYSTEM
+// Supports SystemHMO + HMOTier display
 "use client";
 
 import Link from "next/link";
@@ -10,8 +11,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Building2,
+  Award,
+  TrendingUp,
 } from "lucide-react";
-import { getHMOStatusColors } from "@/lib/hmoStatusColors";
+import { getTierColors } from "@/lib/hmoStatusColors";
 
 /**
  * Format date for display
@@ -59,16 +62,17 @@ function isExpired(expiryDate) {
 /**
  * HMO Summary Card for Patient Dashboard
  * 
- * Displays patient's HMO information with clickable link to details page
+ * Displays patient's HMO information with tier details and clickable link to details page
+ * 
+ * @param {Object} patient - Patient object with system_hmo and hmo_tier
  */
 export default function HMOSummaryCard({ patient }) {
-  // 🔧 FIXED: Add null check for patient
   if (!patient) {
     return null;
   }
 
-  // Check if patient has HMO
-  const hasHMO = patient?.insurance_status === "INSURED" && patient?.hmo;
+  // Check if patient has HMO using new system_hmo field
+  const hasHMO = patient?.insurance_status === "INSURED" && patient?.system_hmo;
   
   if (!hasHMO) {
     // Show self-pay status
@@ -93,18 +97,16 @@ export default function HMOSummaryCard({ patient }) {
     );
   }
 
-  const hmo = patient.hmo;
+  const systemHMO = patient.system_hmo;
+  const hmoTier = patient.hmo_tier;
   const insuranceNumber = patient.insurance_number || "—";
-  const plan = patient.hmo_plan || "Standard Plan";
   const expiryDate = patient.insurance_expiry;
   
   const expiringSoon = isExpiringSoon(expiryDate);
   const expired = isExpired(expiryDate);
   
-  // Get relationship status colors
-  const statusColors = hmo.relationship_status 
-    ? getHMOStatusColors(hmo.relationship_status)
-    : null;
+  // Get tier colors if tier exists
+  const tierColors = hmoTier ? getTierColors(hmoTier.level) : null;
 
   return (
     <Link
@@ -129,17 +131,22 @@ export default function HMOSummaryCard({ patient }) {
 
       {/* Content */}
       <div className="p-5 space-y-4">
-        {/* HMO Name */}
+        {/* HMO Name & Tier */}
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-1">
             <Building2 className="h-4 w-4 text-slate-400" />
             <span className="text-xs font-medium text-slate-600">Provider</span>
           </div>
-          <p className="mt-1 font-semibold text-slate-900">{hmo.name}</p>
-          {statusColors && (
-            <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${statusColors.bgColor} ${statusColors.textColor} ${statusColors.ringColor}`}>
-              {statusColors.label} Partnership
-            </span>
+          <p className="font-semibold text-slate-900">{systemHMO.name}</p>
+          
+          {/* Tier Badge */}
+          {tierColors && hmoTier && (
+            <div className="mt-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1 ${tierColors.bgColor} ${tierColors.textColor} ${tierColors.ringColor}`}>
+                {tierColors.icon}
+                {hmoTier.name}
+              </span>
+            </div>
           )}
         </div>
 
@@ -156,11 +163,28 @@ export default function HMOSummaryCard({ patient }) {
             </span>
           </div>
 
-          {/* Plan */}
-          <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-            <span className="text-xs font-medium text-slate-600">Plan</span>
-            <span className="text-xs font-semibold text-slate-900">{plan}</span>
-          </div>
+          {/* Tier Coverage */}
+          {hmoTier?.coverage_percentage !== null && (
+            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-xs font-medium text-slate-600">Coverage</span>
+              </div>
+              <span className="text-xs font-bold text-emerald-700">
+                {hmoTier.coverage_percentage}%
+              </span>
+            </div>
+          )}
+
+          {/* Copay */}
+          {hmoTier?.copay_amount && (
+            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              <span className="text-xs font-medium text-slate-600">Copay</span>
+              <span className="text-xs font-semibold text-slate-900">
+                ₦{Number(hmoTier.copay_amount).toLocaleString()}
+              </span>
+            </div>
+          )}
 
           {/* Expiry Date */}
           {expiryDate && (
@@ -238,7 +262,7 @@ export default function HMOSummaryCard({ patient }) {
       {/* Footer */}
       <div className="border-t border-slate-100 bg-slate-50 px-5 py-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-600">View full details</span>
+          <span className="text-xs font-medium text-slate-600">View full details & benefits</span>
           <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5" />
         </div>
       </div>
