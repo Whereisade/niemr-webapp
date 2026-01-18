@@ -23,6 +23,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
+  Award,     // Gold tier
+  Star,      // Silver tier
+  TrendingUp, // Bronze tier
 } from "lucide-react";
 
 // 🔹 role-based UI config
@@ -35,7 +38,7 @@ import {
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
 // 🔹 HMO status color helper
-import { getHMOStatusColors } from "@/lib/hmoStatusColors";
+import { getHMOStatusColors, getTierColors } from "@/lib/hmoStatusColors";
 
 
 export default function FacilityLabOrdersPage(props) {
@@ -58,6 +61,89 @@ function formatDateTime(value) {
 }
 
 const normalizeStatus = (s) => String(s || "").toUpperCase();
+
+/**
+ * Helper function to extract HMO information from lab order data
+ * Supports both new SystemHMO structure and legacy HMO structure
+ */
+function getLabOrderHMOInfo(order) {
+  if (!order) {
+    return {
+      hasHMO: false,
+      hmoName: null,
+      tierName: null,
+      tierLevel: null,
+      relationshipStatus: null,
+    };
+  }
+
+  // New SystemHMO structure - check for computed fields first
+  if (order.patient_system_hmo_name || order.patient_hmo_tier_name) {
+    return {
+      hasHMO: true,
+      hmoName: order.patient_system_hmo_name,
+      tierName: order.patient_hmo_tier_name,
+      tierLevel: order.patient_hmo_tier_level,
+      relationshipStatus: order.patient_hmo_relationship_status,
+    };
+  }
+
+  // Legacy HMO structure (backward compatibility)
+  if (order.patient_hmo_name) {
+    return {
+      hasHMO: true,
+      hmoName: order.patient_hmo_name,
+      tierName: null,
+      tierLevel: null,
+      relationshipStatus: order.patient_hmo_relationship_status,
+    };
+  }
+
+  // No HMO
+  return {
+    hasHMO: false,
+    hmoName: null,
+    tierName: null,
+    tierLevel: null,
+    relationshipStatus: null,
+  };
+}
+
+/**
+ * HMO Badge Component - displays HMO name with relationship status colors and tier
+ */
+function HMOBadge({ hmoName, relationshipStatus, tierName, tierLevel }) {
+  if (!hmoName) {
+    return <span className="text-xs text-slate-500">Self Pay</span>;
+  }
+
+  const hmoColors = getHMOStatusColors(relationshipStatus);
+  const tierColors = tierLevel ? getTierColors(
+    tierLevel === 1 ? 'GOLD' : tierLevel === 2 ? 'SILVER' : 'BRONZE'
+  ) : null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {/* HMO Name with relationship status colors */}
+      <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${hmoColors.bgColor} ${hmoColors.textColor} ring-1 ${hmoColors.ringColor}`}>
+        <Building2 className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium">
+          {hmoName}
+        </span>
+      </div>
+
+      {/* Tier Badge (if available) */}
+      {tierName && tierColors && (
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[11px] font-medium ${tierColors.bgColor} ${tierColors.textColor} ring-1 ${tierColors.ringColor}`}>
+          {tierLevel === 1 && <Award className="h-3 w-3" />}
+          {tierLevel === 2 && <Star className="h-3 w-3" />}
+          {tierLevel === 3 && <TrendingUp className="h-3 w-3" />}
+          <span>{tierName}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function FacilityLabOrdersPageInner() {
   const sp = useSearchParams();
@@ -224,124 +310,57 @@ function FacilityLabOrdersPageInner() {
           Facility Lab Orders
         </h1>
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-          Failed to load: {error.message || "Unknown error"}
+          {error.message}
         </div>
       </main>
     );
   }
 
   return (
-    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
-      {/* soft background accents */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100 blur-3xl opacity-60" />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100 blur-3xl opacity-60" />
-
+    <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
       {/* Header */}
-      <header className="mb-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-blue-700">
-            <Activity className="h-3.5 w-3.5" />
-            Facility · Lab Orders
-          </div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
             Facility Lab Orders
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Lab scientist worklist for all tests requested in this facility.
+            Lab test orders from providers in your facility
           </p>
         </div>
+      </div>
 
-        <div className="space-x-2">
-          {/* 🔐 Only facility OWNER or LAB should see this */}
-          {(isOwner || meRole === "LAB") && (
-            <Link
-              href="/facility/labs/catalog/"
-              className="inline-flex items-center rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              New lab catalog creation
-            </Link>
-          )}
-
-          {/* New lab order is available to all lab-capable staff */}
-          <Link
-            href="/facility/labs/new"
-            className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            New lab order
-          </Link>
-        </div>
-      </header>
-
-      {/* Quick stats */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          label="Total lab orders"
-          value={total}
-          accent="from-blue-600 via-indigo-600 to-violet-600"
-        />
-        <StatTile
-          label="Pending collection"
-          value={pendingCount}
-          accent="from-amber-600 via-orange-500 to-red-500"
-        />
-        <StatTile
-          label="In progress"
-          value={collectedCount}
-          accent="from-sky-600 via-cyan-500 to-teal-500"
-        />
-        <StatTile
-          label="Reported"
-          value={reportedCount}
-          accent="from-emerald-600 via-green-500 to-lime-500"
-        />
-      </section>
-
-      {/* Filters / search card */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-        <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-          {/* Search input */}
-          <div className="relative w-full md:max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input
-              type="search"
-              placeholder="Search tests / notes…"
-              defaultValue={s}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  updateQuery({ s: e.currentTarget.value });
-                }
-              }}
-              onBlur={(e) => updateQuery({ s: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-            />
+      {/* Filters panel */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <Filter className="h-3.5 w-3.5 text-slate-400" />
+            Filter lab orders
           </div>
-
-          {/* Filters row */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
-              <Filter className="h-4 w-4 text-slate-400" />
-              Filters
+          <div className="flex flex-wrap gap-2">
+            <div className="relative w-full sm:w-64">
+              <input
+                type="search"
+                placeholder="Search patient, test…"
+                defaultValue={s}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    updateQuery({ s: e.currentTarget.value });
+                  }
+                }}
+                onBlur={(e) => updateQuery({ s: e.target.value })}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
             </div>
 
-            <input
-              type="text"
-              placeholder="Patient ID…"
-              defaultValue={patient}
-              onBlur={(e) => updateQuery({ patient: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
-            />
-
             <select
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-40"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 sm:w-44"
               value={status}
               onChange={(e) => updateQuery({ status: e.target.value })}
             >
               <option value="">All statuses</option>
               <option value="PENDING">Pending</option>
-              <option value="IN_PROGRESS">In progress</option>
+              <option value="IN_PROGRESS">In Progress</option>
               <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
             </select>
@@ -351,12 +370,31 @@ function FacilityLabOrdersPageInner() {
               value={String(limit)}
               onChange={(e) => updateQuery({ limit: e.target.value })}
             >
+              <option value="10">Show 10</option>
               <option value="20">Show 20</option>
               <option value="50">Show 50</option>
-              <option value="100">Show 100</option>
             </select>
           </div>
         </div>
+      </section>
+
+      {/* Stats */}
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatTile
+          label="Pending"
+          value={pendingCount}
+          accent="from-amber-500 to-orange-500"
+        />
+        <StatTile
+          label="In Progress"
+          value={collectedCount}
+          accent="from-sky-500 to-blue-500"
+        />
+        <StatTile
+          label="Completed"
+          value={reportedCount}
+          accent="from-emerald-500 to-teal-500"
+        />
       </section>
 
       {/* Table card */}
@@ -394,7 +432,9 @@ function FacilityLabOrdersPageInner() {
               {rows.length ? (
                 rows.map((order) => {
                   const statusCode = normalizeStatus(order.status);
-                  const hmoColors = getHMOStatusColors(order.patient_hmo_relationship_status);
+                  
+                  // Extract HMO information from order
+                  const hmoInfo = getLabOrderHMOInfo(order);
                   
                   return (
                     <tr
@@ -412,17 +452,14 @@ function FacilityLabOrdersPageInner() {
                         </div>
                       </Td>
 
+                      {/* UPDATED: HMO Column with new system support */}
                       <Td>
-                        {order.patient_hmo_name ? (
-                          <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${hmoColors.bgColor} ${hmoColors.textColor} ring-1 ${hmoColors.ringColor}`}>
-                            <Building2 className="h-3.5 w-3.5" />
-                            <span className="text-xs font-medium">
-                              {order.patient_hmo_name}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-500">Self Pay</span>
-                        )}
+                        <HMOBadge
+                          hmoName={hmoInfo.hmoName}
+                          relationshipStatus={hmoInfo.relationshipStatus}
+                          tierName={hmoInfo.tierName}
+                          tierLevel={hmoInfo.tierLevel}
+                        />
                       </Td>
 
                       <Td>

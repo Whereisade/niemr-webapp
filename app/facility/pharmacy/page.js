@@ -21,11 +21,14 @@ import {
   FileText,
   Loader2,
   CheckCircle2,
-  Building2,  // NEW - for HMO icon
+  Building2,
+  Award,     // For tier icons
+  Star,
+  TrendingUp,
 } from "lucide-react";
 import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
 import { apiFetch } from "@/lib/api";
-import { getHMOStatusColors } from "@/lib/hmoStatusColors";  // NEW - HMO status colors
+import { getHMOStatusColors, getTierColors } from "@/lib/hmoStatusColors";
 
 export default function FacilityPharmacyPage(props) {
   return (
@@ -89,6 +92,97 @@ function normaliseList(payload) {
     }
   }
   return [];
+}
+
+/**
+ * Helper function to extract HMO information from patient data
+ * Supports both new SystemHMO structure and legacy HMO structure
+ */
+function getPatientHMOInfo(patientData) {
+  if (!patientData) {
+    return {
+      hasHMO: false,
+      hmoName: null,
+      tierName: null,
+      tierLevel: null,
+      relationshipStatus: null,
+    };
+  }
+
+  // New SystemHMO structure
+  if (patientData.system_hmo) {
+    const systemHMO = patientData.system_hmo;
+    const tier = patientData.hmo_tier;
+    
+    return {
+      hasHMO: true,
+      hmoName: typeof systemHMO === 'object' ? systemHMO.name : patientData.system_hmo_name,
+      tierName: typeof tier === 'object' ? tier.name : patientData.hmo_tier_name,
+      tierLevel: typeof tier === 'object' ? tier.level : patientData.hmo_tier_level,
+      relationshipStatus: patientData.facility_hmo_relationship_status,
+      systemHMO: typeof systemHMO === 'object' ? systemHMO : null,
+      tier: typeof tier === 'object' ? tier : null,
+    };
+  }
+
+  // Legacy HMO structure (backward compatibility)
+  if (patientData.hmo) {
+    const hmo = patientData.hmo;
+    return {
+      hasHMO: true,
+      hmoName: typeof hmo === 'object' ? hmo.name : null,
+      tierName: patientData.hmo_plan || null,
+      tierLevel: null,
+      relationshipStatus: patientData.hmo_relationship_status,
+      systemHMO: null,
+      tier: null,
+    };
+  }
+
+  // No HMO
+  return {
+    hasHMO: false,
+    hmoName: null,
+    tierName: null,
+    tierLevel: null,
+    relationshipStatus: null,
+  };
+}
+
+/**
+ * HMO Badge Component - displays HMO name with relationship status colors
+ */
+function HMOBadge({ hmoName, relationshipStatus, tierName, tierLevel }) {
+  if (!hmoName) {
+    return <span className="text-xs text-slate-500">Self Pay</span>;
+  }
+
+  const hmoColors = getHMOStatusColors(relationshipStatus);
+  const tierColors = tierLevel ? getTierColors(
+    tierLevel === 1 ? 'GOLD' : tierLevel === 2 ? 'SILVER' : 'BRONZE'
+  ) : null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {/* HMO Name with relationship status colors */}
+      <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${hmoColors.bgColor} ${hmoColors.textColor} ring-1 ${hmoColors.ringColor}`}>
+        <Building2 className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium">
+          {hmoName}
+        </span>
+      </div>
+
+      {/* Tier Badge (if available) */}
+      {tierName && tierColors && (
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[11px] font-medium ${tierColors.bgColor} ${tierColors.textColor} ring-1 ${tierColors.ringColor}`}>
+          {tierLevel === 1 && <Award className="h-3 w-3" />}
+          {tierLevel === 2 && <Star className="h-3 w-3" />}
+          {tierLevel === 3 && <TrendingUp className="h-3 w-3" />}
+          <span>{tierName}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FacilityPharmacyPageInner() {
@@ -253,217 +347,178 @@ function FacilityPharmacyPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [refreshKey]);
+  }, [me, refreshKey]);
 
+  // Normalise prescriptions
   const { rows, total } = normalisePrescriptionsPayload(data);
 
-  // Patient lookup map
+  // Build patientMap for quick lookup
   const patientMap = useMemo(() => {
-    const map = new Map();
-    for (const p of patients) {
-      const name =
-        p.full_name ||
-        [p.first_name, p.last_name].filter(Boolean).join(" ") ||
-        null;
-      map.set(p.id, {
-        name: name || `Patient #${p.id}`,
-        phone: p.phone || "",
+    const m = new Map();
+    patients.forEach((p) => {
+      const name = [p.first_name, p.middle_name, p.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      m.set(p.id, { 
+        name, 
+        phone: p.phone,
+        // Include HMO information in patient map
+        system_hmo: p.system_hmo,
+        hmo_tier: p.hmo_tier,
+        system_hmo_name: p.system_hmo_name,
+        hmo_tier_name: p.hmo_tier_name,
+        hmo_tier_level: p.hmo_tier_level,
+        facility_hmo_relationship_status: p.facility_hmo_relationship_status,
+        // Legacy support
+        hmo: p.hmo,
+        hmo_plan: p.hmo_plan,
+        hmo_relationship_status: p.hmo_relationship_status,
       });
-    }
-    return map;
+    });
+    return m;
   }, [patients]);
 
-  // Stock by drug ID
+  // Build stockByDrugId map
   const stockByDrugId = useMemo(() => {
     const m = new Map();
-    for (const s of stock) {
-      const drug = s.drug || {};
-      if (drug.id != null) {
-        m.set(drug.id, s.current_qty ?? 0);
+    stock.forEach((s) => {
+      if (s.drug?.id) {
+        const existing = m.get(s.drug.id) || 0;
+        m.set(s.drug.id, existing + Number(s.quantity || 0));
       }
-    }
+    });
     return m;
   }, [stock]);
 
-  // Stock statistics
-  const stockStats = useMemo(() => {
-    let totalLines = stock.length;
-    let totalQty = 0;
-    let lowStock = 0;
-    let outOfStock = 0;
-
-    for (const s of stock) {
-      const qty = Number(s.current_qty) || 0;
-      totalQty += qty;
-      if (qty === 0) outOfStock++;
-      else if (qty <= 10) lowStock++;
-    }
-
-    return { totalLines, totalQty, lowStock, outOfStock };
-  }, [stock]);
-
-  // Prescription statistics
-  const prescriptionStats = useMemo(() => {
-    let pending = 0;
-    let partiallyDispensed = 0;
-    let dispensed = 0;
-
-    for (const rx of rows) {
-      const v = String(rx.status || "").toUpperCase();
-      if (v === "PRESCRIBED") pending++;
-      else if (v === "PARTIALLY_DISPENSED") partiallyDispensed++;
-      else if (v === "DISPENSED") dispensed++;
-    }
-
-    return { pending, partiallyDispensed, dispensed, total: rows.length };
-  }, [rows]);
-
-  // Filtered catalog for search
+  // Filter catalog
   const filteredCatalog = useMemo(() => {
-    if (!catalogSearch.trim()) return catalog;
-    const q = catalogSearch.toLowerCase();
+    if (!catalogSearch) return catalog;
+    const lower = catalogSearch.toLowerCase();
     return catalog.filter((d) => {
       return (
-        d.code?.toLowerCase().includes(q) ||
-        d.name?.toLowerCase().includes(q) ||
-        d.strength?.toLowerCase().includes(q)
+        d.name?.toLowerCase().includes(lower) ||
+        d.code?.toLowerCase().includes(lower) ||
+        d.form?.toLowerCase().includes(lower)
       );
     });
   }, [catalog, catalogSearch]);
 
-  // Stock rows with search
-  const stockRows = useMemo(() => {
-    return stock
-      .map((s) => {
-        const drug = s.drug || {};
-        return {
-          id: s.id,
-          drugId: drug.id,
-          code: drug.code || "",
-          name: drug.name || "",
-          strength: drug.strength || "",
-          form: drug.form || "",
-          current_qty: s.current_qty ?? 0,
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
+  // Count prescriptions by status
+  const prescriptionCounts = useMemo(() => {
+    const counts = {
+      prescribed: 0,
+      partially: 0,
+      dispensed: 0,
+      total: rows.length,
+    };
+    rows.forEach((rx) => {
+      const s = String(rx.status || "").toUpperCase();
+      if (s === "PRESCRIBED") counts.prescribed++;
+      else if (s === "PARTIALLY_DISPENSED") counts.partially++;
+      else if (s === "DISPENSED") counts.dispensed++;
+    });
+    return counts;
+  }, [rows]);
+
+  // Count stock alerts
+  const stockAlerts = useMemo(() => {
+    let lowStock = 0;
+    let outOfStock = 0;
+    stock.forEach((s) => {
+      const qty = Number(s.quantity || 0);
+      if (qty === 0) outOfStock++;
+      else if (qty <= 10) lowStock++;
+    });
+    return { lowStock, outOfStock };
   }, [stock]);
 
-  function updateQuery(patch) {
-    const params = new URLSearchParams(searchParams?.toString() || "");
-
-    Object.entries(patch).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === "") {
-        params.delete(key);
+  const updateQuery = (updates) => {
+    const current = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([k, v]) => {
+      if (v) {
+        current.set(k, v);
       } else {
-        params.set(key, String(value));
+        current.delete(k);
       }
     });
-
-    if (
-      "status" in patch ||
-      "s" in patch ||
-      "start" in patch ||
-      "end" in patch ||
-      "limit" in patch
-    ) {
-      params.set("page", "1");
+    if (updates.hasOwnProperty("page") && !updates.page) {
+      current.set("page", "1");
     }
-
-    router.push(`${pathname}?${params.toString()}`);
-  }
-
-  if (meLoading) {
-    return (
-      <main className="mx-auto max-w-7xl p-6 md:p-10">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">
-          Loading pharmacy workspace…
-        </div>
-      </main>
-    );
-  }
+    if (
+      !updates.hasOwnProperty("page") &&
+      (updates.status !== undefined ||
+        updates.start !== undefined ||
+        updates.end !== undefined ||
+        updates.s !== undefined)
+    ) {
+      current.set("page", "1");
+    }
+    router.push(`${pathname}?${current.toString()}`);
+  };
 
   return (
-    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
-      {/* Background glows */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-sky-100/60 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100/60 blur-3xl" />
-
+    <main className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Header */}
-      <header className="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="flex items-center justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-sky-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-sky-700">
-            <Pill className="h-3.5 w-3.5" />
-            Facility · Pharmacy
-          </div>
-          <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold text-slate-900">
             Pharmacy workspace
           </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Manage prescriptions, track inventory, and dispense medications for
-            facility patients.
+          <p className="text-sm text-slate-600">
+            Manage prescriptions, stock, and drug catalog
           </p>
         </div>
-
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-3">
           {canPrescribe && (
             <Link
-              href="/facility/pharmacy/prescribe"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700"
+              href="/facility/pharmacy/new"
+              className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
             >
               <Plus className="h-4 w-4" />
               New prescription
             </Link>
           )}
         </div>
-      </header>
+      </div>
 
-      {/* Stats Grid */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats row */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Pending prescriptions"
-          value={prescriptionStats.pending + prescriptionStats.partiallyDispensed}
+          label="Total prescriptions"
+          value={prescriptionCounts.total}
           icon={ClipboardList}
-          accent="from-sky-500 via-sky-600 to-sky-700"
-          subtitle={`${prescriptionStats.pending} new, ${prescriptionStats.partiallyDispensed} partial`}
+          accent="from-sky-500 to-indigo-500"
         />
         <StatCard
-          label="Dispensed today"
-          value={prescriptionStats.dispensed}
-          icon={CheckCircle2}
-          accent="from-emerald-500 via-emerald-600 to-emerald-700"
-          subtitle="Completed prescriptions"
+          label="Prescribed"
+          value={prescriptionCounts.prescribed}
+          icon={Activity}
+          accent="from-indigo-500 to-violet-500"
         />
         <StatCard
-          label="Low stock items"
-          value={stockStats.lowStock}
-          icon={TrendingDown}
-          accent="from-amber-500 via-amber-600 to-amber-700"
-          subtitle={`${stockStats.outOfStock} out of stock`}
-          warning={stockStats.lowStock > 0 || stockStats.outOfStock > 0}
+          label="Partially dispensed"
+          value={prescriptionCounts.partially}
+          icon={Pill}
+          accent="from-violet-500 to-purple-500"
         />
         <StatCard
-          label="Catalog items"
-          value={catalog.length}
-          icon={Package}
-          accent="from-slate-500 via-slate-600 to-slate-700"
-          subtitle={`${stockStats.totalQty} units in stock`}
+          label="Out of stock items"
+          value={stockAlerts.outOfStock}
+          icon={AlertTriangle}
+          accent="from-rose-500 to-pink-500"
+          warning={stockAlerts.outOfStock > 0}
         />
-      </section>
+      </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
         <TabButton
           active={activeTab === "prescriptions"}
           onClick={() => setActiveTab("prescriptions")}
           icon={ClipboardList}
         >
           Prescriptions
-          {(prescriptionStats.pending + prescriptionStats.partiallyDispensed) > 0 && (
-            <span className="ml-1.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
-              {prescriptionStats.pending + prescriptionStats.partiallyDispensed}
-            </span>
-          )}
         </TabButton>
         {canManageCatalog && (
           <>
@@ -472,17 +527,12 @@ function FacilityPharmacyPageInner() {
               onClick={() => setActiveTab("stock")}
               icon={Boxes}
             >
-              Stock levels
-              {(stockStats.lowStock + stockStats.outOfStock) > 0 && (
-                <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                  {stockStats.lowStock + stockStats.outOfStock}
-                </span>
-              )}
+              Stock
             </TabButton>
             <TabButton
               active={activeTab === "catalog"}
               onClick={() => setActiveTab("catalog")}
-              icon={FileText}
+              icon={Package}
             >
               Catalog
             </TabButton>
@@ -490,7 +540,7 @@ function FacilityPharmacyPageInner() {
         )}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab content */}
       {activeTab === "prescriptions" && (
         <PrescriptionsTab
           rows={rows}
@@ -512,17 +562,14 @@ function FacilityPharmacyPageInner() {
           stockByDrugId={stockByDrugId}
         />
       )}
-
-      {activeTab === "stock" && canManageCatalog && (
+      {activeTab === "stock" && (
         <StockTab
-          stockRows={stockRows}
+          stock={stock}
           stockLoading={stockLoading}
           stockError={stockError}
-          stockStats={stockStats}
         />
       )}
-
-      {activeTab === "catalog" && canManageCatalog && (
+      {activeTab === "catalog" && (
         <CatalogTab
           filteredCatalog={filteredCatalog}
           catalogLoading={catalogLoading}
@@ -532,11 +579,11 @@ function FacilityPharmacyPageInner() {
         />
       )}
 
-      {/* Prescription details modal */}
+      {/* Details modal */}
       <PrescriptionDetailsModal
         open={detailsOpen}
-        id={detailsId}
         onClose={() => setDetailsOpen(false)}
+        prescriptionId={detailsId}
         allowDispense={canDispense}
         onUpdated={() => setRefreshKey((k) => k + 1)}
       />
@@ -667,8 +714,8 @@ function PrescriptionsTab({
                       ? `Patient #${rx.patient}`
                       : "—";
 
-                    // Get HMO colors
-                    const hmoColors = getHMOStatusColors(rx.patient_hmo_relationship_status);
+                    // Extract HMO information from patient data
+                    const hmoInfo = getPatientHMOInfo(patientInfo);
 
                     // Check stock availability for items
                     let hasLowStock = false;
@@ -728,18 +775,14 @@ function PrescriptionsTab({
                           )}
                         </Td>
                         
-                        {/* NEW: HMO Column */}
+                        {/* UPDATED: HMO Column with new system support */}
                         <Td>
-                          {rx.patient_hmo_name ? (
-                            <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${hmoColors.bgColor} ${hmoColors.textColor} ring-1 ${hmoColors.ringColor}`}>
-                              <Building2 className="h-3.5 w-3.5" />
-                              <span className="text-xs font-medium">
-                                {rx.patient_hmo_name}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-500">Self Pay</span>
-                          )}
+                          <HMOBadge
+                            hmoName={hmoInfo.hmoName}
+                            relationshipStatus={hmoInfo.relationshipStatus}
+                            tierName={hmoInfo.tierName}
+                            tierLevel={hmoInfo.tierLevel}
+                          />
                         </Td>
                         
                         <Td>
@@ -852,7 +895,7 @@ function PrescriptionsTab({
   );
 }
 
-function StockTab({ stockRows, stockLoading, stockError, stockStats }) {
+function StockTab({ stock, stockLoading, stockError }) {
   return (
     <section className="space-y-4">
       {/* Quick actions */}
@@ -862,7 +905,7 @@ function StockTab({ stockRows, stockLoading, stockError, stockStats }) {
             Stock management
           </h3>
           <p className="text-xs text-slate-500">
-            View current stock levels and manage inventory
+            Manage drug inventory and stock levels
           </p>
         </div>
         <Link
@@ -879,10 +922,10 @@ function StockTab({ stockRows, stockLoading, stockError, stockStats }) {
         <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
         <div className="border-b border-slate-100 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-900">
-            Current stock levels
+            Current stock
           </h3>
           <p className="text-xs text-slate-500">
-            {stockStats.totalLines} items · {stockStats.totalQty} total units
+            {stock.length} stock item{stock.length !== 1 ? "s" : ""}
           </p>
         </div>
 
@@ -898,64 +941,74 @@ function StockTab({ stockRows, stockLoading, stockError, stockStats }) {
             <table className="min-w-full divide-y divide-slate-100 text-xs">
               <thead className="sticky top-0 bg-slate-50 text-slate-700">
                 <tr>
+                  <Th>Batch</Th>
                   <Th>Drug</Th>
-                  <Th>Strength</Th>
-                  <Th>Form</Th>
-                  <Th>Current qty</Th>
-                  <Th>Status</Th>
+                  <Th>Quantity</Th>
+                  <Th>Unit price</Th>
+                  <Th>Expiry date</Th>
+                  <Th>Supplier</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {stockRows.length ? (
-                  stockRows.map((row) => {
-                    const isOut = row.current_qty === 0;
-                    const isLow = row.current_qty > 0 && row.current_qty <= 10;
+                {stock.length ? (
+                  stock.map((s) => {
+                    const qty = Number(s.quantity || 0);
+                    const lowStock = qty <= 10 && qty > 0;
+                    const outOfStock = qty === 0;
+
                     return (
                       <tr
-                        key={row.id || row.drugId}
+                        key={s.id}
                         className="hover:bg-slate-50/70 transition"
                       >
                         <Td>
-                          <span className="text-xs font-medium text-slate-900">
-                            {row.name || "—"}
-                          </span>
-                          <span className="ml-1 font-mono text-[10px] text-slate-500">
-                            {row.code ? `(${row.code})` : ""}
+                          <span className="font-mono text-[11px] text-slate-700">
+                            {s.batch_number || "—"}
                           </span>
                         </Td>
-                        <Td>{row.strength || "—"}</Td>
-                        <Td>{row.form || "—"}</Td>
+                        <Td>
+                          <span className="text-xs font-medium text-slate-900">
+                            {s.drug?.name || s.drug?.code || "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              outOfStock
+                                ? "bg-rose-50 text-rose-700"
+                                : lowStock
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-emerald-50 text-emerald-700"
+                            }`}
+                          >
+                            {qty}
+                          </span>
+                        </Td>
                         <Td>
                           <span className="font-medium text-slate-900">
-                            {row.current_qty ?? 0}
+                            ₦{Number(s.unit_price || 0).toLocaleString()}
                           </span>
                         </Td>
                         <Td>
-                          {isOut ? (
-                            <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
-                              Out of stock
-                            </span>
-                          ) : isLow ? (
-                            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                              Low stock
+                          {s.expiry_date ? (
+                            <span className="text-xs text-slate-700">
+                              {new Date(s.expiry_date).toLocaleDateString()}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                              In stock
-                            </span>
+                            "—"
                           )}
                         </Td>
+                        <Td>{s.supplier || "—"}</Td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-3 py-6 text-center text-xs text-slate-500"
                     >
-                      No stock records found. Add stock in the stock management
-                      page.
+                      No stock items found. Add stock via stock management.
                     </td>
                   </tr>
                 )}
