@@ -7,7 +7,8 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Lock, ArrowLeft, CheckCircle2, AlertTriangle } from "lucide-react";
 
-function ResetPasswordForm() {
+// Separate component that uses useSearchParams
+function ResetPasswordFormContent() {
   const sp = useSearchParams();
   const router = useRouter();
 
@@ -42,7 +43,6 @@ function ResetPasswordForm() {
       if (!r.ok) throw new Error(data?.detail || "Could not reset password");
 
       setDone(true);
-      // small UX convenience
       setTimeout(() => router.push("/login"), 1200);
     } catch (e2) {
       setErr(e2?.message || "Reset failed");
@@ -133,7 +133,8 @@ function ResetPasswordForm() {
   );
 }
 
-export default function ResetPasswordPage() {
+// Main component that doesn't use useSearchParams directly
+function ResetPasswordForm() {
   return (
     <Suspense fallback={
       <div className="min-h-[70vh] flex items-center justify-center p-6">
@@ -148,7 +149,11 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     }>
-      <ResetPasswordForm />
+      <ResetPasswordFormContent />
     </Suspense>
   );
+}
+
+export default function ResetPasswordPage() {
+  return <ResetPasswordForm />;
 }
