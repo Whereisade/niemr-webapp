@@ -35,6 +35,7 @@ export default function RootLayout({ children }) {
         {/* Main */}
         <main id="main" className="container py-10">
           {children}
+          <Analytics />
         </main>
 
         {/* Footer */}
