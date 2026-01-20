@@ -614,7 +614,8 @@ function FacilityPatientDetailPageInner() {
         textColor: "text-slate-600",
         icon: Loader2,
         iconClass: "animate-spin",
-        subtitle: null
+        subtitle: null,
+        tierIcon: null
       };
     }
 
@@ -626,29 +627,55 @@ function FacilityPatientDetailPageInner() {
         textColor: "text-amber-700",
         icon: Clock,
         iconClass: "",
-        subtitle: "Approval Required"
+        subtitle: "Approval Required",
+        tierIcon: null
       };
     }
 
     // Check for System HMO enrollment
-    if (patient?.system_hmo && hmoDetails?.isSystemHMO) {
-      const hmoName = patient.system_hmo_name || hmoDetails.name || "HMO Patient";
-      const tierInfo = hmoDetails.currentTier 
-        ? `${hmoDetails.currentTier.name} (L${hmoDetails.currentTier.level})`
-        : patient.hmo_tier_name || null;
+    if (patient?.system_hmo) {
+      // Determine if system HMO is active (not expired)
+      const isExpired = patient.insurance_expiry 
+        ? new Date(patient.insurance_expiry) < new Date()
+        : false;
+
+      // Extract HMO name - handle both object and ID responses
+      const systemHMOId = typeof patient.system_hmo === 'object' 
+        ? patient.system_hmo?.id 
+        : patient.system_hmo;
+      
+      const currentSystemHMO = typeof patient.system_hmo === 'object'
+        ? patient.system_hmo
+        : systemHMOs.find(h => h.id === systemHMOId);
+      
+      const hmoName = currentSystemHMO?.name || "HMO Plan";
+
+      // Get tier info
+      const currentTier = typeof patient.hmo_tier === 'object'
+        ? patient.hmo_tier
+        : null;
+      
+      const tierInfo = currentTier
+        ? `${currentTier.name} (L${currentTier.level})`
+        : null;
+
+      // Determine status colors
+      const bgColor = isExpired ? "bg-amber-100" : "bg-emerald-100";
+      const textColor = isExpired ? "text-amber-700" : "text-emerald-700";
+      const statusLabel = isExpired ? "EXPIRED" : "ACTIVE";
 
       return {
         text: hmoName,
-        bgColor: "bg-blue-100",
-        textColor: "text-blue-700",
+        bgColor,
+        textColor,
         icon: Building2,
         iconClass: "",
-        subtitle: tierInfo,
+        subtitle: tierInfo ? `${tierInfo} • ${statusLabel}` : statusLabel,
         tierIcon: Award
       };
     }
 
-    // Check for legacy HMO
+    // Check for legacy HMO (facility-scoped)
     if (patient?.hmo && hmoDetails && !hmoDetails.isSystemHMO) {
       const hmoName = typeof patient.hmo === 'object' ? patient.hmo.name : null;
       const displayText = hmoDetails.name || hmoName || "HMO Patient";
@@ -662,7 +689,8 @@ function FacilityPatientDetailPageInner() {
           textColor: colors.textColor,
           icon: Building2,
           iconClass: "",
-          subtitle: `${colors.label} relationship`
+          subtitle: `${colors.label} relationship`,
+          tierIcon: null
         };
       }
 
@@ -672,7 +700,8 @@ function FacilityPatientDetailPageInner() {
         textColor: "text-blue-700",
         icon: Building2,
         iconClass: "",
-        subtitle: null
+        subtitle: null,
+        tierIcon: null
       };
     }
 
@@ -683,7 +712,8 @@ function FacilityPatientDetailPageInner() {
       textColor: "text-slate-700",
       icon: Shield,
       iconClass: "",
-      subtitle: null
+      subtitle: null,
+      tierIcon: null
     };
   };
 
@@ -839,14 +869,14 @@ function FacilityPatientDetailPageInner() {
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">
                     <InsuranceIcon className={`h-3.5 w-3.5 ${insuranceDisplay.textColor} ${insuranceDisplay.iconClass}`} />
-                    <div className="flex flex-col">
-                      <span className={`text-sm font-semibold ${insuranceDisplay.textColor}`}>
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className={`text-sm font-semibold ${insuranceDisplay.textColor} truncate`}>
                         {insuranceDisplay.text}
                       </span>
                       {insuranceDisplay.subtitle && (
                         <div className="flex items-center gap-1">
                           {TierIcon && <TierIcon className="h-2.5 w-2.5 text-slate-500" />}
-                          <span className="text-[9px] font-medium text-slate-500">
+                          <span className="text-[9px] font-medium text-slate-500 truncate">
                             {insuranceDisplay.subtitle}
                           </span>
                         </div>
