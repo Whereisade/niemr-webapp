@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import SmartHomeLink from "@/components/SmartHomeLink";
-
+import { Analytics } from "@vercel/analytics/next"
 import LogoutButton from "@/components/LogoutButton";
 import AppHeader from "@/components/layout/AppHeader";
 
