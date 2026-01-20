@@ -2,12 +2,12 @@
 
 export const dynamic = "force-dynamic";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Lock, ArrowLeft, CheckCircle2, AlertTriangle } from "lucide-react";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const sp = useSearchParams();
   const router = useRouter();
 
@@ -130,5 +130,25 @@ export default function ResetPasswordPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[70vh] flex items-center justify-center p-6">
+        <div className="card w-full max-w-md">
+          <div className="card-body">
+            <div className="text-xs uppercase tracking-wide text-blue-700 font-semibold">
+              NIEMR
+            </div>
+            <h2 className="h2 mt-1">Reset Password</h2>
+            <p className="muted text-sm">Loading...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
