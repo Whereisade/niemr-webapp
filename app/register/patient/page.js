@@ -137,7 +137,7 @@ export default function PatientRegisterPage() {
               <Field label="First name" value={form.first_name} onChange={(e)=>upd("first_name", e.target.value)} required />
               <Field label="Last name"  value={form.last_name}  onChange={(e)=>upd("last_name", e.target.value)} required />
               <Field label="Date of Birth" type="date" value={form.dob} onChange={(e)=>upd("dob", e.target.value)} required icon={Calendar} />
-              <Field label="Phone (E.164)" value={form.phone} onChange={(e)=>upd("phone", e.target.value)} icon={Phone} placeholder="+2348012345678" />
+              <Field label="Phone" value={form.phone} onChange={(e)=>upd("phone", e.target.value)} icon={Phone} placeholder="+2348012345678" />
             </div>
 
             {/* Address */}

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react"; // Add eye icons
 
 export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
   const router = useRouter();
@@ -9,6 +10,7 @@ export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // Add state for password visibility
 
   // derive a lowercase role param if provided
   const roleParam =
@@ -88,14 +90,28 @@ export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
           </div>
           <div>
             <label className="block text-sm mb-1">Password</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
+            <div className="relative">
+              <input
+                className="input w-full pr-10"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {err ? <div className="text-red-600 text-sm">{err}</div> : null}
@@ -105,11 +121,13 @@ export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
           </button>
 
           <div className="flex items-center justify-between text-sm">
-            <Link href="/forgot-password" className="text-blue-700 hover:underline">
+            <Link
+              href="/forgot-password"
+              className="text-blue-700 hover:underline"
+            >
               Forgot password?
             </Link>
           </div>
-
         </div>
       </div>
     </form>

@@ -22,6 +22,7 @@ import {
   Pill,
   Boxes,
   Mail,
+  
 } from "lucide-react";
 
 import LogoutButton from "@/components/LogoutButton";
@@ -157,7 +158,7 @@ function buildNavForUser(user) {
       { href: "/facility/hmos", label: "HMOs", icon: Shield },
       { href: "/facility/billing", label: "Billing", icon: CreditCard },
       // { href: "/facility/payments", label: "Payments", icon: CreditCard },
-      { href: "/facility/emails", label: "Emails", icon: Mail },
+      { href: "/facility/patients", label: "Patients", icon: Users },
       {
         href: "/facility/providers",
         label: "Staff",

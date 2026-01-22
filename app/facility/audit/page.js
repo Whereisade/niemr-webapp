@@ -13,18 +13,27 @@ import {
   Activity,
   ArrowLeft,
   ArrowRight,
-  FileText,
-  Eye,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 
-
-export default function FacilityAuditPage(props) {
+export default function FacilityAuditPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
-      <FacilityAuditPageInner {...props} />
+    <Suspense fallback={<LoadingState />}>
+      <FacilityAuditPageInner />
     </Suspense>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-sm text-slate-500">Loading audit logs...</p>
+      </div>
+    </div>
   );
 }
 
@@ -33,37 +42,26 @@ function formatDateTime(value) {
   try {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return String(value);
-    return d.toLocaleString();
+    return d.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return String(value);
   }
-}
-
-function normalizeAuditResponse(res) {
-  if (!res) return [];
-  if (Array.isArray(res?.results)) return res.results;
-  if (Array.isArray(res)) return res;
-  if (res && typeof res === "object") {
-    const numericKeys = Object.keys(res).filter((k) => /^\d+$/.test(k));
-    if (numericKeys.length) {
-      return numericKeys
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => res[k]);
-    }
-  }
-  return [];
 }
 
 function FacilityAuditPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [data, setData] = useState(null);
-  const [rows, setRows] = useState([]);
+  const [data, setData] = useState({ count: 0, results: [], next: null, previous: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedRow, setExpandedRow] = useState(null);
-
   const [searchInput, setSearchInput] = useState(searchParams.get("q") || "");
 
   const page = Number(searchParams.get("page") || "1");
@@ -77,19 +75,17 @@ function FacilityAuditPageInner() {
       try {
         setLoading(true);
         setError("");
-        const res = await fetchAuditLogs({ page, limit, q });
+        
+        const response = await fetchAuditLogs({ page, limit, q });
 
         if (cancelled) return;
 
-        setData(res);
-        setRows(normalizeAuditResponse(res));
+        setData(response);
       } catch (err) {
-        console.error("Failed to load audit logs", err);
+        console.error("Failed to load audit logs:", err);
         if (!cancelled) {
-          setError(
-            err?.message || "Failed to load audit logs. Please try again."
-          );
-          setRows([]);
+          setError(err?.message || "Failed to load audit logs. Please try again.");
+          setData({ count: 0, results: [], next: null, previous: null });
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -103,34 +99,40 @@ function FacilityAuditPageInner() {
     };
   }, [page, limit, q]);
 
-  const total = Number(data?.count ?? rows.length);
-  const hasNextPage = rows.length === limit;
-  const hasPrevPage = page > 1;
+  const rows = data.results || [];
+  const total = data.count || 0;
+  const hasNextPage = !!data.next;
+  const hasPrevPage = !!data.previous;
 
   function goToPage(nextPage) {
-    const sp = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams.toString());
     if (nextPage && nextPage > 1) {
-      sp.set("page", String(nextPage));
+      params.set("page", String(nextPage));
     } else {
-      sp.delete("page");
+      params.delete("page");
     }
-    router.push(`/facility/audit?${sp.toString()}`);
+    router.push(`/facility/audit?${params.toString()}`);
   }
 
   function applySearch(newQ) {
-    const sp = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams.toString());
     if (newQ) {
-      sp.set("q", newQ);
+      params.set("q", newQ);
     } else {
-      sp.delete("q");
+      params.delete("q");
     }
-    sp.delete("page"); // reset to first page
-    router.push(`/facility/audit?${sp.toString()}`);
+    params.delete("page"); // Reset to first page
+    router.push(`/facility/audit?${params.toString()}`);
   }
 
   function handleSearchSubmit(e) {
     e.preventDefault();
     applySearch(searchInput.trim());
+  }
+
+  function clearSearch() {
+    setSearchInput("");
+    applySearch("");
   }
 
   const uniqueUsers = new Set(
@@ -151,30 +153,38 @@ function FacilityAuditPageInner() {
             Facility · Audit Trail
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Audit logs
+            Audit Logs
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            A chronological trail of actions across this facility—who did what,
-            where, and when.
+            A chronological trail of actions across this facility—who did what, where, and when.
           </p>
         </div>
 
         {/* Search box */}
         <form
           onSubmit={handleSearchSubmit}
-          className="flex w-full max-w-md items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs shadow-sm"
+          className="flex w-full max-w-md items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm hover:border-slate-300 transition-colors"
         >
           <Search className="h-4 w-4 text-slate-400" />
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Filter by user, action, target, IP…"
+            placeholder="Search by user, message, or target ID..."
             className="flex-1 border-none bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
           />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              ×
+            </button>
+          )}
           <button
             type="submit"
-            className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800"
+            className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800 transition-colors"
           >
             Search
           </button>
@@ -210,10 +220,14 @@ function FacilityAuditPageInner() {
         />
       </section>
 
+      {/* Error Alert */}
       {error && (
-        <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          <Filter className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
-          <span>{error}</span>
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
+          <div>
+            <div className="font-medium">Error loading audit logs</div>
+            <div className="mt-0.5 text-xs text-rose-700">{error}</div>
+          </div>
         </div>
       )}
 
@@ -229,127 +243,123 @@ function FacilityAuditPageInner() {
                 <Th>Action</Th>
                 <Th>Target</Th>
                 <Th>Message</Th>
-                <Th>IP</Th>
+                <Th>IP Address</Th>
                 <Th className="w-10"></Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {loading && (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="p-6 text-center text-sm text-slate-500"
-                  >
-                    Loading audit logs…
+                  <td colSpan={7} className="p-6 text-center text-sm text-slate-500">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      Loading audit logs...
+                    </div>
                   </td>
                 </tr>
               )}
 
-              {!loading &&
-                rows.map((log) => {
-                  const ts = log.created_at || log.timestamp;
-                  const actorDisplay = log.actor_display || log.actor_email || "System";
-                  const verb = log.verb || "—";
-                  const targetModel = log.target_model || "—";
-                  const targetDisplay = log.target_display || log.target_id || "—";
-                  const targetId = log.target_id || "";
-                  const message = log.message || "—";
-                  const ip = log.ip_address || "—";
-                  const hasChanges = log.changes && Object.keys(log.changes).length > 0;
-                  const isExpanded = expandedRow === log.id;
+              {!loading && rows.map((log) => {
+                const ts = log.created_at || log.timestamp;
+                const actorDisplay = log.actor_display || log.actor_email || "System";
+                const verb = log.verb || "—";
+                const targetModel = log.target_model || "—";
+                const targetDisplay = log.target_display || log.target_id || "—";
+                const targetId = log.target_id || "";
+                const message = log.message || "—";
+                const ip = log.ip_address || "—";
+                const hasChanges = log.changes && Object.keys(log.changes).length > 0;
+                const isExpanded = expandedRow === log.id;
 
-                  return (
-                    <>
-                      <tr
-                        key={log.id}
-                        className={`transition hover:bg-slate-50/60 ${isExpanded ? "bg-slate-50/40" : ""}`}
-                      >
-                        <Td>
-                          <span className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
-                            {formatDateTime(ts)}
+                return (
+                  <>
+                    <tr
+                      key={log.id}
+                      className={`transition hover:bg-slate-50/60 ${isExpanded ? "bg-slate-50/40" : ""}`}
+                    >
+                      <Td>
+                        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
+                          {formatDateTime(ts)}
+                        </span>
+                      </Td>
+                      <Td>
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
+                            <UserRound className="h-4 w-4 text-blue-700" />
                           </span>
-                        </Td>
-                        <Td>
-                          <div className="flex items-center gap-2">
-                            <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
-                              <UserRound className="h-4 w-4 text-blue-700" />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium text-slate-900 max-w-[140px] truncate" title={actorDisplay}>
+                              {actorDisplay}
                             </span>
-                            <div className="flex flex-col">
-                              <span className="text-xs font-medium text-slate-900 max-w-[140px] truncate" title={actorDisplay}>
-                                {actorDisplay}
+                            {log.actor_email && actorDisplay !== log.actor_email && (
+                              <span className="text-[10px] text-slate-500 max-w-[140px] truncate" title={log.actor_email}>
+                                {log.actor_email}
                               </span>
-                              {log.actor_email && actorDisplay !== log.actor_email && (
-                                <span className="text-[10px] text-slate-500 max-w-[140px] truncate" title={log.actor_email}>
-                                  {log.actor_email}
-                                </span>
-                              )}
-                            </div>
+                            )}
                           </div>
-                        </Td>
-                        <Td>
-                          <VerbPill value={verb} />
-                        </Td>
-                        <Td>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-medium text-slate-900 max-w-[180px] truncate" title={targetDisplay}>
-                              {/* {targetDisplay} */}
+                        </div>
+                      </Td>
+                      <Td>
+                        <VerbPill value={verb} />
+                      </Td>
+                      <Td>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-medium text-slate-900 max-w-[180px] truncate" title={targetDisplay}>
+                            {targetDisplay}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 capitalize">
+                              {targetModel}
                             </span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 capitalize">
-                                {targetModel}
+                            {targetId && (
+                              <span className="text-[10px] text-slate-400 font-mono truncate max-w-[80px]" title={targetId}>
+                                #{targetId.length > 8 ? targetId.slice(0, 8) + "…" : targetId}
                               </span>
-                              {targetId && (
-                                <span className="text-[10px] text-slate-400 font-mono truncate max-w-[80px]" title={targetId}>
-                                  #{targetId.length > 8 ? targetId.slice(0, 8) + "…" : targetId}
-                                </span>
-                              )}
-                            </div>
+                            )}
                           </div>
-                        </Td>
-                        <Td>
-                          <span className="text-xs text-slate-700 max-w-[120px] truncate block" title={message}>
-                            {message}
-                          </span>
-                        </Td>
-                        <Td>
-                          <span className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
-                            {ip}
-                          </span>
-                        </Td>
-                        <Td>
-                          {hasChanges && (
-                            <button
-                              type="button"
-                              onClick={() => setExpandedRow(isExpanded ? null : log.id)}
-                              className="grid h-6 w-6 place-items-center rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-700"
-                              title="View changes"
-                            >
-                              {isExpanded ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </button>
-                          )}
-                        </Td>
+                        </div>
+                      </Td>
+                      <Td>
+                        <span className="text-xs text-slate-700 max-w-[120px] truncate block" title={message}>
+                          {message}
+                        </span>
+                      </Td>
+                      <Td>
+                        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-mono text-slate-700">
+                          {ip}
+                        </span>
+                      </Td>
+                      <Td>
+                        {hasChanges && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedRow(isExpanded ? null : log.id)}
+                            className="grid h-6 w-6 place-items-center rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors"
+                            title={isExpanded ? "Hide changes" : "View changes"}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                      </Td>
+                    </tr>
+                    {isExpanded && hasChanges && (
+                      <tr key={`${log.id}-changes`}>
+                        <td colSpan={7} className="bg-slate-50/70 px-4 py-3">
+                          <ChangesDisplay changes={log.changes} />
+                        </td>
                       </tr>
-                      {isExpanded && hasChanges && (
-                        <tr key={`${log.id}-changes`}>
-                          <td colSpan={7} className="bg-slate-50/70 px-4 py-3">
-                            <ChangesDisplay changes={log.changes} />
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })}
+                    )}
+                  </>
+                );
+              })}
 
               {!loading && !rows.length && !error && (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-10 text-center text-sm text-slate-500"
-                  >
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                       <Shield className="h-6 w-6 text-slate-400" />
                     </div>
@@ -357,7 +367,7 @@ function FacilityAuditPageInner() {
                       No audit entries found
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      Adjust your filters or try a different search query.
+                      {q ? "Try adjusting your search query." : "No activity recorded yet."}
                     </div>
                   </td>
                 </tr>
@@ -366,18 +376,17 @@ function FacilityAuditPageInner() {
           </table>
         </div>
 
-        {/* Pager */}
+        {/* Pagination */}
         <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
           <span>
-            Page {page} · {rows.length} log
-            {rows.length === 1 ? "" : "s"} on page · {total} total
+            Page {page} · {rows.length} log{rows.length === 1 ? "" : "s"} on page · {total.toLocaleString()} total
           </span>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => goToPage(page - 1)}
-              disabled={!hasPrevPage}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-medium hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+              disabled={!hasPrevPage || loading}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-medium hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Previous
@@ -385,8 +394,8 @@ function FacilityAuditPageInner() {
             <button
               type="button"
               onClick={() => goToPage(page + 1)}
-              disabled={!hasNextPage}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-medium hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+              disabled={!hasNextPage || loading}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-medium hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               Next
               <ArrowRight className="h-3.5 w-3.5" />
@@ -402,7 +411,7 @@ function FacilityAuditPageInner() {
 
 function StatTile({ icon: Icon, label, value, accent, isText = false }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
       <div className="p-5">
         <div className="flex items-center justify-between">
@@ -450,9 +459,7 @@ function VerbPill({ value }) {
   };
   const { cls, label } = map[v] || { cls: "bg-slate-50 text-slate-700 ring-slate-200", label: v || "—" };
   return (
-    <span
-      className={`inline-flex items-center rounded-lg px-2 py-1 text-[11px] font-medium ring-1 ${cls}`}
-    >
+    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-[11px] font-medium ring-1 ${cls}`}>
       {label}
     </span>
   );
@@ -474,13 +481,13 @@ function ChangesDisplay({ changes }) {
           {rest.related_model && (
             <div className="mb-1">
               <span className="text-slate-500">Related model:</span>{" "}
-              <span className="font-medium text-slate-800">{rest.related_model}</span>
+              <span className="font-medium text-slate-800 capitalize">{rest.related_model}</span>
             </div>
           )}
           {rest.pks && rest.pks.length > 0 && (
             <div>
-              <span className="text-slate-500">IDs:</span>{" "}
-              <span className="font-mono text-slate-700">{rest.pks.join(", ")}</span>
+              <span className="text-slate-500">IDs ({rest.pks.length}):</span>{" "}
+              <span className="font-mono text-slate-700">{rest.pks.slice(0, 10).join(", ")}{rest.pks.length > 10 ? "..." : ""}</span>
             </div>
           )}
         </div>
@@ -495,7 +502,7 @@ function ChangesDisplay({ changes }) {
   ]);
 
   // Filter out internal/uninteresting fields
-  const skipFields = new Set(["id", "created_at", "updated_at", "password"]);
+  const skipFields = new Set(["id", "created_at", "updated_at", "password", "sha256", "size_bytes"]);
   const displayKeys = [...allKeys].filter((k) => !skipFields.has(k));
 
   if (displayKeys.length === 0) return null;
@@ -505,13 +512,13 @@ function ChangesDisplay({ changes }) {
       <div className="text-[11px] font-medium text-slate-600 uppercase tracking-wide">
         Field Changes
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="min-w-full text-xs">
           <thead>
-            <tr className="border-b border-slate-200">
-              <th className="px-2 py-1.5 text-left font-medium text-slate-600">Field</th>
-              {before && <th className="px-2 py-1.5 text-left font-medium text-rose-600">Before</th>}
-              {after && <th className="px-2 py-1.5 text-left font-medium text-emerald-600">After</th>}
+            <tr className="border-b border-slate-200 bg-slate-50">
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Field</th>
+              {before && <th className="px-3 py-2 text-left font-semibold text-rose-600">Before</th>}
+              {after && <th className="px-3 py-2 text-left font-semibold text-emerald-600">After</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -522,16 +529,16 @@ function ChangesDisplay({ changes }) {
 
               return (
                 <tr key={key} className={changed ? "bg-amber-50/30" : ""}>
-                  <td className="px-2 py-1.5 font-medium text-slate-700 capitalize">
+                  <td className="px-3 py-2 font-medium text-slate-700 capitalize">
                     {key.replace(/_/g, " ")}
                   </td>
                   {before && (
-                    <td className="px-2 py-1.5 font-mono text-slate-600 max-w-[200px] truncate">
+                    <td className="px-3 py-2 font-mono text-slate-600 max-w-[200px] truncate" title={String(beforeVal)}>
                       {formatValue(beforeVal)}
                     </td>
                   )}
                   {after && (
-                    <td className="px-2 py-1.5 font-mono text-slate-600 max-w-[200px] truncate">
+                    <td className="px-3 py-2 font-mono text-slate-600 max-w-[200px] truncate" title={String(afterVal)}>
                       {formatValue(afterVal)}
                     </td>
                   )}
@@ -541,8 +548,8 @@ function ChangesDisplay({ changes }) {
           </tbody>
         </table>
         {displayKeys.length > 15 && (
-          <div className="mt-2 text-[11px] text-slate-500 italic">
-            + {displayKeys.length - 15} more fields
+          <div className="px-3 py-2 text-[11px] text-slate-500 italic bg-slate-50 border-t border-slate-200">
+            + {displayKeys.length - 15} more fields not shown
           </div>
         )}
       </div>

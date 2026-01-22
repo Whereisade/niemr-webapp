@@ -344,10 +344,9 @@ export default async function FacilityDashboard() {
   // ===== ENHANCED DYNAMIC STATS (Role-based, 3 stats per role) =====
   let stats;
   if (isOwner) {
-    // ✅ FIXED: Count only APPROVED, active, non-sacked providers
+    // ✅ FIXED: Count only active, non-sacked providers (don't filter by status)
     const activeProviders = provs.filter(p => {
-      const status = (p.status || p.verification_status || "").toUpperCase();
-      return p.is_active && !p.is_sacked && status === "APPROVED";
+      return p.is_active && !p.is_sacked;
     }).length;
     
     stats = [
@@ -365,12 +364,11 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Active Providers",
-        value: activeProviders,  // ✅ FIXED: Real active provider count (approved only)
+        value: activeProviders,  // ✅ FIXED: Real active provider count
         icon: Users2,
         trend: `${provs.filter(p => {
-          const status = (p.status || p.verification_status || "").toUpperCase();
-          return !p.is_active || p.is_sacked || status !== "APPROVED";
-        }).length} `,
+          return !p.is_active || p.is_sacked;
+        }).length} inactive`,
         trendUp: true,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
