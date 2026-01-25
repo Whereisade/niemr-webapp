@@ -754,18 +754,22 @@ export default function FacilityEncounterLabsPage() {
               <div className="mt-2 text-sm text-slate-900">
                 {selectedCodes.size + manualTests.length ? (
                   <div className="space-y-1">
-                    {Array.from(selectedCodes).slice(0, 8).map((c) => (
-                      <div key={c} className="flex items-center justify-between">
-                        <span className="font-mono text-xs">{c}</span>
-                        <button
-                          type="button"
-                          className="text-xs text-slate-500 hover:text-slate-900"
-                          onClick={() => toggleCode(c)}
-                        >
-                          remove
-                        </button>
-                      </div>
-                    ))}
+                    {Array.from(selectedCodes).slice(0, 8).map((c) => {
+                      const test = catalog.find((t) => String(t?.code) === String(c));
+                      const testName = test?.name || c;
+                      return (
+                        <div key={c} className="flex items-center justify-between">
+                          <span className="text-xs">{testName}</span>
+                          <button
+                            type="button"
+                            className="text-xs text-slate-500 hover:text-slate-900"
+                            onClick={() => toggleCode(c)}
+                          >
+                            remove
+                          </button>
+                        </div>
+                      );
+                    })}
                     {manualTests.slice(0, 8).map((m) => (
                       <div key={m} className="flex items-center justify-between">
                         <span className="text-xs">{m}</span>

@@ -802,8 +802,8 @@ export default function FacilityEncounterPrescriptionPage() {
                       <div className="text-sm font-semibold text-slate-900">
                         {it?.drug_code ? (
                           <>
-                            <span className="font-mono text-xs">
-                              {it.drug_code}
+                            <span className="text-xs">
+                              {catalog.find((d) => String(d?.code) === String(it.drug_code))?.name || it.drug_code}
                             </span>
                           </>
                         ) : (

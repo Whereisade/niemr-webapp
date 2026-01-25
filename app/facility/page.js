@@ -200,6 +200,15 @@ export default async function FacilityDashboard() {
     fetchMe(),
   ]);
 
+  // Fetch provider stats separately to handle potential 404
+  let providerStats = {};
+  try {
+    providerStats = await safeFetchJSON("/providers/facility-stats/?current=true", {});
+  } catch (error) {
+    console.warn("Provider stats endpoint not available yet:", error);
+    providerStats = {};
+  }
+
   if (!me) {
     redirect("/login/facility");
   }
@@ -221,6 +230,12 @@ export default async function FacilityDashboard() {
   let rxCounts = { prescribed: 0, partial: 0, dispensed: 0, cancelled: 0 };
   let stockCounts = { lowStock: 0, outOfStock: 0, totalItems: 0 };
   let revenueCounts = { todayTotal: 0, paymentsCollected: 0 };
+  
+  // ✅ Declare at function scope for doctor role (used in both stats & quickMetrics)
+  let myApptsCount = 0;
+  let myEncountersList = [];
+  let openEncounters = 0;
+  let completedToday = 0;
 
   if (role === "LAB") {
     const [pending, inProgress, completedToday, cancelled] = await Promise.all([
@@ -344,10 +359,10 @@ export default async function FacilityDashboard() {
   // ===== ENHANCED DYNAMIC STATS (Role-based, 3 stats per role) =====
   let stats;
   if (isOwner) {
-    // ✅ FIXED: Count only active, non-sacked providers (don't filter by status)
-    const activeProviders = provs.filter(p => {
-      return p.is_active && !p.is_sacked;
-    }).length;
+    // ✅ FIXED: Use backend endpoint for accurate provider stats
+    const activeProviders = providerStats?.active_providers || 0;
+    const totalProviders = providerStats?.total_providers || 0;
+    const inactiveProviders = totalProviders - activeProviders;
     
     stats = [
       {
@@ -364,11 +379,10 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Active Providers",
-        value: activeProviders,  // ✅ FIXED: Real active provider count
+        value: activeProviders,  // ✅ FIXED: From backend endpoint
+        subValue: `${totalProviders} total providers`,
         icon: Users2,
-        trend: `${provs.filter(p => {
-          return !p.is_active || p.is_sacked;
-        }).length} inactive`,
+        trend: `${inactiveProviders} inactive`,
         trendUp: true,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
@@ -484,7 +498,7 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Providers on Duty",
-        value: provs.filter(p => {
+        value: providerStats?.active_providers || provs.filter(p => {
           const status = (p.status || p.verification_status || "").toUpperCase();
           return p.is_active && !p.is_sacked && status === "APPROVED";
         }).length,
@@ -497,23 +511,25 @@ export default async function FacilityDashboard() {
       },
     ];
   } else if (role === "DOCTOR") {
-    // ✅ FIXED: Fetch doctor-specific encounters without limit restrictions
-    const [myAppts, myEncounters] = await Promise.all([
-      safeFetchJSON("/encounters/?mine=1", []),  // Fetch ALL encounters (no limit)
+    // ✅ Fetch doctor-specific data ONCE at the top
+    const [myApptsData, myEncountersData] = await Promise.all([
       safeFetchJSON("/appointments/?mine=1&date=today", []),
+      safeFetchJSON("/encounters/?mine=1", []),  // No limit - get ALL encounters
     ]);
     
-    const myApptsCount = getCount(myAppts);
-    const myEncountersList = normalizeList(myEncounters);
+    myApptsCount = getCount(myApptsData);
+    myEncountersList = normalizeList(myEncountersData);
     
-    // ✅ Open encounters: not CLOSED or CROSSED_OUT
-    const openEncounters = myEncountersList.filter(e => 
-      !["CLOSED", "CROSSED_OUT"].includes(String(e.status || "").toUpperCase())
-    ).length;
+    // ✅ Calculate open encounters: not CLOSED or CROSSED_OUT
+    openEncounters = myEncountersList.filter(e => {
+      const status = String(e.status || "").toUpperCase();
+      return !["CLOSED", "CROSSED_OUT"].includes(status);
+    }).length;
     
-    // ✅ Completed today: CLOSED status and finalized/locked within today's date range
-    const completedToday = myEncountersList.filter(e => {
-      if (String(e.status || "").toUpperCase() !== "CLOSED") return false;
+    // ✅ Calculate completed today: CLOSED and locked/finalized today
+    completedToday = myEncountersList.filter(e => {
+      const status = String(e.status || "").toUpperCase();
+      if (status !== "CLOSED") return false;
       
       // Check if closed/locked today
       const closedAt = e.locked_at || e.clinical_finalized_at || e.updated_at;
@@ -536,7 +552,7 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Open Encounters",
-        value: openEncounters,  // ✅ FIXED: Real count of open encounters
+        value: openEncounters,  // ✅ FIXED: Real count from API
         icon: Activity,
         accent: "from-emerald-500 to-teal-600",
         bgAccent: "bg-emerald-50",
@@ -546,7 +562,7 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Completed Today",
-        value: completedToday,  // ✅ FIXED: Real count of encounters completed today
+        value: completedToday,  // ✅ FIXED: Real count from API
         icon: CheckCircle2,
         accent: "from-purple-500 to-pink-600",
         bgAccent: "bg-purple-50",
@@ -603,7 +619,7 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Active Providers",
-        value: provs.filter(p => {
+        value: providerStats?.active_providers || provs.filter(p => {
           const status = (p.status || p.verification_status || "").toUpperCase();
           return p.is_active && !p.is_sacked && status === "APPROVED";
         }).length,
@@ -762,25 +778,12 @@ export default async function FacilityDashboard() {
       },
     ];
   } else if (role === "DOCTOR") {
-    // ✅ FIXED: Use the real encounter data we fetched above
-    const [myAppts, myEncounters] = await Promise.all([
-      safeFetchJSON("/appointments/?mine=1&date=today", []),
-      safeFetchJSON("/encounters/?mine=1", []),
-    ]);
+    // ✅ Reuse variables from stats section - NO duplicate API calls
+    // Variables available: myApptsCount, myEncountersList, openEncounters, completedToday
     
-    const myApptsCount = getCount(myAppts);
-    const myEncountersList = normalizeList(myEncounters);
-    const openCases = myEncountersList.filter(e => 
-      !["CLOSED", "CROSSED_OUT"].includes(String(e.status || "").toUpperCase())
-    ).length;
-    const completedToday = myEncountersList.filter(e => {
-      if (String(e.status || "").toUpperCase() !== "CLOSED") return false;
-      const closedAt = e.locked_at || e.clinical_finalized_at || e.updated_at;
-      if (!closedAt) return false;
-      const closedDate = new Date(closedAt);
-      return closedDate >= dayStart && closedDate <= dayEnd;
-    }).length;
-    const completionRate = myApptsCount > 0 ? Math.round((completedToday / myApptsCount) * 100) : 0;
+    const completionRate = myApptsCount > 0 
+      ? Math.round((completedToday / myApptsCount) * 100) 
+      : 0;
     
     quickMetrics = [
       {
@@ -793,14 +796,14 @@ export default async function FacilityDashboard() {
       {
         icon: Activity,
         label: "Open Cases",
-        value: openCases,
+        value: openEncounters,  // ✅ FIXED: Reused from stats section
         sublabel: "Active encounters",
         color: "emerald",
       },
       {
         icon: CheckCircle2,
         label: "Completed",
-        value: completedToday,
+        value: completedToday,  // ✅ FIXED: Reused from stats section
         sublabel: "Today",
         color: "violet",
       },
@@ -1233,14 +1236,8 @@ export default async function FacilityDashboard() {
                         Care Team
                       </h3>
                       <p className="text-xs text-slate-600">
-                        {provs.filter(p => {
-                          const status = (p.status || p.verification_status || "").toUpperCase();
-                          return p.is_active && !p.is_sacked && status === "APPROVED";
-                        }).length} active provider
-                        {provs.filter(p => {
-                          const status = (p.status || p.verification_status || "").toUpperCase();
-                          return p.is_active && !p.is_sacked && status === "APPROVED";
-                        }).length !== 1 ? "s" : ""}
+                        {providerStats?.active_providers || 0} active provider
+                        {providerStats?.active_providers !== 1 ? "s" : ""}
                       </p>
                     </div>
                     <Link
@@ -1252,10 +1249,7 @@ export default async function FacilityDashboard() {
                   </div>
                 </div>
                 <ul className="divide-y divide-slate-100">
-                  {provs.filter(p => {
-                    const status = (p.status || p.verification_status || "").toUpperCase();
-                    return p.is_active && !p.is_sacked && status === "APPROVED";
-                  }).slice(0, 4).map((p, i) => (
+                  {provs.slice(0, 4).map((p, i) => (
                     <li
                       key={p.id || i}
                       className="flex items-center justify-between p-4 transition hover:bg-slate-50"
