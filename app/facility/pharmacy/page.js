@@ -583,7 +583,7 @@ function FacilityPharmacyPageInner() {
       <PrescriptionDetailsModal
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
-        prescriptionId={detailsId}
+        id={detailsId}
         allowDispense={canDispense}
         onUpdated={() => setRefreshKey((k) => k + 1)}
       />

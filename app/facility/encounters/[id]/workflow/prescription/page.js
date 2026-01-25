@@ -278,14 +278,14 @@ export default function FacilityEncounterPrescriptionPage() {
     if (!code) return;
 
     setItems((prev) => {
-      // allow duplicates if intentionally needed? keep it simple: de-dupe by code + dose/freq (initially empty)
+      // Allow duplicates if intentionally needed? keep it simple: de-dupe by code + dose/freq (initially empty)
       if (prev.some((x) => String(x?.drug_code) === code && !x?.drug_name)) return prev;
       return [
         ...prev,
         {
           drug_code: code,
-          drug_name: "",
-          dose: "",
+          drug_name: drug?.name || "", // 🆕 Auto-fill drug name too
+          dose: drug?.strength || "", // 🆕 Auto-fill dose from catalog drug strength
           frequency: "",
           duration_days: "", // Empty by default - let doctor input
           instruction: "",
@@ -803,7 +803,7 @@ export default function FacilityEncounterPrescriptionPage() {
                         {it?.drug_code ? (
                           <>
                             <span className="text-xs">
-                              {catalog.find((d) => String(d?.code) === String(it.drug_code))?.name || it.drug_code}
+                              {it.drug_name || catalog.find((d) => String(d?.code) === String(it.drug_code))?.name || it.drug_code}
                             </span>
                           </>
                         ) : (

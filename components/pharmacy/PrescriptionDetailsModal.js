@@ -61,6 +61,11 @@ export default function PrescriptionDetailsModal({
   const [submitErrors, setSubmitErrors] = useState({});
   const [submitSuccess, setSubmitSuccess] = useState({});
 
+  // Prescribed quantity editing
+  const [editingPrescribedId, setEditingPrescribedId] = useState(null);
+  const [prescribedForms, setPrescribedForms] = useState({});
+  const [updatingPrescribed, setUpdatingPrescribed] = useState(null);
+
   // Load prescription
   useEffect(() => {
     if (!open || !id) return;
@@ -74,6 +79,7 @@ export default function PrescriptionDetailsModal({
       setSubmitErrors({});
       setSubmitSuccess({});
       setExpandedItemId(null);
+      setEditingPrescribedId(null);
 
       try {
         const res = await fetch(`/api/proxy/pharmacy/prescriptions/${id}/`, {
@@ -86,14 +92,17 @@ export default function PrescriptionDetailsModal({
         const json = await res.json();
         if (!cancelled) {
           setRx(json);
-          // Initialize dispense forms
+          // Initialize forms
           const forms = {};
+          const prescribedFormsInit = {};
           if (json.items) {
             json.items.forEach((item) => {
               forms[item.id] = { qty: "", note: "" };
+              prescribedFormsInit[item.id] = { qty: item.qty_prescribed || "" };
             });
           }
           setDispenseForms(forms);
+          setPrescribedForms(prescribedFormsInit);
         }
       } catch (err) {
         console.error("Failed to load prescription details:", err);
@@ -287,6 +296,89 @@ export default function PrescriptionDetailsModal({
     }));
   }
 
+  function updatePrescribedForm(itemId, updates) {
+    setPrescribedForms((prev) => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], ...updates },
+    }));
+  }
+
+  async function handleUpdatePrescribed(itemId) {
+    setSubmitErrors((prev) => ({ ...prev, [itemId]: null }));
+    setSubmitSuccess((prev) => ({ ...prev, [itemId]: "" }));
+
+    if (!allowDispense || !rx || !id) return;
+
+    const form = prescribedForms[itemId];
+    if (!form) return;
+
+    const numericQty = Number(form.qty);
+    if (!Number.isFinite(numericQty) || numericQty <= 0) {
+      setSubmitErrors((prev) => ({
+        ...prev,
+        [itemId]: "Enter a valid prescribed quantity.",
+      }));
+      return;
+    }
+
+    try {
+      setUpdatingPrescribed(itemId);
+      const res = await fetch(
+        `/api/proxy/pharmacy/prescriptions/${id}/update-item/`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            item_id: itemId,
+            qty_prescribed: numericQty,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        let msg = `Failed to update prescribed quantity (${res.status})`;
+        try {
+          const errJson = await res.json();
+          if (errJson && (errJson.detail || errJson.error)) {
+            msg = errJson.detail || errJson.error;
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(msg);
+      }
+
+      const updated = await res.json();
+      setRx(updated);
+
+      setSubmitSuccess((prev) => ({
+        ...prev,
+        [itemId]: `Prescribed quantity updated to ${numericQty}.`,
+      }));
+
+      // Close the editing form after success
+      setTimeout(() => {
+        setEditingPrescribedId(null);
+        setSubmitSuccess((prev) => ({ ...prev, [itemId]: "" }));
+      }, 2000);
+
+      if (typeof onUpdated === "function") {
+        onUpdated();
+      }
+    } catch (err) {
+      console.error("Update prescribed quantity failed:", err);
+      setSubmitErrors((prev) => ({
+        ...prev,
+        [itemId]: err.message || "Failed to update prescribed quantity.",
+      }));
+    } finally {
+      setUpdatingPrescribed(null);
+    }
+  }
+
   if (!open || !id) return null;
 
   const status = String(rx?.status || "").toUpperCase();
@@ -435,8 +527,10 @@ export default function PrescriptionDetailsModal({
                         ? stockByDrugId.get(drug.id)
                         : null;
 
-                      const isFullyDispensed = remaining === 0;
+                      const isFullyDispensed = remaining === 0 && prescribed > 0;
+                      const noPrescribedQty = prescribed === 0;
                       const isExpanded = expandedItemId === item.id;
+                      const isEditingPrescribed = editingPrescribedId === item.id;
                       const hasStockIssue =
                         stockQty !== null &&
                         remaining > 0 &&
@@ -448,7 +542,9 @@ export default function PrescriptionDetailsModal({
                         <div
                           key={item.id}
                           className={`overflow-hidden rounded-xl border ${
-                            isFullyDispensed
+                            noPrescribedQty
+                              ? "border-blue-200 bg-blue-50/30"
+                              : isFullyDispensed
                               ? "border-emerald-200 bg-emerald-50/30"
                               : isOutOfStock
                               ? "border-rose-200 bg-rose-50/30"
@@ -502,8 +598,8 @@ export default function PrescriptionDetailsModal({
                                   <span className="text-slate-500">
                                     Prescribed:
                                   </span>
-                                  <span className="font-semibold text-slate-900">
-                                    {prescribed}
+                                  <span className={`font-semibold ${noPrescribedQty ? 'text-blue-700' : 'text-slate-900'}`}>
+                                    {prescribed || "Not set"}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs">
@@ -550,7 +646,13 @@ export default function PrescriptionDetailsModal({
                               </div>
 
                               {/* Stock warnings */}
-                              {isOutOfStock && (
+                              {noPrescribedQty && (
+                                <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  Prescribed quantity not set
+                                </div>
+                              )}
+                              {isOutOfStock && !noPrescribedQty && (
                                 <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-rose-100 px-2 py-1 text-xs font-medium text-rose-800">
                                   <AlertTriangle className="h-3.5 w-3.5" />
                                   Out of stock - cannot dispense
@@ -570,41 +672,166 @@ export default function PrescriptionDetailsModal({
                               )}
                             </div>
 
-                            {/* Dispense button */}
-                            {canDispense && !isFullyDispensed && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedItemId(
-                                    isExpanded ? null : item.id
-                                  )
-                                }
-                                disabled={isOutOfStock}
-                                className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                                  isOutOfStock
-                                    ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
-                                    : isExpanded
-                                    ? "border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
-                                    : "border border-sky-200 bg-sky-600 text-white hover:bg-sky-700"
-                                }`}
-                              >
-                                {isExpanded ? (
-                                  <>
-                                    <ChevronUp className="h-4 w-4" />
-                                    Cancel
-                                  </>
-                                ) : (
-                                  <>
-                                    Dispense
-                                    <ChevronDown className="h-4 w-4" />
-                                  </>
+                            {/* Action buttons */}
+                            {canDispense && (
+                              <div className="flex flex-col gap-2">
+                                {/* Set/Edit Prescribed Quantity button */}
+                                {!isFullyDispensed && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingPrescribedId(
+                                        isEditingPrescribed ? null : item.id
+                                      );
+                                      // Close dispense form if open
+                                      if (expandedItemId === item.id) {
+                                        setExpandedItemId(null);
+                                      }
+                                      // Clear messages
+                                      setSubmitErrors((prev) => ({ ...prev, [item.id]: null }));
+                                      setSubmitSuccess((prev) => ({ ...prev, [item.id]: "" }));
+                                    }}
+                                    className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                                      isEditingPrescribed
+                                        ? "border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                        : noPrescribedQty
+                                        ? "border border-blue-200 bg-blue-600 text-white hover:bg-blue-700"
+                                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {isEditingPrescribed ? (
+                                      <>
+                                        <ChevronUp className="h-4 w-4" />
+                                        Cancel
+                                      </>
+                                    ) : noPrescribedQty ? (
+                                      <>
+                                        Set Qty
+                                        <ChevronDown className="h-4 w-4" />
+                                      </>
+                                    ) : (
+                                      <>
+                                        Edit Qty
+                                        <ChevronDown className="h-4 w-4" />
+                                      </>
+                                    )}
+                                  </button>
                                 )}
-                              </button>
+
+                                {/* Dispense button - only show if prescribed qty is set */}
+                                {!isFullyDispensed && !noPrescribedQty && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedItemId(
+                                        isExpanded ? null : item.id
+                                      );
+                                      // Close prescribed editing form if open
+                                      if (editingPrescribedId === item.id) {
+                                        setEditingPrescribedId(null);
+                                      }
+                                      // Clear messages
+                                      setSubmitErrors((prev) => ({ ...prev, [item.id]: null }));
+                                      setSubmitSuccess((prev) => ({ ...prev, [item.id]: "" }));
+                                    }}
+                                    disabled={isOutOfStock}
+                                    className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                                      isOutOfStock
+                                        ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                                        : isExpanded
+                                        ? "border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                        : "border border-sky-200 bg-sky-600 text-white hover:bg-sky-700"
+                                    }`}
+                                  >
+                                    {isExpanded ? (
+                                      <>
+                                        <ChevronUp className="h-4 w-4" />
+                                        Cancel
+                                      </>
+                                    ) : (
+                                      <>
+                                        Dispense
+                                        <ChevronDown className="h-4 w-4" />
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
 
+                          {/* Edit Prescribed Quantity Form */}
+                          {canDispense && isEditingPrescribed && (
+                            <div className="border-t border-slate-200 bg-blue-50 p-4">
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  handleUpdatePrescribed(item.id);
+                                }}
+                                className="space-y-3"
+                              >
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                                    Prescribed quantity{" "}
+                                    <span className="text-rose-600">*</span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={prescribedForms[item.id]?.qty || ""}
+                                    onChange={(e) =>
+                                      updatePrescribedForm(item.id, {
+                                        qty: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Enter quantity prescribed"
+                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                  />
+                                  <p className="mt-1 text-xs text-slate-600">
+                                    Set the total quantity prescribed by the doctor
+                                  </p>
+                                </div>
+
+                                {submitErrors[item.id] && (
+                                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{submitErrors[item.id]}</span>
+                                  </div>
+                                )}
+
+                                {submitSuccess[item.id] && (
+                                  <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{submitSuccess[item.id]}</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-end gap-2 pt-1">
+                                  <button
+                                    type="submit"
+                                    disabled={updatingPrescribed === item.id}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+                                  >
+                                    {updatingPrescribed === item.id ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Updating…
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        {noPrescribedQty ? "Set quantity" : "Update quantity"}
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
+                          )}
+
                           {/* Dispense Form */}
-                          {canDispense && isExpanded && !isFullyDispensed && (
+                          {canDispense && isExpanded && !isFullyDispensed && !noPrescribedQty && (
                             <div className="border-t border-slate-200 bg-slate-50 p-4">
                               <form
                                 onSubmit={(e) => {
