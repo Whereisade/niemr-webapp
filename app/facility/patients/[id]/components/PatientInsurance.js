@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import {
   Shield,
@@ -39,6 +39,20 @@ export default function PatientInsurance({ patientId }) {
   // System HMOs with tiers
   const [systemHMOs, setSystemHMOs] = useState([]);
   const [facilityHMOs, setFacilityHMOs] = useState([]);
+
+  // Only show HMOs that this facility has activated
+  const activeSystemHMOs = useMemo(() => {
+    const ids = new Set(
+      facilityHMOs
+        .filter((fh) => fh && fh.is_active !== false)
+        .map((fh) =>
+          typeof fh.system_hmo === "object" ? fh.system_hmo?.id : fh.system_hmo
+        )
+        .filter(Boolean)
+    );
+    return systemHMOs.filter((h) => ids.has(h.id));
+  }, [facilityHMOs, systemHMOs]);
+
   
   // HMO Approvals
   const [approvals, setApprovals] = useState([]);
@@ -640,12 +654,17 @@ export default function PatientInsurance({ patientId }) {
                 disabled={saving}
               >
                 <option value="">-- Select an HMO --</option>
-                {systemHMOs.map((hmo) => (
+                {activeSystemHMOs.map((hmo) => (
                   <option key={hmo.id} value={hmo.id}>
                     {hmo.name} {hmo.nhis_number && `(${hmo.nhis_number})`}
                   </option>
                 ))}
               </select>
+              {activeSystemHMOs.length === 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  No HMOs have been activated for this facility yet. Please activate an HMO in Facility HMO settings.
+                </p>
+              )}
             </div>
 
             {/* Tier Selection */}

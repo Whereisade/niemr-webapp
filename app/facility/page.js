@@ -50,10 +50,59 @@ import LiveUpcomingAppointmentsRows from "@/components/facility/LiveUpcomingAppo
 
 const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
 const ACCESS_COOKIE = process.env.ACCESS_COOKIE || "niemr_access";
+const REFRESH_COOKIE = process.env.REFRESH_COOKIE || "niemr_refresh";
+
+function buildBackendUrl(path) {
+  const base = BACKEND.replace(/\/$/, "");
+  const u = new URL(`${base}/api${path}`);
+  // DRF usually expects trailing slashes
+  if (!u.pathname.endsWith("/")) u.pathname += "/";
+  return u.toString();
+}
 
 async function safeFetchJSON(path, fallback) {
   try {
-    const res = await fetch(`/api/proxy${path}`, { cache: "no-store" });
+    const cookieStore = await cookies();
+    const access = cookieStore.get(ACCESS_COOKIE)?.value || null;
+    const refresh = cookieStore.get(REFRESH_COOKIE)?.value || null;
+
+    if (!access) return fallback;
+
+    const url = buildBackendUrl(path);
+
+    let res = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${access}`,
+        Accept: "application/json",
+      },
+    });
+
+    // If access expired, try refresh once (best-effort). We can't persist the new cookie
+    // from a Server Component, but we can still use the refreshed token for this render.
+    if (res.status === 401 && refresh) {
+      const rr = await fetch(buildBackendUrl("/accounts/token/refresh/"), {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+
+      if (rr.ok) {
+        const refreshed = await rr.json().catch(() => ({}));
+        const newAccess = refreshed?.access || null;
+        if (newAccess) {
+          res = await fetch(url, {
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${newAccess}`,
+              Accept: "application/json",
+            },
+          });
+        }
+      }
+    }
+
     if (!res.ok) return fallback;
     return await res.json();
   } catch {
@@ -356,6 +405,22 @@ export default async function FacilityDashboard() {
       : facilityName
     : greetingName;
 
+  // Facility-wide open encounters (used by Nurse + default staff cards)
+  // Appointment statuses do not include IN_PROGRESS, so we pull encounter statuses directly.
+  let facilityOpenEncountersCount = 0;
+  if (
+    role === "NURSE" ||
+    (!isOwner && !isFrontdesk && !["LAB", "PHARMACY", "DOCTOR"].includes(role))
+  ) {
+    const [openE, inProgressE, waitingLabsE] = await Promise.all([
+      safeFetchCount("/encounters/?status=OPEN", 0),
+      safeFetchCount("/encounters/?status=IN_PROGRESS", 0),
+      safeFetchCount("/encounters/?status=WAITING_LABS", 0),
+    ]);
+    facilityOpenEncountersCount = (openE || 0) + (inProgressE || 0) + (waitingLabsE || 0);
+  }
+
+
   // ===== ENHANCED DYNAMIC STATS (Role-based, 3 stats per role) =====
   let stats;
   if (isOwner) {
@@ -595,7 +660,7 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Open Encounters",
-        value: statusCounts.IN_PROGRESS || 0,
+        value: facilityOpenEncountersCount,
         icon: Stethoscope,
         accent: "from-purple-500 to-pink-600",
         bgAccent: "bg-purple-50",
@@ -632,7 +697,7 @@ export default async function FacilityDashboard() {
       },
       {
         label: "Open Encounters",
-        value: statusCounts.IN_PROGRESS || 0,
+        value: facilityOpenEncountersCount,
         icon: Activity,
         accent: "from-purple-500 to-pink-600",
         bgAccent: "bg-purple-50",
@@ -648,39 +713,45 @@ export default async function FacilityDashboard() {
   
   if (isOwner) {
     const completedCount = statusCounts.COMPLETED || 0;
+    const checkedInCount = statusCounts.CHECKED_IN || 0;
+    const cancelledCount = statusCounts.CANCELLED || 0;
+    const noShowCount = statusCounts.NO_SHOW || 0;
+
     const totalCount = todaysCountForDashboard || 1;
-    const completionRate = Math.round((completedCount / totalCount) * 100);
-    const avgWaitTime = calculateAverageWaitTime(appts) || "—";
-    const capacityUtilization = Math.min(Math.round((totalCount / 50) * 100), 100); // Assuming 50 slots
-    
+    const attendanceRate = Math.round(
+      ((checkedInCount + completedCount) / totalCount) * 100
+    );
+
+    const outstanding = Number(revenueCounts.todayTotal || 0) - Number(revenueCounts.paymentsCollected || 0);
+
     quickMetrics = [
       {
         icon: BarChart3,
-        label: "Completion Rate",
-        value: `${completionRate}%`,
-        sublabel: `${completedCount} of ${totalCount}`,
+        label: "Attendance Rate",
+        value: `${attendanceRate}%`,
+        sublabel: `${checkedInCount + completedCount} attended of ${totalCount}`,
         color: "emerald",
       },
       {
-        icon: Clock,
-        label: "Avg Wait Time",
-        value: avgWaitTime,
-        sublabel: "Check-in to start",
+        icon: CheckCircle2,
+        label: "Completed",
+        value: completedCount,
+        sublabel: "Appointments completed today",
         color: "blue",
       },
       {
-        icon: Activity,
-        label: "Capacity Utilization",
-        value: `${capacityUtilization}%`,
-        sublabel: "Appointment slots",
-        color: "violet",
+        icon: AlertCircle,
+        label: "Missed / Cancelled",
+        value: cancelledCount + noShowCount,
+        sublabel: `${cancelledCount} cancelled · ${noShowCount} no-show`,
+        color: "amber",
       },
       {
         icon: DollarSign,
-        label: "Outstanding Balance",
-        value: `₦${(revenueCounts.todayTotal - revenueCounts.paymentsCollected).toLocaleString()}`,
-        sublabel: "Pending payment",
-        color: "amber",
+        label: "Payments Collected",
+        value: `₦${Number(revenueCounts.paymentsCollected || 0).toLocaleString()}`,
+        sublabel: `Outstanding ₦${Math.max(0, outstanding).toLocaleString()}`,
+        color: "violet",
       },
     ];
   } else if (role === "LAB") {
@@ -834,7 +905,7 @@ export default async function FacilityDashboard() {
       {
         icon: Activity,
         label: "Open Encounters",
-        value: statusCounts.IN_PROGRESS || 0,
+        value: facilityOpenEncountersCount,
         sublabel: "In progress",
         color: "violet",
       },
@@ -1227,59 +1298,7 @@ export default async function FacilityDashboard() {
           {/* Sidebar */}
           <aside className="space-y-6">
             {/* Providers Preview */}
-            {provs.length > 0 && (
-              <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-                <div className="border-b border-slate-200 p-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-slate-900">
-                        Care Team
-                      </h3>
-                      <p className="text-xs text-slate-600">
-                        {providerStats?.active_providers || 0} active provider
-                        {providerStats?.active_providers !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                    <Link
-                      href="/facility/providers"
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      View all
-                    </Link>
-                  </div>
-                </div>
-                <ul className="divide-y divide-slate-100">
-                  {provs.slice(0, 4).map((p, i) => (
-                    <li
-                      key={p.id || i}
-                      className="flex items-center justify-between p-4 transition hover:bg-slate-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 place-items-center rounded-lg bg-emerald-50">
-                          <Stethoscope className="h-5 w-5 text-emerald-600" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-slate-900">
-                            {p.user?.full_name ||
-                              [p.user?.first_name, p.user?.last_name]
-                                .filter(Boolean)
-                                .join(" ") ||
-                              p.user?.email ||
-                              "Provider"}
-                          </div>
-                          {p.provider_type && (
-                            <div className="text-xs text-slate-500">
-                              {p.provider_type.replaceAll("_", " ")}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-slate-400" />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            
 
             {/* Settings Cards */}
             <div className="space-y-3">
