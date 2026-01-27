@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -16,7 +16,10 @@ import {
   downloadLabPdf,
   downloadImagingPdf,
   downloadBillingPdf,
+  downloadHmoStatementPdf,
 } from "@/lib/reports";
+
+import { apiFetch } from "@/lib/api";
 
 const REPORT_TYPES = [
   {
@@ -47,6 +50,13 @@ const REPORT_TYPES = [
     helper: "Use the Patient ID (or a Charge ID for a single-charge receipt). Date range optional.",
     icon: ReceiptIcon, // simple alias too
   },
+  {
+    id: "hmo_statement",
+    label: "HMO statement",
+    description: "Download statement for an HMO linked to this facility (FacilityHMO).",
+    helper: "Select the FacilityHMO link from the dropdown. Date range optional.",
+    icon: HmoIcon,
+  },
 ];
 
 // Simple icon aliases using existing lucide icons you already have installed
@@ -58,23 +68,78 @@ function ReceiptIcon(props) {
   return <Users {...props} />; // re-use Users as a generic “billing” icon
 }
 
+function HmoIcon(props) {
+  return <Building2 {...props} />;
+}
+
 export default function FacilityReportsPage() {
   const [type, setType] = useState("encounter");
   const [refId, setRefId] = useState("");
   const [billingStart, setBillingStart] = useState("");
   const [billingEnd, setBillingEnd] = useState("");
+  const [facilityHMOs, setFacilityHMOs] = useState([]);
+  const [facilityHmoId, setFacilityHmoId] = useState("");
+  const [hmoLoading, setHmoLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  function normalizeList(res) {
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.results)) return res.results;
+    return [];
+  }
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadFacilityHMOs() {
+      try {
+        setHmoLoading(true);
+        const data = await apiFetch("/patients/hmo/facility/");
+        const list = normalizeList(data);
+        if (!ignore) setFacilityHMOs(list);
+      } catch (err) {
+        console.error("Failed to load facility HMOs", err);
+      } finally {
+        if (!ignore) setHmoLoading(false);
+      }
+    }
+
+    loadFacilityHMOs();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const activeFacilityHMOs = useMemo(() => {
+    const list = (facilityHMOs || [])
+      .filter((fh) => fh && fh.is_active !== false)
+      .map((fh) => {
+        const system = fh.system_hmo || {};
+        const name = system?.name || fh?.name || `HMO #${fh.id}`;
+        return { id: fh.id, name };
+      });
+
+    list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return list;
+  }, [facilityHMOs]);
 
   async function handleDownload(event) {
     event.preventDefault();
     setError("");
     setMessage("");
 
-    if (!refId.trim()) {
-      setError("Please enter a valid reference ID.");
-      return;
+    if (type === "hmo_statement") {
+      if (!facilityHmoId) {
+        setError("Please select an HMO from the dropdown.");
+        return;
+      }
+    } else {
+      if (!refId.trim()) {
+        setError("Please enter a valid reference ID.");
+        return;
+      }
     }
 
     try {
@@ -87,9 +152,18 @@ export default function FacilityReportsPage() {
       } else if (type === "imaging") {
         await downloadImagingPdf(refId.trim());
       } else if (type === "billing") {
+        const start = billingStart ? `${billingStart}T00:00:00Z` : undefined;
+        const end = billingEnd ? `${billingEnd}T23:59:59Z` : undefined;
         await downloadBillingPdf(refId.trim(), {
-          start: billingStart || undefined,
-          end: billingEnd || undefined,
+          start,
+          end,
+        });
+      } else if (type === "hmo_statement") {
+        const start = billingStart ? `${billingStart}T00:00:00Z` : undefined;
+        const end = billingEnd ? `${billingEnd}T23:59:59Z` : undefined;
+        await downloadHmoStatementPdf(facilityHmoId, {
+          start,
+          end,
         });
       }
 
@@ -211,32 +285,57 @@ export default function FacilityReportsPage() {
       {/* Form */}
       <section className="rounded-xl border border-slate-200 bg-white px-4 py-4">
         <form className="space-y-4" onSubmit={handleDownload}>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-700">
-              Reference ID
-            </label>
-            <input
-              type="text"
-              value={refId}
-              onChange={(e) => setRefId(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900"
-              placeholder={
-                activeType?.id === "encounter"
-                  ? "e.g. 123 or EN-000123"
-                  : activeType?.id === "lab"
-                  ? "e.g. 456 or LAB-000456"
-                  : activeType?.id === "imaging"
-                  ? "e.g. 789 or IMG-000789"
-                  : "e.g. Patient ID (e.g. 321)"
-              }
-            />
-            {activeType?.helper && (
-              <p className="text-[11px] text-slate-500">{activeType.helper}</p>
-            )}
-          </div>
+          {type === "hmo_statement" ? (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-700">
+                HMO (Facility Link)
+              </label>
+              <select
+                value={facilityHmoId}
+                onChange={(e) => setFacilityHmoId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900"
+              >
+                <option value="">
+                  {hmoLoading ? "Loading HMOs..." : "Select an HMO"}
+                </option>
+                {activeFacilityHMOs.map((fh) => (
+                  <option key={fh.id} value={String(fh.id)}>
+                    {fh.name} (FacilityHMO #{fh.id})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-500">
+                This list comes from your Facility → HMO page (FacilityHMO links).
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-700">
+                Reference ID
+              </label>
+              <input
+                type="text"
+                value={refId}
+                onChange={(e) => setRefId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900"
+                placeholder={
+                  activeType?.id === "encounter"
+                    ? "e.g. 123 or EN-000123"
+                    : activeType?.id === "lab"
+                    ? "e.g. 456 or LAB-000456"
+                    : activeType?.id === "imaging"
+                    ? "e.g. 789 or IMG-000789"
+                    : "e.g. Patient ID (e.g. 321)"
+                }
+              />
+              {activeType?.helper && (
+                <p className="text-[11px] text-slate-500">{activeType.helper}</p>
+              )}
+            </div>
+          )}
 
-          {/* Billing-only date range */}
-          {type === "billing" && (
+          {/* Statement date range (billing + HMO statement) */}
+          {(type === "billing" || type === "hmo_statement") && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-700">

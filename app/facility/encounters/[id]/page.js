@@ -31,6 +31,7 @@ import {
   ArrowLeft,
   Edit,
   Eye,
+  Shield, // ✅ NEW: for HMO badge
 } from "lucide-react";
 
 function formatDateTime(value) {
@@ -57,10 +58,10 @@ function formatDate(value) {
 
 function calculateEncounterDuration(encounter) {
   if (!encounter) return null;
-  
+
   const startTime = new Date(encounter.occurred_at || encounter.created_at);
   if (isNaN(startTime.getTime())) return null;
-  
+
   // End time is when clinical documentation was finalized, or now if still ongoing
   let endTime;
   if (encounter.clinical_finalized_at) {
@@ -68,12 +69,12 @@ function calculateEncounterDuration(encounter) {
   } else {
     endTime = new Date(); // Current time for ongoing encounters
   }
-  
+
   if (isNaN(endTime.getTime())) return null;
-  
+
   // Calculate total duration in minutes
   let totalMinutes = Math.floor((endTime - startTime) / (1000 * 60));
-  
+
   // Subtract paused time if applicable
   if (encounter.paused_at && encounter.resumed_at) {
     const pausedStart = new Date(encounter.paused_at);
@@ -90,13 +91,14 @@ function calculateEncounterDuration(encounter) {
       totalMinutes -= pausedMinutes;
     }
   }
-  
+
   // Format the duration nicely
   if (totalMinutes < 0) totalMinutes = 0;
-  
+
   if (totalMinutes < 60) {
     return `${totalMinutes} min`;
-  } else if (totalMinutes < 1440) { // Less than 24 hours
+  } else if (totalMinutes < 1440) {
+    // Less than 24 hours
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
@@ -137,57 +139,59 @@ function normalizeList(data) {
 
 function StatusBadge({ status }) {
   const statusUpper = String(status || "").toUpperCase();
-  
+
   const statusConfig = {
-    OPEN: { 
-      bg: "bg-emerald-50", 
-      text: "text-emerald-700", 
+    OPEN: {
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
       ring: "ring-emerald-200",
       icon: Activity,
-      label: "Open" 
+      label: "Open",
     },
-    IN_PROGRESS: { 
-      bg: "bg-blue-50", 
-      text: "text-blue-700", 
+    IN_PROGRESS: {
+      bg: "bg-blue-50",
+      text: "text-blue-700",
       ring: "ring-blue-200",
       icon: Activity,
-      label: "In Progress" 
+      label: "In Progress",
     },
-    WAITING_LABS: { 
-      bg: "bg-amber-50", 
-      text: "text-amber-700", 
+    WAITING_LABS: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
       ring: "ring-amber-200",
       icon: Beaker,
-      label: "Waiting Labs" 
+      label: "Waiting Labs",
     },
-    CLOSED: { 
-      bg: "bg-slate-100", 
-      text: "text-slate-700", 
+    CLOSED: {
+      bg: "bg-slate-100",
+      text: "text-slate-700",
       ring: "ring-slate-300",
       icon: CheckCircle2,
-      label: "Closed" 
+      label: "Closed",
     },
-    CROSSED_OUT: { 
-      bg: "bg-red-50", 
-      text: "text-red-700", 
+    CROSSED_OUT: {
+      bg: "bg-red-50",
+      text: "text-red-700",
       ring: "ring-red-200",
       icon: XCircle,
-      label: "Crossed Out" 
+      label: "Crossed Out",
     },
   };
 
-  const config = statusConfig[statusUpper] || { 
-    bg: "bg-slate-50", 
-    text: "text-slate-600", 
+  const config = statusConfig[statusUpper] || {
+    bg: "bg-slate-50",
+    text: "text-slate-600",
     ring: "ring-slate-200",
     icon: Activity,
-    label: status || "Unknown" 
+    label: status || "Unknown",
   };
 
   const Icon = config.icon;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ring-1 ${config.bg} ${config.text} ${config.ring}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ring-1 ${config.bg} ${config.text} ${config.ring}`}
+    >
       <Icon className="h-4 w-4" />
       {config.label}
     </span>
@@ -196,23 +200,29 @@ function StatusBadge({ status }) {
 
 function StageBadge({ stage }) {
   const stageUpper = String(stage || "").toUpperCase();
-  
+
   const stageConfig = {
     TRIAGE: { bg: "bg-purple-50", text: "text-purple-700", label: "Triage" },
     LABS: { bg: "bg-cyan-50", text: "text-cyan-700", label: "Labs" },
-    WAITING_LABS: { bg: "bg-amber-50", text: "text-amber-700", label: "Waiting Labs" },
+    WAITING_LABS: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      label: "Waiting Labs",
+    },
     NOTE: { bg: "bg-indigo-50", text: "text-indigo-700", label: "Clinical Note" },
     PRESCRIPTION: { bg: "bg-pink-50", text: "text-pink-700", label: "Prescription" },
   };
 
-  const config = stageConfig[stageUpper] || { 
-    bg: "bg-slate-50", 
-    text: "text-slate-600", 
-    label: stage || "—" 
+  const config = stageConfig[stageUpper] || {
+    bg: "bg-slate-50",
+    text: "text-slate-600",
+    label: stage || "—",
   };
 
   return (
-    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${config.bg} ${config.text}`}>
+    <span
+      className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${config.bg} ${config.text}`}
+    >
       {config.label}
     </span>
   );
@@ -220,21 +230,23 @@ function StageBadge({ stage }) {
 
 function PriorityBadge({ priority }) {
   const priorityUpper = String(priority || "").toUpperCase();
-  
+
   const priorityConfig = {
     ROUTINE: { bg: "bg-slate-50", text: "text-slate-600", label: "Routine" },
     URGENT: { bg: "bg-orange-50", text: "text-orange-700", label: "Urgent" },
     STAT: { bg: "bg-red-50", text: "text-red-700", label: "STAT" },
   };
 
-  const config = priorityConfig[priorityUpper] || { 
-    bg: "bg-slate-50", 
-    text: "text-slate-600", 
-    label: priority || "—" 
+  const config = priorityConfig[priorityUpper] || {
+    bg: "bg-slate-50",
+    text: "text-slate-600",
+    label: priority || "—",
   };
 
   return (
-    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${config.bg} ${config.text}`}>
+    <span
+      className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${config.bg} ${config.text}`}
+    >
       {config.label}
     </span>
   );
@@ -242,7 +254,7 @@ function PriorityBadge({ priority }) {
 
 function TypeBadge({ type }) {
   const typeUpper = String(type || "").toUpperCase();
-  
+
   const typeConfig = {
     NEW: { label: "New Visit" },
     FOLLOW_UP: { label: "Follow-up" },
@@ -261,15 +273,17 @@ function TypeBadge({ type }) {
 function InfoCard({ icon: Icon, label, value, subValue, color = "text-slate-600" }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-50 ${color}`}>
+      <div
+        className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-50 ${color}`}
+      >
         <Icon className="h-5 w-5" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-medium text-slate-500">{label}</p>
-        <p className="mt-0.5 text-sm font-semibold text-slate-900 truncate">{value || "—"}</p>
-        {subValue && (
-          <p className="mt-0.5 text-xs text-slate-500">{subValue}</p>
-        )}
+        <p className="mt-0.5 text-sm font-semibold text-slate-900 truncate">
+          {value || "—"}
+        </p>
+        {subValue && <p className="mt-0.5 text-xs text-slate-500">{subValue}</p>}
       </div>
     </div>
   );
@@ -280,15 +294,15 @@ function TimelineEvent({ icon: Icon, title, timestamp, detail, color = "text-sla
 
   return (
     <div className="flex gap-3 pb-4 last:pb-0">
-      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-50 ${color}`}>
+      <div
+        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-50 ${color}`}
+      >
         <Icon className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-900">{title}</p>
         <p className="mt-0.5 text-xs text-slate-500">{formatDateTime(timestamp)}</p>
-        {detail && (
-          <p className="mt-1 text-xs text-slate-600">{detail}</p>
-        )}
+        {detail && <p className="mt-1 text-xs text-slate-600">{detail}</p>}
       </div>
     </div>
   );
@@ -336,6 +350,10 @@ export default function FacilityEncounterDetailPage() {
 
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusUpdateError, setStatusUpdateError] = useState("");
+
+  // ✅ NEW: Patient insurance (HMO + Tier)
+  const [insuranceInfo, setInsuranceInfo] = useState({ hmoName: "", tierName: "" });
+  const [insuranceLoading, setInsuranceLoading] = useState(false);
 
   // Live duration update for ongoing encounters
   const [, setDurationTick] = useState(0);
@@ -426,9 +444,7 @@ export default function FacilityEncounterDetailPage() {
       } catch (err) {
         console.error("Failed to load facility encounter", err);
         if (!cancelled) {
-          setError(
-            err?.message || "Failed to load encounter details. Please try again."
-          );
+          setError(err?.message || "Failed to load encounter details. Please try again.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -440,6 +456,97 @@ export default function FacilityEncounterDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  // ✅ NEW: Load patient insurance (SystemHMO + Tier) for display beside patient name
+  useEffect(() => {
+    const patientId = encounter?.patient;
+    if (!patientId) {
+      // fallback: if encounter already has insurance fields (rare), still try to show them
+      const fallbackHmo =
+        encounter?.system_hmo_name ||
+        encounter?.hmo_name ||
+        encounter?.patient_hmo_name ||
+        encounter?.patient_system_hmo_name ||
+        "";
+      const fallbackTier =
+        encounter?.hmo_tier_name ||
+        encounter?.tier_name ||
+        encounter?.patient_hmo_tier_name ||
+        "";
+      setInsuranceInfo({ hmoName: fallbackHmo || "", tierName: fallbackTier || "" });
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadInsurance() {
+      setInsuranceLoading(true);
+      try {
+        const p = await apiFetch(`/patients/${patientId}/`, { method: "GET" });
+
+        // system_hmo can be object or id
+        let systemHmoObj = p?.system_hmo || null;
+        let systemHmoId =
+          typeof systemHmoObj === "object" ? systemHmoObj?.id : systemHmoObj;
+
+        // If it's just an ID, lookup name via dropdown (only if needed)
+        if (systemHmoId && typeof systemHmoObj !== "object") {
+          const dropdown = await apiFetch(`/patients/hmo/system/dropdown/`, {
+            method: "GET",
+          }).catch(() => []);
+          if (Array.isArray(dropdown)) {
+            systemHmoObj = dropdown.find((h) => h.id === Number(systemHmoId)) || null;
+          }
+        }
+
+        // tier can be object or id; if id, try to map from systemHmoObj.tiers
+        let tierObj = p?.hmo_tier || null;
+        let tierId = typeof tierObj === "object" ? tierObj?.id : tierObj;
+
+        if (tierId && typeof tierObj !== "object") {
+          const tiers = systemHmoObj?.tiers || [];
+          if (Array.isArray(tiers)) {
+            tierObj = tiers.find((t) => t.id === Number(tierId)) || null;
+          }
+        }
+
+        const hmoName =
+          (typeof systemHmoObj === "object" ? systemHmoObj?.name : "") || "";
+        const tierName =
+          (typeof tierObj === "object" ? tierObj?.name : "") ||
+          (typeof tierObj === "string" ? tierObj : "") ||
+          "";
+
+        if (!cancelled) {
+          setInsuranceInfo({ hmoName, tierName });
+        }
+      } catch (e) {
+        // don't block page if insurance can't load
+        if (!cancelled) {
+          const fallbackHmo =
+            encounter?.system_hmo_name ||
+            encounter?.hmo_name ||
+            encounter?.patient_hmo_name ||
+            encounter?.patient_system_hmo_name ||
+            "";
+          const fallbackTier =
+            encounter?.hmo_tier_name ||
+            encounter?.tier_name ||
+            encounter?.patient_hmo_tier_name ||
+            "";
+          setInsuranceInfo({ hmoName: fallbackHmo || "", tierName: fallbackTier || "" });
+        }
+      } finally {
+        if (!cancelled) setInsuranceLoading(false);
+      }
+    }
+
+    loadInsurance();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [encounter?.patient]);
 
   useEffect(() => {
     if (!id) return;
@@ -504,9 +611,7 @@ export default function FacilityEncounterDetailPage() {
       } catch (err) {
         console.error("Failed to load lab orders", err);
         if (!cancelled) {
-          setLabOrdersError(
-            err?.message || "Lab orders could not be loaded."
-          );
+          setLabOrdersError(err?.message || "Lab orders could not be loaded.");
           setLabOrders([]);
         }
       } finally {
@@ -542,9 +647,7 @@ export default function FacilityEncounterDetailPage() {
       } catch (err) {
         console.error("Failed to load prescriptions", err);
         if (!cancelled) {
-          setPrescriptionsError(
-            err?.message || "Prescriptions could not be loaded."
-          );
+          setPrescriptionsError(err?.message || "Prescriptions could not be loaded.");
           setPrescriptions([]);
         }
       } finally {
@@ -560,15 +663,16 @@ export default function FacilityEncounterDetailPage() {
 
   // Update duration display every minute for ongoing encounters
   useEffect(() => {
-    const isOngoing = encounter && 
-                      !encounter.clinical_finalized_at && 
-                      encounter.status !== "COMPLETED" && 
-                      encounter.status !== "CROSSED_OUT";
-    
+    const isOngoing =
+      encounter &&
+      !encounter.clinical_finalized_at &&
+      encounter.status !== "COMPLETED" &&
+      encounter.status !== "CROSSED_OUT";
+
     if (!isOngoing) return;
 
     const interval = setInterval(() => {
-      setDurationTick(prev => prev + 1);
+      setDurationTick((prev) => prev + 1);
     }, 60000); // Update every minute
 
     return () => clearInterval(interval);
@@ -587,9 +691,7 @@ export default function FacilityEncounterDetailPage() {
   const patientName =
     encounter?.patient_name ||
     (encounter?.patient_first_name || encounter?.patient_last_name
-      ? `${encounter?.patient_first_name || ""} ${
-          encounter?.patient_last_name || ""
-        }`.trim()
+      ? `${encounter?.patient_first_name || ""} ${encounter?.patient_last_name || ""}`.trim()
       : "") ||
     "Unknown Patient";
 
@@ -615,11 +717,11 @@ export default function FacilityEncounterDetailPage() {
   const isNurse = role === "NURSE";
 
   const workflowBtnLabel =
-    statusUpper === "WAITING_LABS" 
-      ? "Go to Waiting Labs" 
-      : isNurse 
-        ? "Open Nurse Workflow"
-        : "Open Encounter Workflow";
+    statusUpper === "WAITING_LABS"
+      ? "Go to Waiting Labs"
+      : isNurse
+      ? "Open Nurse Workflow"
+      : "Open Encounter Workflow";
 
   // Get patient initials for avatar
   const patientInitials = patientName
@@ -628,6 +730,11 @@ export default function FacilityEncounterDetailPage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const insuranceBadgeText =
+    insuranceInfo?.hmoName
+      ? `HMO: ${insuranceInfo.hmoName}${insuranceInfo?.tierName ? ` • ${insuranceInfo.tierName}` : ""}`
+      : "";
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-6 md:p-10">
@@ -690,7 +797,13 @@ export default function FacilityEncounterDetailPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
                 title="Resume encounter"
               >
-                {statusUpdating ? "Resuming…" : <><Play className="h-4 w-4" /> Resume</>}
+                {statusUpdating ? (
+                  "Resuming…"
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" /> Resume
+                  </>
+                )}
               </button>
             ) : (
               <button
@@ -700,7 +813,13 @@ export default function FacilityEncounterDetailPage() {
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 title="Pause encounter"
               >
-                {statusUpdating ? "Pausing…" : <><Pause className="h-4 w-4" /> Pause</>}
+                {statusUpdating ? (
+                  "Pausing…"
+                ) : (
+                  <>
+                    <Pause className="h-4 w-4" /> Pause
+                  </>
+                )}
               </button>
             ))}
 
@@ -749,7 +868,24 @@ export default function FacilityEncounterDetailPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-500">Patient</p>
-                  <p className="mt-1 text-lg font-bold text-slate-900 truncate">{patientName}</p>
+
+                  {/* ✅ UPDATED: Name row now includes insurance info beside it */}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 min-w-0">
+                    <p className="text-lg font-bold text-slate-900 truncate">{patientName}</p>
+
+                    {insuranceLoading ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                        <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
+                        Loading insurance…
+                      </span>
+                    ) : insuranceBadgeText ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                        <Shield className="h-3.5 w-3.5" />
+                        {insuranceBadgeText}
+                      </span>
+                    ) : null}
+                  </div>
+
                   {encounter?.patient && (
                     <p className="mt-1 text-xs text-slate-500">ID: {encounter.patient}</p>
                   )}
@@ -767,7 +903,7 @@ export default function FacilityEncounterDetailPage() {
             {/* Clinical Team Card */}
             <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm">
               <p className="text-xs font-medium text-slate-500">Clinical Team</p>
-              
+
               <div className="mt-4 space-y-3">
                 {nurseName && (
                   <div className="flex items-center gap-3">
@@ -794,7 +930,9 @@ export default function FacilityEncounterDetailPage() {
                 )}
 
                 {!nurseName && !providerName && (
-                  <p className="text-sm text-slate-500 italic">No clinical team assigned yet</p>
+                  <p className="text-sm text-slate-500 italic">
+                    No clinical team assigned yet
+                  </p>
                 )}
 
                 {createdByName && (
@@ -815,12 +953,7 @@ export default function FacilityEncounterDetailPage() {
             </h2>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <InfoCard
-                icon={Building2}
-                label="Facility"
-                value={facilityName}
-                color="text-indigo-600"
-              />
+              <InfoCard icon={Building2} label="Facility" value={facilityName} color="text-indigo-600" />
               <InfoCard
                 icon={Calendar}
                 label="Visit Date"
@@ -832,13 +965,15 @@ export default function FacilityEncounterDetailPage() {
                 icon={Clock}
                 label="Duration"
                 value={
-                  calculateEncounterDuration(encounter) || 
+                  calculateEncounterDuration(encounter) ||
                   (encounter?.duration_value && encounter?.duration_unit
                     ? `${encounter.duration_value} ${encounter.duration_unit}`
                     : "—")
                 }
                 subValue={
-                  !encounter?.clinical_finalized_at && encounter?.status !== "COMPLETED" && encounter?.status !== "CROSSED_OUT"
+                  !encounter?.clinical_finalized_at &&
+                  encounter?.status !== "COMPLETED" &&
+                  encounter?.status !== "CROSSED_OUT"
                     ? "⏱️ Ongoing"
                     : encounter?.clinical_finalized_at
                     ? "✓ Completed"
@@ -854,18 +989,8 @@ export default function FacilityEncounterDetailPage() {
                   color="text-pink-600"
                 />
               )}
-              <InfoCard
-                icon={Clock}
-                label="Created At"
-                value={formatDateTime(encounter?.created_at)}
-                color="text-slate-600"
-              />
-              <InfoCard
-                icon={Clock}
-                label="Last Updated"
-                value={formatDateTime(encounter?.updated_at)}
-                color="text-slate-600"
-              />
+              <InfoCard icon={Clock} label="Created At" value={formatDateTime(encounter?.created_at)} color="text-slate-600" />
+              <InfoCard icon={Clock} label="Last Updated" value={formatDateTime(encounter?.updated_at)} color="text-slate-600" />
             </div>
           </div>
 
@@ -875,7 +1000,9 @@ export default function FacilityEncounterDetailPage() {
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-6 w-6 flex-shrink-0 text-amber-600" />
                 <div>
-                  <p className="text-xs font-medium text-slate-500">Chief Complaint / Reason for Visit</p>
+                  <p className="text-xs font-medium text-slate-500">
+                    Chief Complaint / Reason for Visit
+                  </p>
                   <p className="mt-1 text-base text-slate-900">{encounter.chief_complaint}</p>
                 </div>
               </div>
@@ -894,44 +1021,24 @@ export default function FacilityEncounterDetailPage() {
                 <div className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
                   <Lock className="h-4 w-4" />
                   Locked
-                  {lockedAt && <span className="text-slate-500">• {formatDateTime(lockedAt)}</span>}
+                  {lockedAt && (
+                    <span className="text-slate-500">• {formatDateTime(lockedAt)}</span>
+                  )}
                 </div>
               )}
 
               {lockDueAt && !locked && (
-                <div className="text-xs text-slate-500">
-                  Lock due: {formatDateTime(lockDueAt)}
-                </div>
+                <div className="text-xs text-slate-500">Lock due: {formatDateTime(lockDueAt)}</div>
               )}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <SoapSection
-                label="History of Present Illness (HPI)"
-                content={encounter?.hpi}
-                icon={FileText}
-              />
-              <SoapSection
-                label="Review of Systems (ROS)"
-                content={encounter?.ros}
-                icon={FileText}
-              />
-              <SoapSection
-                label="Physical Examination"
-                content={encounter?.physical_exam}
-                icon={Thermometer}
-              />
-              <SoapSection
-                label="Diagnoses / Assessment"
-                content={encounter?.diagnoses}
-                icon={Stethoscope}
-              />
+              <SoapSection label="History of Present Illness (HPI)" content={encounter?.hpi} icon={FileText} />
+              <SoapSection label="Review of Systems (ROS)" content={encounter?.ros} icon={FileText} />
+              <SoapSection label="Physical Examination" content={encounter?.physical_exam} icon={Thermometer} />
+              <SoapSection label="Diagnoses / Assessment" content={encounter?.diagnoses} icon={Stethoscope} />
               <div className="lg:col-span-2">
-                <SoapSection
-                  label="Plan / Treatment"
-                  content={encounter?.plan}
-                  icon={CheckCircle2}
-                />
+                <SoapSection label="Plan / Treatment" content={encounter?.plan} icon={CheckCircle2} />
               </div>
             </div>
 
@@ -959,43 +1066,36 @@ export default function FacilityEncounterDetailPage() {
               <h2 className="text-lg font-semibold text-slate-900">Lab Orders</h2>
             </div>
 
-            {labOrdersLoading && (
-              <p className="text-sm text-slate-500">Loading lab orders…</p>
-            )}
+            {labOrdersLoading && <p className="text-sm text-slate-500">Loading lab orders…</p>}
 
-            {labOrdersError && (
-              <p className="text-sm text-red-600">{labOrdersError}</p>
-            )}
+            {labOrdersError && <p className="text-sm text-red-600">{labOrdersError}</p>}
 
             {!labOrdersLoading && !labOrdersError && labOrders.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
                 <Beaker className="mx-auto h-12 w-12 text-slate-300" />
-                <p className="mt-3 text-sm text-slate-600">
-                  No lab orders for this encounter yet
-                </p>
+                <p className="mt-3 text-sm text-slate-600">No lab orders for this encounter yet</p>
               </div>
             )}
 
             {!labOrdersLoading && labOrders.length > 0 && (
               <div className="space-y-4">
                 {labOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="rounded-xl border border-slate-100 bg-slate-50 p-4"
-                  >
+                  <div key={order.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                     <div className="mb-3 flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-slate-900">
                             Lab Order #{order.id}
                           </span>
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            order.status === "COMPLETED"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : order.status === "PENDING"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-slate-100 text-slate-700"
-                          }`}>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              order.status === "COMPLETED"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : order.status === "PENDING"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-slate-100 text-slate-700"
+                            }`}
+                          >
                             {order.status || "Unknown"}
                           </span>
                         </div>
@@ -1040,34 +1140,35 @@ export default function FacilityEncounterDetailPage() {
                             {order.items.map((item, idx) => (
                               <tr key={item.id || idx} className="hover:bg-slate-50">
                                 <td className="px-3 py-2 font-medium text-slate-900">
-                                  {item.display_name || item.requested_name || item.test?.name || "—"}
+                                  {item.display_name ||
+                                    item.requested_name ||
+                                    item.test?.name ||
+                                    "—"}
                                 </td>
                                 <td className="px-3 py-2 text-slate-700">
-                                  {item.result_value != null
-                                    ? item.result_value
-                                    : item.result_text || "—"}
+                                  {item.result_value != null ? item.result_value : item.result_text || "—"}
                                 </td>
                                 <td className="px-3 py-2 text-slate-600">
                                   {item.result_unit || item.test?.unit || "—"}
                                 </td>
                                 <td className="px-3 py-2">
                                   {item.flag ? (
-                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                      item.flag === "HIGH" || item.flag === "H"
-                                        ? "bg-red-100 text-red-700"
-                                        : item.flag === "LOW" || item.flag === "L"
-                                        ? "bg-blue-100 text-blue-700"
-                                        : "bg-slate-100 text-slate-700"
-                                    }`}>
+                                    <span
+                                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                        item.flag === "HIGH" || item.flag === "H"
+                                          ? "bg-red-100 text-red-700"
+                                          : item.flag === "LOW" || item.flag === "L"
+                                          ? "bg-blue-100 text-blue-700"
+                                          : "bg-slate-100 text-slate-700"
+                                      }`}
+                                    >
                                       {item.flag}
                                     </span>
                                   ) : (
                                     "—"
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-slate-600">
-                                  {item.status || "—"}
-                                </td>
+                                <td className="px-3 py-2 text-slate-600">{item.status || "—"}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1087,20 +1188,14 @@ export default function FacilityEncounterDetailPage() {
               <h2 className="text-lg font-semibold text-slate-900">Prescriptions</h2>
             </div>
 
-            {prescriptionsLoading && (
-              <p className="text-sm text-slate-500">Loading prescriptions…</p>
-            )}
+            {prescriptionsLoading && <p className="text-sm text-slate-500">Loading prescriptions…</p>}
 
-            {prescriptionsError && (
-              <p className="text-sm text-red-600">{prescriptionsError}</p>
-            )}
+            {prescriptionsError && <p className="text-sm text-red-600">{prescriptionsError}</p>}
 
             {!prescriptionsLoading && !prescriptionsError && prescriptions.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
                 <Pill className="mx-auto h-12 w-12 text-slate-300" />
-                <p className="mt-3 text-sm text-slate-600">
-                  No prescriptions for this encounter yet
-                </p>
+                <p className="mt-3 text-sm text-slate-600">No prescriptions for this encounter yet</p>
               </div>
             )}
 
@@ -1117,13 +1212,15 @@ export default function FacilityEncounterDetailPage() {
                           <span className="text-sm font-semibold text-slate-900">
                             Prescription #{prescription.id}
                           </span>
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            prescription.status === "COMPLETED"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : prescription.status === "PENDING"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-slate-100 text-slate-700"
-                          }`}>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              prescription.status === "COMPLETED"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : prescription.status === "PENDING"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-slate-100 text-slate-700"
+                            }`}
+                          >
                             {prescription.status || "Unknown"}
                           </span>
                         </div>
@@ -1157,9 +1254,7 @@ export default function FacilityEncounterDetailPage() {
                                 <td className="px-3 py-2 font-medium text-slate-900">
                                   {item.drug_name || item.drug?.name || "—"}
                                 </td>
-                                <td className="px-3 py-2 text-slate-700">
-                                  {item.dose || "—"}
-                                </td>
+                                <td className="px-3 py-2 text-slate-700">{item.dose || "—"}</td>
                                 <td className="px-3 py-2 text-slate-700">
                                   {item.frequency || "—"}
                                 </td>
@@ -1195,20 +1290,14 @@ export default function FacilityEncounterDetailPage() {
               <h2 className="text-lg font-semibold text-slate-900">Attachments</h2>
             </div>
 
-            {attachmentsLoading && (
-              <p className="text-sm text-slate-500">Loading attachments…</p>
-            )}
+            {attachmentsLoading && <p className="text-sm text-slate-500">Loading attachments…</p>}
 
-            {attachmentsError && (
-              <p className="text-sm text-red-600">{attachmentsError}</p>
-            )}
+            {attachmentsError && <p className="text-sm text-red-600">{attachmentsError}</p>}
 
             {!attachmentsLoading && !attachmentsError && attachments.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
                 <Paperclip className="mx-auto h-12 w-12 text-slate-300" />
-                <p className="mt-3 text-sm text-slate-600">
-                  No files attached to this encounter yet
-                </p>
+                <p className="mt-3 text-sm text-slate-600">No files attached to this encounter yet</p>
               </div>
             )}
 
@@ -1220,8 +1309,7 @@ export default function FacilityEncounterDetailPage() {
                   const nameFromPath =
                     typeof att.file === "string" ? att.file.split("/").slice(-1)[0] : null;
 
-                  const label =
-                    att.filename || att.name || nameFromPath || `Attachment #${att.id}`;
+                  const label = att.filename || att.name || nameFromPath || `Attachment #${att.id}`;
 
                   return (
                     <div
@@ -1234,9 +1322,7 @@ export default function FacilityEncounterDetailPage() {
                           <span className="font-medium text-slate-900">{label}</span>
                         </div>
                         {att.description && (
-                          <span className="mt-1 text-xs text-slate-600">
-                            {att.description}
-                          </span>
+                          <span className="mt-1 text-xs text-slate-600">{att.description}</span>
                         )}
                         {att.created_at && (
                           <span className="mt-1 text-xs text-slate-500">
@@ -1286,7 +1372,9 @@ export default function FacilityEncounterDetailPage() {
                     icon={Pause}
                     title="Paused (Waiting for Labs)"
                     timestamp={encounter.paused_at}
-                    detail={encounter?.paused_by_name ? `By ${encounter.paused_by_name}` : undefined}
+                    detail={
+                      encounter?.paused_by_name ? `By ${encounter.paused_by_name}` : undefined
+                    }
                     color="text-amber-600"
                   />
                 )}
@@ -1296,7 +1384,9 @@ export default function FacilityEncounterDetailPage() {
                     icon={Play}
                     title="Resumed"
                     timestamp={encounter.resumed_at}
-                    detail={encounter?.resumed_by_name ? `By ${encounter.resumed_by_name}` : undefined}
+                    detail={
+                      encounter?.resumed_by_name ? `By ${encounter.resumed_by_name}` : undefined
+                    }
                     color="text-blue-600"
                   />
                 )}
@@ -1306,7 +1396,11 @@ export default function FacilityEncounterDetailPage() {
                     icon={Beaker}
                     title="Labs Skipped"
                     timestamp={encounter.labs_skipped_at}
-                    detail={encounter?.labs_skipped_by_name ? `By ${encounter.labs_skipped_by_name}` : undefined}
+                    detail={
+                      encounter?.labs_skipped_by_name
+                        ? `By ${encounter.labs_skipped_by_name}`
+                        : undefined
+                    }
                     color="text-orange-600"
                   />
                 )}
@@ -1316,7 +1410,11 @@ export default function FacilityEncounterDetailPage() {
                     icon={CheckCircle2}
                     title="Clinical Documentation Finalized"
                     timestamp={encounter.clinical_finalized_at}
-                    detail={encounter?.clinical_finalized_by_name ? `By ${encounter.clinical_finalized_by_name}` : "Lock countdown started"}
+                    detail={
+                      encounter?.clinical_finalized_by_name
+                        ? `By ${encounter.clinical_finalized_by_name}`
+                        : "Lock countdown started"
+                    }
                     color="text-purple-600"
                   />
                 )}
