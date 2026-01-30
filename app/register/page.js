@@ -4,6 +4,7 @@ import {
   Building2,
   Stethoscope,
   UserRound,
+  HeartHandshake,
   ArrowRight,
   Sparkles,
   ShieldCheck,
@@ -35,6 +36,13 @@ export default function RegisterChooser() {
       icon: UserRound,
       accent: "from-violet-600/10 to-violet-600/20 text-violet-700",
     },
+    {
+      href: "/register/outreach",
+      title: "Outreach",
+      desc: "Create the Outreach Super Admin account that can create outreach events, invite outreach staff, and generate reports. Outreach staff do not register — they receive temporary credentials.",
+      icon: HeartHandshake,
+      accent: "from-amber-600/10 to-amber-600/20 text-amber-700",
+    },
   ];
 
   return (
@@ -58,7 +66,7 @@ export default function RegisterChooser() {
       </section>
 
       {/* Account cards */}
-      <section className="grid md:grid-cols-3 gap-6 mt-8">
+      <section className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
         {cards.map((c) => {
           const Icon = c.icon;
           return (

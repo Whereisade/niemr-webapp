@@ -22,6 +22,8 @@ import {
   Pill,
   Boxes,
   Mail,
+  HeartHandshake,
+  FileText,
   
 } from "lucide-react";
 
@@ -50,6 +52,18 @@ function formatRole(role) {
     .replace(/_/g, " ")
     .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function buildOutreachNav({ isSuperAdmin } = {}) {
+  const base = [
+    { href: "/outreach", label: "Overview", icon: LayoutDashboard },
+    { href: "/outreach/patients", label: "Patients", icon: Users },
+    { href: "/outreach/reports", label: "Reports", icon: FileText },
+  ];
+  if (isSuperAdmin) {
+    base.splice(1, 0, { href: "/outreach/events", label: "Events", icon: CalendarClock, accent: true });
+  }
+  return base;
 }
 
 // Decide which nav items to show based on user role + facility
@@ -233,6 +247,8 @@ export default function AppHeader() {
   const pathname = usePathname();
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [outreachMeta, setOutreachMeta] = useState(null);
+  const [_loadingOutreach, setLoadingOutreach] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,7 +288,52 @@ export default function AppHeader() {
     };
   }, []);
 
-  const navItems = buildNavForUser(user);
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchOutreachMeta() {
+      if (!user) {
+        setOutreachMeta(null);
+        return;
+      }
+      setLoadingOutreach(true);
+      try {
+        const res = await fetch("/api/proxy/outreach/my-event/", {
+          method: "GET",
+          credentials: "include",
+        });
+        if (!res.ok) {
+          if (!cancelled) setOutreachMeta(null);
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled) setOutreachMeta(data || null);
+      } catch (e) {
+        if (!cancelled) setOutreachMeta(null);
+      } finally {
+        if (!cancelled) setLoadingOutreach(false);
+      }
+    }
+    fetchOutreachMeta();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const isOutreachRoute = pathname?.startsWith("/outreach");
+  const canAccessOutreach =
+    !!outreachMeta?.is_outreach_super_admin ||
+    (Array.isArray(outreachMeta?.assignments) && outreachMeta.assignments.length > 0);
+
+  const baseNav = buildNavForUser(user);
+  const outreachLink = canAccessOutreach
+    ? { href: "/outreach", label: "Outreach", icon: HeartHandshake, accent: true }
+    : null;
+
+  const navItems = isOutreachRoute && canAccessOutreach
+    ? buildOutreachNav({ isSuperAdmin: !!outreachMeta?.is_outreach_super_admin })
+    : outreachLink
+      ? [...baseNav.filter((x) => x.href !== "/outreach"), outreachLink]
+      : baseNav;
   const isAuthed = !!user;
 
   const displayName = (() => {

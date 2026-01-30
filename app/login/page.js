@@ -4,6 +4,7 @@ import {
   Building2,
   Stethoscope,
   UserRound,
+  HeartHandshake,
   ArrowRight,
   Sparkles,
   ShieldCheck,
@@ -24,7 +25,7 @@ export default function LoginChooser() {
     },
     {
       href: "/login/provider",
-      title: "Independent Provider",
+      title: "Solo Practice",
       desc: "For doctors, lab scientists, pharmacists and other practitioners accessing their NIEMR workspace and patient notes.",
       icon: Stethoscope,
       accent: "from-emerald-600/10 to-emerald-600/20 text-emerald-700",
@@ -35,6 +36,13 @@ export default function LoginChooser() {
       desc: "For patients and dependents accessing results, medications, and appointment reminders.",
       icon: UserRound,
       accent: "from-violet-600/10 to-violet-600/20 text-violet-700",
+    },
+    {
+      href: "/login/outreach",
+      title: "Outreach Staff",
+      desc: "For outreach teams capturing vitals, encounters, labs, pharmacy, and reports during community programs.",
+      icon: HeartHandshake,
+      accent: "from-amber-600/10 to-amber-600/20 text-amber-700",
     },
   ];
 
@@ -60,7 +68,7 @@ export default function LoginChooser() {
       </section>
 
       {/* Login type cards */}
-      <section className="grid md:grid-cols-3 gap-6 mt-8">
+      <section className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
         {cards.map((c) => {
           const Icon = c.icon;
           return (
