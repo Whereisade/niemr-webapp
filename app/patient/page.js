@@ -45,6 +45,23 @@ async function safeFetchJSON(path, fallback) {
   }
 }
 
+// Server-side helper (this page is a Server Component): fetch directly from Django
+// using the access token from cookies. Server-side fetch("/api/proxy/... ") won't
+// automatically forward browser cookies, so it can silently return empty data.
+async function fetchAuthedJSON(token, path, fallback) {
+  if (!token) return fallback;
+  try {
+    const res = await fetch(`${BACKEND}/api${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return fallback;
+    return await res.json();
+  } catch {
+    return fallback;
+  }
+}
+
 async function fetchMe() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ACCESS_COOKIE)?.value;
@@ -80,6 +97,84 @@ async function fetchPatientProfile(token) {
   }
 }
 
+function formatNaira(amount) {
+  const n = Number(amount || 0);
+  try {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      maximumFractionDigits: 0,
+    }).format(isFinite(n) ? n : 0);
+  } catch {
+    return `₦${isFinite(n) ? Math.round(n).toLocaleString() : "0"}`;
+  }
+}
+
+function formatApptDateTime(appt) {
+  const startRaw = appt?.start_at || appt?.start_time || appt?.time;
+  const endRaw = appt?.end_at;
+  if (!startRaw) return "—";
+
+  const start = new Date(startRaw);
+  const end = endRaw ? new Date(endRaw) : null;
+  if (Number.isNaN(start.getTime())) return String(startRaw);
+
+  const dateStr = new Intl.DateTimeFormat("en-NG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(start);
+
+  const timeFmt = new Intl.DateTimeFormat("en-NG", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const startTime = timeFmt.format(start);
+  const endTime = end && !Number.isNaN(end.getTime()) ? timeFmt.format(end) : null;
+
+  return `${dateStr} • ${endTime ? `${startTime} - ${endTime}` : startTime}`;
+}
+
+function formatRelativeFromNow(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  const diffMs = Date.now() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  const diffHrs = Math.floor(diffMins / 60);
+  if (diffHrs < 24) return `${diffHrs} hr${diffHrs === 1 ? "" : "s"} ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+}
+
+function vitalsColor(v) {
+  const flag = String(v?.overall || "").toUpperCase();
+  if (flag === "RED") return "amber";
+  if (flag === "ORANGE") return "amber";
+  if (flag === "YELLOW") return "amber";
+  if (flag === "GREEN") return "emerald";
+  return "emerald";
+}
+
+function formatVitalsValue(v) {
+  if (!v) return "—";
+  const s = v?.systolic;
+  const d = v?.diastolic;
+  if (s && d) return `${s}/${d}`;
+  if (v?.heart_rate) return `${v.heart_rate} bpm`;
+  if (v?.spo2) return `${v.spo2}%`;
+  return "—";
+}
+
+function formatVitalsSublabel(v) {
+  if (!v) return "No vitals recorded";
+  const rel = formatRelativeFromNow(v?.measured_at);
+  return rel ? `Measured ${rel}` : "Latest measurement";
+}
+
 export default async function PatientDashboard() {
   // 🆕 UPDATE THIS SECTION to fetch patient profile
   const me = await fetchMe();
@@ -98,9 +193,10 @@ export default async function PatientDashboard() {
   const patientProfile = await fetchPatientProfile(token);
 
   // Existing fetches
-  const [myAppointments, notifications] = await Promise.all([
-    safeFetchJSON("/appointments/?mine=true&limit=10", []),
-    safeFetchJSON("/notifications/?limit=10", []),
+  const [myAppointments, notifications, dashboardSummary] = await Promise.all([
+    fetchAuthedJSON(token, "/appointments/?mine=true&limit=10", []),
+    fetchAuthedJSON(token, "/notifications/?limit=10", []),
+    fetchAuthedJSON(token, "/patients/dashboard-summary/", null),
   ]);
 
   const appts = Array.isArray(myAppointments)
@@ -110,6 +206,26 @@ export default async function PatientDashboard() {
   const notifList = Array.isArray(notifications)
     ? notifications
     : notifications?.results || [];
+
+  // If the patient has no in-app notifications yet, fall back to showing a few
+  // recent/upcoming appointments as "updates" so the section isn't empty.
+  const fallbackUpdates = !notifList.length && appts.length
+    ? appts.slice(0, 5).map((a) => {
+        const provider = a.provider_name || a.provider?.full_name || "Provider";
+        const when = formatApptDateTime(a);
+        const reason = a.reason || "Consultation";
+        const statusLabel = (a.status || "scheduled").toString().toLowerCase();
+        return {
+          id: `APPT-${a.id}`,
+          title: `Appointment ${statusLabel}`,
+          body: `${reason} with ${provider} • ${when}`,
+          kind: "APPOINTMENT",
+          is_read: true,
+        };
+      })
+    : [];
+
+  const dashboardUpdates = notifList.length ? notifList : fallbackUpdates;
 
   const unreadCount = notifList.filter((n) => {
     if (!n) return false;
@@ -127,6 +243,17 @@ export default async function PatientDashboard() {
     me?.email ||
     "";
 
+  const summary = dashboardSummary && typeof dashboardSummary === "object" ? dashboardSummary : null;
+  const totalVisits = summary?.total_visits ?? 0;
+  const outstandingBalance = summary?.billing?.outstanding_balance ?? "0.00";
+  const unpaidChargesCount = summary?.billing?.unpaid_charges_count ?? 0;
+
+  const quick = summary?.metrics || {};
+  const pendingLabs = quick?.pending_labs ?? 0;
+  const activePrescriptions = quick?.active_prescriptions ?? 0;
+  const pendingImaging = quick?.pending_imaging ?? 0;
+  const latestVitals = summary?.latest_vitals || null;
+
   const stats = [
     {
       label: "Upcoming Visits",
@@ -140,26 +267,26 @@ export default async function PatientDashboard() {
       cta: "View schedule",
     },
     {
-      label: "Health Records",
-      value: "12",
-      icon: FileText,
-      trend: "Up to date",
+      label: "Total Visits",
+      value: totalVisits,
+      icon: ClipboardList,
+      trend: totalVisits > 0 ? "History available" : null,
       accent: "from-emerald-500 to-teal-600",
       bgAccent: "bg-emerald-50",
       iconColor: "text-emerald-600",
       href: "/patient/encounters",
-      cta: "View records",
+      cta: "View visits",
     },
     {
-      label: "New Alerts",
-      value: unreadCount,
-      icon: BellRing,
-      badge: unreadCount > 0 ? "Review" : null,
+      label: "Outstanding Bills",
+      value: formatNaira(outstandingBalance),
+      icon: CreditCard,
+      badge: unpaidChargesCount > 0 ? `${unpaidChargesCount} unpaid` : null,
       accent: "from-amber-500 to-orange-600",
       bgAccent: "bg-amber-50",
       iconColor: "text-amber-600",
-      href: "/notifications",
-      cta: "View notifications",
+      href: "/patient/billing",
+      cta: "View billing",
     },
   ];
 
@@ -250,35 +377,60 @@ export default async function PatientDashboard() {
           ))}
         </section>
 
+        {/* Quick Actions */}
+        <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              <h3 className="font-semibold text-slate-900">Quick Actions</h3>
+            </div>
+            <p className="mt-1 text-xs text-slate-600">Common actions for patients</p>
+          </div>
+          <div className="p-4 grid gap-2 sm:grid-cols-2">
+            <QuickAction href="/patient/encounters" icon={Activity} label="My Health Records" primary />
+            <QuickAction href="/patient/appointments/new" icon={CalendarRange} label="Book Appointment" />
+            <QuickAction href="/patient/vitals" icon={Heart} label="My Vitals" />
+            <QuickAction href="/patient/documents" icon={FileText} label="My Medical Documents" />
+            <QuickAction href="/patient/labs" icon={FlaskConical} label="Lab Results" />
+            <QuickAction href="/patient/imaging" icon={Scan} label="Imaging Tests" />
+            <QuickAction href="/patient/pharmacy" icon={Pill} label="Prescriptions" />
+            <QuickAction href="/patient/billing" icon={CreditCard} label="Billing & Charges" />
+          </div>
+        </section>
+
         {/* Quick Health Metrics */}
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <HealthMetric
             icon={Activity}
             label="Last Vitals"
-            value="Normal"
-            sublabel="3 days ago"
-            color="emerald"
+            value={formatVitalsValue(latestVitals)}
+            sublabel={formatVitalsSublabel(latestVitals)}
+            color={vitalsColor(latestVitals)}
+            href="/patient/vitals"
           />
           <HealthMetric
             icon={FlaskConical}
-            label="Lab Results"
-            value="2"
-            sublabel="Pending review"
+            label="Pending Labs"
+            value={pendingLabs}
+            sublabel={pendingLabs > 0 ? "Awaiting results" : "No pending lab orders"}
             color="blue"
+            href="/patient/labs"
           />
           <HealthMetric
             icon={Pill}
-            label="Prescriptions"
-            value="3"
-            sublabel="Active medications"
+            label="Active Prescriptions"
+            value={activePrescriptions}
+            sublabel={activePrescriptions > 0 ? "Ongoing medications" : "No active prescriptions"}
             color="violet"
+            href="/patient/pharmacy"
           />
           <HealthMetric
             icon={Scan}
-            label="Imaging"
-            value="1"
-            sublabel="Report available"
+            label="Pending Imaging"
+            value={pendingImaging}
+            sublabel={pendingImaging > 0 ? "Awaiting report" : "No pending imaging"}
             color="amber"
+            href="/patient/imaging"
           />
         </section>
 
@@ -326,7 +478,7 @@ export default async function PatientDashboard() {
                           <Td>
                             <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
                               <Clock className="h-3 w-3" />
-                              {a.start_time || a.time || "—"}
+                              {formatApptDateTime(a)}
                             </span>
                           </Td>
                           <Td>
@@ -362,8 +514,8 @@ export default async function PatientDashboard() {
                 actionLabel="View all"
               />
               <ul className="divide-y divide-slate-100">
-                {notifList.length ? (
-                  notifList.slice(0, 5).map((n, i) => (
+                {dashboardUpdates.length ? (
+                  dashboardUpdates.slice(0, 5).map((n, i) => (
                     <li key={n.id || i} className="p-4 transition hover:bg-slate-50">
                       <div className="flex items-start gap-3">
                         <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-blue-50">
@@ -394,63 +546,6 @@ export default async function PatientDashboard() {
             {/* HMO SUMMARY CARD*/}
             {patientProfile && <HMOSummaryCard patient={patientProfile} />}
 
-            {/* Quick Actions */}
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-blue-600" />
-                  <h3 className="font-semibold text-slate-900">Quick Access</h3>
-                </div>
-                <p className="mt-1 text-xs text-slate-600">Common actions for patients</p>
-              </div>
-              <div className="p-4 space-y-2">
-                <QuickAction
-                  href="/patient/encounters"
-                  icon={Activity}
-                  label="My Health Records"
-                  primary
-                />
-                <QuickAction
-                  href="/patient/vitals"
-                  icon={Heart}
-                  label="My Vitals"
-                />
-                <QuickAction
-                  href="/patient/documents"
-                  icon={Heart}
-                  label="My Medical Documents"
-                />
-                <QuickAction
-                  href="/patient/labs"
-                  icon={FlaskConical}
-                  label="Lab Results"
-                />
-                <QuickAction
-                  href="/patient/imaging"
-                  icon={Scan}
-                  label="Imaging Tests"
-                />
-                <QuickAction
-                  href="/patient/pharmacy"
-                  icon={Pill}
-                  label="Prescriptions"
-                />
-                
-                <div className="border-t border-slate-200 pt-2 mt-2">
-                  <QuickAction
-                    href="/patient/billing"
-                    icon={CreditCard}
-                    label="Billing & Charges"
-                  />
-                  <QuickAction
-                    href="/patient/payments"
-                    icon={CreditCard}
-                    label="Payment History"
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* Health Summary Card */}
             <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 shadow-sm ring-1 ring-emerald-200">
               <div className="p-5">
@@ -465,7 +560,7 @@ export default async function PatientDashboard() {
                 </div>
                 <div className="mt-4 space-y-2">
                   <SummaryItem label="Allergies" value="Updated" status="success" />
-                  <SummaryItem label="Medications" value="3 active" status="info" />
+                  <SummaryItem label="Medications" value={`${activePrescriptions} active`} status="info" />
                 </div>
                 <Link
                   href="/patient/allergies"
@@ -620,7 +715,7 @@ function QuickAction({ href, icon: Icon, label, primary }) {
   );
 }
 
-function HealthMetric({ icon: Icon, label, value, sublabel, color }) {
+function HealthMetric({ icon: Icon, label, value, sublabel, color, href }) {
   const colors = {
     emerald: "bg-emerald-50 text-emerald-600",
     blue: "bg-blue-50 text-blue-600",
@@ -630,8 +725,13 @@ function HealthMetric({ icon: Icon, label, value, sublabel, color }) {
   const colorClasses = colors[color] || colors.blue;
   const [bg, text] = colorClasses.split(" ");
 
+  const Wrapper = href ? Link : "div";
+  const wrapperProps = href
+    ? { href, className: "group block rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md" }
+    : { className: "rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200" };
+
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <Wrapper {...wrapperProps}>
       <div className="flex items-center justify-between">
         <div className={`grid h-10 w-10 place-items-center rounded-lg ${bg}`}>
           <Icon className={`h-5 w-5 ${text}`} />
@@ -644,7 +744,7 @@ function HealthMetric({ icon: Icon, label, value, sublabel, color }) {
       {sublabel && (
         <div className="mt-2 text-xs text-slate-500">{sublabel}</div>
       )}
-    </div>
+    </Wrapper>
   );
 }
 

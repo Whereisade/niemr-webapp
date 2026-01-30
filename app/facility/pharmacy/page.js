@@ -472,7 +472,7 @@ function FacilityPharmacyPageInner() {
         <div className="flex items-center gap-3">
           {canPrescribe && (
             <Link
-              href="/facility/pharmacy/new"
+              href="/facility/pharmacy/prescribe"
               className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
             >
               <Plus className="h-4 w-4" />

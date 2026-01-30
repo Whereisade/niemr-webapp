@@ -229,11 +229,13 @@ export default function FacilityEncounterLabsPage() {
   // Debounced search
   useEffect(() => {
     const t = setTimeout(() => {
-      loadCatalog(q, catalogSource, outsourcedToUserId || null);
+      // Always search within the currently selected catalog scope
+      const source = outsourcedToUserId ? "outsourced" : "facility";
+      loadCatalog(q, source, outsourcedToUserId || null);
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, outsourcedToUserId]);
 
   // 🔥 Auto-reload catalog when outsourced lab changes
   useEffect(() => {

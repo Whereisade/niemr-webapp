@@ -1,24 +1,23 @@
 // app/settings/profile/page.js
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  fetchAccountProfile,
-  updateAccountProfile,
-} from "@/lib/accountProfile";
-import {
-  fetchVisibilitySettings,
-  updateVisibilitySettings,
-} from "@/lib/visibility";
+import { fetchAccountProfile, changeAccountPassword } from "@/lib/accountProfile";
+import { fetchVisibilitySettings, updateVisibilitySettings } from "@/lib/visibility";
 
 export default function ProfileSettingsPage() {
   const [profile, setProfile] = useState(null);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   // Visibility toggle state
   const [visibilitySettings, setVisibilitySettings] = useState(null);
@@ -34,17 +33,15 @@ export default function ProfileSettingsPage() {
       try {
         setLoading(true);
         setError("");
-        setSuccess("");
+        setPasswordError("");
+        setPasswordSuccess("");
         setVisibilityError("");
         setVisibilitySuccess("");
 
-        // Load account profile
         const res = await fetchAccountProfile();
         if (cancelled) return;
 
         setProfile(res || {});
-        setFirstName((res?.first_name || "").trim());
-        setLastName((res?.last_name || "").trim());
 
         // Load visibility settings (only for non-patients)
         if (res?.role !== "PATIENT") {
@@ -62,10 +59,7 @@ export default function ProfileSettingsPage() {
       } catch (err) {
         console.error("Failed to load account profile", err);
         if (!cancelled) {
-          setError(
-            err?.message ||
-              "Failed to load your profile. Please try again."
-          );
+          setError(err?.message || "Failed to load your profile. Please try again.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -78,32 +72,50 @@ export default function ProfileSettingsPage() {
     };
   }, []);
 
-  async function handleSubmit(e) {
+  async function handlePasswordSubmit(e) {
     e.preventDefault();
-    if (!profile) return;
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    const cur = currentPassword;
+    const next = newPassword;
+    const confirm = confirmPassword;
+
+    if (!cur || !next || !confirm) {
+      setPasswordError("Please fill all password fields.");
+      return;
+    }
+    if (next.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+    if (next !== confirm) {
+      setPasswordError("New password and confirmation do not match.");
+      return;
+    }
+    if (cur === next) {
+      setPasswordError("New password must be different from your current password.");
+      return;
+    }
 
     try {
-      setSaving(true);
-      setError("");
-      setSuccess("");
+      setSavingPassword(true);
+      const res = await changeAccountPassword({
+        current_password: cur,
+        new_password: next,
+        confirm_password: confirm,
+      });
 
-      const payload = {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-      };
-
-      const updated = await updateAccountProfile(payload);
-
-      setProfile(updated || { ...profile, ...payload });
-      setSuccess("Profile updated successfully.");
+      setPasswordSuccess(res?.detail || "Password updated successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (err) {
-      console.error("Failed to update account profile", err);
-      setError(
-        err?.message ||
-          "Failed to update your profile. Please check the fields and try again."
-      );
+      console.error("Failed to change password", err);
+      setPasswordError(err?.message || "Failed to update password. Please try again.");
     } finally {
-      setSaving(false);
+      setSavingPassword(false);
     }
   }
 
@@ -118,14 +130,10 @@ export default function ProfileSettingsPage() {
 
       setIsPubliclyVisible(result.is_publicly_visible);
       setVisibilitySuccess(result.message || "Visibility updated successfully.");
-
-      // Clear success message after 3 seconds
       setTimeout(() => setVisibilitySuccess(""), 3000);
     } catch (err) {
       console.error("Failed to update visibility", err);
-      setVisibilityError(
-        err?.message || "Failed to update visibility. Please try again."
-      );
+      setVisibilityError(err?.message || "Failed to update visibility. Please try again.");
     } finally {
       setSavingVisibility(false);
     }
@@ -133,12 +141,12 @@ export default function ProfileSettingsPage() {
 
   const email = profile?.email || "";
   const role = profile?.role || profile?.user_role || "";
-  const facilityName =
-    profile?.facility?.name ||
-    profile?.facility_name ||
-    "";
-  
-  // Determine if we should show the visibility toggle
+  const facilityName = profile?.facility?.name || profile?.facility_name || "";
+  const displayName = [profile?.first_name, profile?.last_name]
+    .map((x) => (typeof x === "string" ? x.trim() : ""))
+    .filter(Boolean)
+    .join(" ") || "—";
+
   const showVisibilityToggle = visibilitySettings !== null && role !== "PATIENT";
 
   return (
@@ -148,8 +156,7 @@ export default function ProfileSettingsPage() {
           Account profile
         </h1>
         <p className="text-sm text-slate-600">
-          Update your name and review the account details linked to
-          this login.
+          Review your account details and manage your security settings.
         </p>
       </header>
 
@@ -158,116 +165,167 @@ export default function ProfileSettingsPage() {
           {error}
         </div>
       )}
-      {success && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {success}
-        </div>
-      )}
 
+      {/* Profile Details */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        {loading && (
-          <p className="text-sm text-slate-500">
-            Loading your profile…
-          </p>
-        )}
-
-        {!loading && (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-5 text-sm text-slate-800"
-          >
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading your profile…</p>
+        ) : (
+          <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  First name
-                </label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => {
-                    setFirstName(e.target.value);
-                    setSuccess("");
-                    setError("");
-                  }}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Enter your first name"
-                />
+                <p className="text-xs font-medium text-slate-600">Name</p>
+                <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                  {displayName}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Name is managed by the system. If it needs correction, contact your admin.
+                </p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Last name
-                </label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => {
-                    setLastName(e.target.value);
-                    setSuccess("");
-                    setError("");
-                  }}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Enter your last name"
-                />
+                <p className="text-xs font-medium text-slate-600">Email</p>
+                <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {email || "—"}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Email address is managed by the system and cannot be changed here.
+                </p>
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  readOnly
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Email address is managed by the system and cannot be
-                  changed here.
+                <p className="text-xs font-medium text-slate-600">Role</p>
+                <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {role || "—"}
                 </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Role
-                </label>
-                <input
-                  type="text"
-                  value={role || "—"}
-                  readOnly
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                />
                 {facilityName && (
                   <p className="mt-1 text-[11px] text-slate-500">
                     Facility: <span className="font-medium">{facilityName}</span>
                   </p>
                 )}
               </div>
-            </div>
 
-            <div className="flex justify-end pt-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Save changes"}
-              </button>
+              <div>
+                <p className="text-xs font-medium text-slate-600">Account</p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Logged in and active
+                </p>
+              </div>
             </div>
-          </form>
+          </div>
         )}
       </section>
+
+      {/* Password Reset / Change */}
+      {!loading && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Security</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Reset your password for this account.
+              </p>
+            </div>
+
+            {passwordError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {passwordError}
+              </div>
+            )}
+            {passwordSuccess && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {passwordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Current password
+                </label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    setPasswordError("");
+                    setPasswordSuccess("");
+                  }}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Enter your current password"
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    New password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      setPasswordError("");
+                      setPasswordSuccess("");
+                    }}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Enter a new password"
+                    autoComplete="new-password"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Use at least 8 characters.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Confirm new password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      setPasswordError("");
+                      setPasswordSuccess("");
+                    }}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Confirm new password"
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-xs text-slate-500">
+                  Forgot your current password?{" "}
+                  <Link href="/forgot-password" className="text-blue-600 hover:underline">
+                    Send reset link
+                  </Link>
+                </p>
+                <button
+                  type="submit"
+                  disabled={savingPassword}
+                  className="inline-flex items-center rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {savingPassword ? "Updating…" : "Update password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+      )}
 
       {/* Visibility Toggle Section - Only for facilities and providers */}
       {!loading && showVisibilityToggle && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">
-                Public Visibility
-              </h2>
+              <h2 className="text-base font-semibold text-slate-900">Public Visibility</h2>
               <p className="mt-1 text-sm text-slate-600">
                 Control whether your {visibilitySettings.entity_type === "facility" ? "facility" : "practice"} appears in public search results and can accept online bookings.
               </p>
@@ -290,19 +348,20 @@ export default function ProfileSettingsPage() {
                   <span className="text-sm font-medium text-slate-900">
                     {isPubliclyVisible ? "Publicly Visible" : "Hidden from Public"}
                   </span>
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    isPubliclyVisible 
-                      ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20" 
-                      : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
-                  }`}>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      isPubliclyVisible
+                        ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20"
+                        : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
+                    }`}
+                  >
                     {isPubliclyVisible ? "Active" : "Inactive"}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-600">
-                  {isPubliclyVisible 
+                  {isPubliclyVisible
                     ? `Your ${visibilitySettings.entity_type === "facility" ? "facility" : "practice"} is visible to patients searching for healthcare providers and can accept online bookings.`
-                    : `Your ${visibilitySettings.entity_type === "facility" ? "facility" : "practice"} is hidden from public search. Only walk-in patients or those with direct referrals can book appointments.`
-                  }
+                    : `Your ${visibilitySettings.entity_type === "facility" ? "facility" : "practice"} is hidden from public search. Only walk-in patients or those with direct referrals can book appointments.`}
                 </p>
               </div>
 
@@ -327,12 +386,7 @@ export default function ProfileSettingsPage() {
 
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
               <div className="flex gap-2">
-                <svg
-                  className="h-5 w-5 flex-shrink-0 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg className="h-5 w-5 flex-shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -341,14 +395,11 @@ export default function ProfileSettingsPage() {
                   />
                 </svg>
                 <div className="flex-1">
-                  <h3 className="text-xs font-semibold text-blue-900">
-                    About visibility settings
-                  </h3>
+                  <h3 className="text-xs font-semibold text-blue-900">About visibility settings</h3>
                   <p className="mt-1 text-xs text-blue-800">
-                    {visibilitySettings.entity_type === "facility" 
+                    {visibilitySettings.entity_type === "facility"
                       ? "When hidden, your facility won't appear in patient searches on the platform. Existing patients can still access your services, but new patients will need a direct referral or contact to find you."
-                      : "When hidden, you won't appear in provider searches on the platform. This is useful if you only accept walk-in patients or referrals, or if you're temporarily not accepting new patients."
-                    }
+                      : "When hidden, you won't appear in provider searches on the platform. This is useful if you only accept walk-in patients or referrals, or if you're temporarily not accepting new patients."}
                   </p>
                 </div>
               </div>

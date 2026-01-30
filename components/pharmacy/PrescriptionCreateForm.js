@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   User,
   FileText,
+  Building2,
   AlertCircle,
   Trash2,
 } from "lucide-react";
@@ -58,6 +59,13 @@ export default function PrescriptionCreateForm({
   const [encounterId, setEncounterId] = useState("");
   const [note, setNote] = useState("");
 
+  // Outsourcing (independent doctors/nurses)
+  const [outsourcedTo, setOutsourcedTo] = useState("");
+  const [externalPharmacies, setExternalPharmacies] = useState([]);
+  const [pharmaciesLoading, setPharmaciesLoading] = useState(false);
+  const [pharmaciesError, setPharmaciesError] = useState("");
+  const [selectedPharmacyName, setSelectedPharmacyName] = useState("");
+
   // Selected medications with their details
   const [selectedMeds, setSelectedMeds] = useState([]);
   
@@ -87,6 +95,13 @@ export default function PrescriptionCreateForm({
   }, []);
 
   const meRole = safeToUpper(me?.role);
+  const providerType = safeToUpper(me?.provider?.provider_type);
+  const isDoctorOrNurse =
+    ["DOCTOR", "NURSE"].includes(meRole) ||
+    ["DOCTOR", "NURSE"].includes(providerType);
+  const isPharmacyProvider = meRole === "PHARMACY" || providerType === "PHARMACIST";
+  const isIndependent = !me?.facility;
+  const shouldSelectExternalPharmacy = isIndependent && isDoctorOrNurse && !isPharmacyProvider;
 
   useEffect(() => {
     let cancelled = false;
@@ -109,13 +124,57 @@ export default function PrescriptionCreateForm({
       cancelled = true;
     };
   }, []);
-
+  // Load external pharmacies for independent doctors/nurses
   useEffect(() => {
+    if (meLoading || !shouldSelectExternalPharmacy) return;
+
+    let cancelled = false;
+    async function loadExternalPharmacies() {
+      try {
+        setPharmaciesLoading(true);
+        setPharmaciesError("");
+        const res = await apiFetch("/providers/?facility=none&type=PHARMACIST", {
+          method: "GET",
+        });
+        if (cancelled) return;
+        setExternalPharmacies(normaliseList(res));
+      } catch (e) {
+        if (!cancelled) {
+          setExternalPharmacies([]);
+          setPharmaciesError(e?.message || "Failed to load external pharmacies.");
+        }
+      } finally {
+        if (!cancelled) setPharmaciesLoading(false);
+      }
+    }
+
+    loadExternalPharmacies();
+    return () => {
+      cancelled = true;
+    };
+  }, [meLoading, shouldSelectExternalPharmacy]);
+
+  // Load catalog (own catalog for pharmacies, or external pharmacy catalog for independent doctors/nurses)
+  useEffect(() => {
+    if (meLoading) return;
+
     let cancelled = false;
     async function loadCatalog() {
       try {
         setCatalogLoading(true);
-        const res = await apiFetch("/pharmacy/catalog/?page=1&limit=500", {
+
+        // Independent doctors/nurses must select an external pharmacy first
+        if (shouldSelectExternalPharmacy && !outsourcedTo) {
+          if (!cancelled) setCatalog([]);
+          return;
+        }
+
+        const params = new URLSearchParams({ page: "1", limit: "500" });
+        if (shouldSelectExternalPharmacy) {
+          params.set("created_by", String(outsourcedTo));
+        }
+
+        const res = await apiFetch(`/pharmacy/catalog/?${params.toString()}`, {
           method: "GET",
         });
         if (cancelled) return;
@@ -126,11 +185,22 @@ export default function PrescriptionCreateForm({
         if (!cancelled) setCatalogLoading(false);
       }
     }
+
     loadCatalog();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [meLoading, shouldSelectExternalPharmacy, outsourcedTo]);
+
+
+  const getProviderDisplayName = (provider) => {
+    // Priority: business_name > display_name/full_name > email
+    if (provider?.business_name) return provider.business_name;
+    const fullName =
+      provider?.display_name || provider?.full_name || provider?.user_name || null;
+    if (fullName) return fullName;
+    return provider?.user_email || provider?.email || "External pharmacy";
+  };
 
   const patientOptions = useMemo(() => {
     return patients.map((p) => {
@@ -228,6 +298,14 @@ export default function PrescriptionCreateForm({
     setError("");
     setSuccess("");
 
+    if (shouldSelectExternalPharmacy) {
+      const oid = Number(outsourcedTo);
+      if (!Number.isFinite(oid) || oid <= 0) {
+        setError("Please select an external pharmacy.");
+        return;
+      }
+    }
+
     const pid = Number(patientId);
     if (!Number.isFinite(pid) || pid <= 0) {
       setError("Please select a patient.");
@@ -274,6 +352,13 @@ export default function PrescriptionCreateForm({
       items,
     };
 
+    if (shouldSelectExternalPharmacy) {
+      const oid = Number(outsourcedTo);
+      if (Number.isFinite(oid) && oid > 0) {
+        payload.outsourced_to = oid;
+      }
+    }
+
     try {
       setSaving(true);
       const created = await apiFetch("/pharmacy/prescriptions/", {
@@ -291,20 +376,25 @@ export default function PrescriptionCreateForm({
     }
   }
 
+  const computedTitle = shouldSelectExternalPharmacy ? "Outsource prescription" : title;
+  const computedSubtitle = shouldSelectExternalPharmacy
+    ? "Select an external pharmacy and prescribe from their catalog."
+    : subtitle;
+
   return (
     <main className="mx-auto max-w-6xl p-6 md:p-10">
       {/* Header */}
       <header className="mb-8">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-sky-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-sky-700">
           <Pill className="h-3.5 w-3.5" />
-          {title}
+          {computedTitle}
         </div>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
-              {title}
+              {computedTitle}
             </h1>
-            <p className="mt-2 text-sm text-slate-600">{subtitle}</p>
+            <p className="mt-2 text-sm text-slate-600">{computedSubtitle}</p>
           </div>
           <Link
             href={backHref}
@@ -428,6 +518,63 @@ export default function PrescriptionCreateForm({
             </div>
           </section>
 
+          {shouldSelectExternalPharmacy && (
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="h-1.5 w-full bg-gradient-to-r from-amber-600 via-orange-600 to-red-600" />
+              <div className="p-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50">
+                    <Building2 className="h-5 w-5 text-amber-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      External Pharmacy
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Select a pharmacy to load their catalog and assign this prescription
+                    </p>
+                  </div>
+                </div>
+
+                <select
+                  value={outsourcedTo}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setOutsourcedTo(v);
+                    setSelectedMeds([]);
+                    setCatalogSearch("");
+
+                    const selected = externalPharmacies.find(
+                      (p) => String(p?.user ?? p?.user_id ?? "") === String(v)
+                    );
+                    setSelectedPharmacyName(selected ? getProviderDisplayName(selected) : "");
+                  }}
+                  disabled={pharmaciesLoading}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60"
+                >
+                  <option value="">
+                    {pharmaciesLoading
+                      ? "Loading pharmacies…"
+                      : "— Select external pharmacy —"}
+                  </option>
+                  {externalPharmacies.map((p) => {
+                    const value = String(p?.user ?? p?.user_id ?? "");
+                    const displayName = getProviderDisplayName(p);
+                    return (
+                      <option key={value || displayName} value={value}>
+                        {displayName}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                {pharmaciesError && (
+                  <p className="mt-2 text-xs text-rose-600">{pharmaciesError}</p>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* Medications Selection */}
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="h-1.5 w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600" />
@@ -438,10 +585,14 @@ export default function PrescriptionCreateForm({
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-slate-900">
-                    Medications to Prescribe
+                    {shouldSelectExternalPharmacy
+                      ? `Medications from ${selectedPharmacyName || "External Pharmacy"}`
+                      : "Medications to Prescribe"}
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Select from catalog or add free-text medications
+                    {shouldSelectExternalPharmacy
+                      ? "Select medications from the external pharmacy catalog or add free-text items."
+                      : "Select from catalog or add free-text medications"}
                   </p>
                 </div>
               </div>
@@ -606,13 +757,22 @@ export default function PrescriptionCreateForm({
                   type="text"
                   value={catalogSearch}
                   onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Search catalog by name or code…"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  disabled={shouldSelectExternalPharmacy && !outsourcedTo}
+                  placeholder={
+                    shouldSelectExternalPharmacy && !outsourcedTo
+                      ? "Select an external pharmacy to load catalog…"
+                      : "Search catalog by name or code…"
+                  }
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60"
                 />
               </div>
 
               {/* Available Drugs */}
-              {catalogLoading ? (
+              {shouldSelectExternalPharmacy && !outsourcedTo ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+                  Select an external pharmacy above to load its catalog.
+                </div>
+              ) : catalogLoading ? (
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading catalog…

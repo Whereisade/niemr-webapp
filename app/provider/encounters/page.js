@@ -43,6 +43,34 @@ function formatDateTime(value) {
   }
 }
 
+/**
+ * Safely derive a patient id from encounter payloads.
+ * Supports:
+ * - enc.patient_id
+ * - enc.patientId
+ * - enc.patient: number | "123"
+ * - enc.patient: { id: ... }
+ */
+function getPatientId(enc) {
+  const raw =
+    enc?.patient_id ??
+    enc?.patientId ??
+    enc?.patient?.id ??
+    enc?.patient;
+
+  if (raw === undefined || raw === null) return null;
+
+  if (typeof raw === "number") return raw;
+
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    const n = Number(trimmed);
+    if (!Number.isNaN(n) && String(n) === trimmed) return n;
+  }
+
+  return null;
+}
+
 function ProviderEncountersPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -161,8 +189,8 @@ function ProviderEncountersPageInner() {
             Encounters
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            {isIndependentProvider 
-              ? "Clinical encounters you've conducted as an independent provider." 
+            {isIndependentProvider
+              ? "Clinical encounters you've conducted as an independent provider."
               : "Clinical encounters recorded for patients in this facility."}
           </p>
         </div>
@@ -209,7 +237,7 @@ function ProviderEncountersPageInner() {
                 Independent Provider Workflow
               </h3>
               <p className="mt-1 text-sm text-blue-800">
-                As an independent provider, you can create encounters for walk-in patients or from appointments. 
+                As an independent provider, you can create encounters for walk-in patients or from appointments.
                 Labs and prescriptions can be outsourced to lab scientists and pharmacists in your network.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -277,7 +305,6 @@ function ProviderEncountersPageInner() {
           <thead className="bg-slate-50">
             <tr>
               <Th>Patient</Th>
-              {/* ✨ NEW: Show context (facility/independent) */}
               <Th>Context</Th>
               <Th>Type</Th>
               <Th>Status</Th>
@@ -297,22 +324,26 @@ function ProviderEncountersPageInner() {
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((enc) => {
               const patientName = enc.patient_name || enc.patient || "Patient";
+              const patientId = getPatientId(enc); // ✅ NEW
               const typeLabel = enc.encounter_type || enc.type || "Encounter";
               const hasFacility = enc.facility_id || enc.facility;
 
               return (
                 <tr key={enc.id} className="hover:bg-slate-50">
-                  {/* Patient cell with link */}
+                  {/* ✅ Patient name links to PATIENT DETAILS (only) */}
                   <td className="p-3 text-sm text-slate-800">
-                    <Link
-                      href={`/provider/encounters/${enc.id}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {patientName}
-                    </Link>
+                    {patientId ? (
+                      <Link
+                        href={`/provider/patients/${patientId}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {patientName}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-slate-800">{patientName}</span>
+                    )}
                   </td>
 
-                  {/* ✨ NEW: Context column */}
                   <Td>
                     {hasFacility ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
@@ -331,9 +362,7 @@ function ProviderEncountersPageInner() {
                   <Td>
                     <StatusPill value={enc.status} />
                   </Td>
-                  <Td>
-                    {formatDateTime(enc.started_at || enc.created_at || "—")}
-                  </Td>
+                  <Td>{formatDateTime(enc.started_at || enc.created_at || "—")}</Td>
 
                   <td className="p-3 text-right text-sm">
                     <button
@@ -364,6 +393,7 @@ function ProviderEncountersPageInner() {
                   {/* Actions */}
                   <td className="p-3 text-xs text-slate-800 text-right">
                     <div className="flex flex-wrap justify-end gap-2">
+                      {/* keep encounter details accessible here */}
                       <Link
                         href={`/provider/encounters/${enc.id}`}
                         className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
@@ -371,7 +401,7 @@ function ProviderEncountersPageInner() {
                         <ExternalLink className="h-3 w-3" />
                         View
                       </Link>
-                      
+
                       {enc.status !== "CLOSED" && (
                         <button
                           type="button"
@@ -384,8 +414,7 @@ function ProviderEncountersPageInner() {
                             } catch (err) {
                               console.error("Close encounter failed", err);
                               setUpdateError(
-                                err?.message ||
-                                  "Failed to close encounter. Please try again."
+                                err?.message || "Failed to close encounter. Please try again."
                               );
                             } finally {
                               setUpdatingId(null);
@@ -409,11 +438,9 @@ function ProviderEncountersPageInner() {
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
                   </div>
-                  <div className="text-sm font-medium text-slate-900">
-                    No encounters found
-                  </div>
+                  <div className="text-sm font-medium text-slate-900">No encounters found</div>
                   <div className="mt-1 text-sm text-slate-500">
-                    {isIndependentProvider 
+                    {isIndependentProvider
                       ? "Start your first encounter from a patient or appointment."
                       : "Try adjusting search or status filters."}
                   </div>
@@ -448,12 +475,8 @@ function ProviderEncountersPageInner() {
           <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
             <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Encounter attachments
-                </h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {attachmentsFor.label}
-                </p>
+                <h2 className="text-sm font-semibold text-slate-900">Encounter attachments</h2>
+                <p className="mt-0.5 text-xs text-slate-500">{attachmentsFor.label}</p>
               </div>
               <button
                 type="button"
@@ -465,11 +488,7 @@ function ProviderEncountersPageInner() {
             </div>
 
             <div className="px-4 py-3">
-              <AttachmentList
-                refType="ENCOUNTER"
-                refId={attachmentsFor.id}
-                canUpload={true}
-              />
+              <AttachmentList refType="ENCOUNTER" refId={attachmentsFor.id} canUpload={true} />
             </div>
           </div>
         </div>
@@ -516,9 +535,7 @@ function StatTile({ icon: Icon, label, value, gradient }) {
             <Icon className="h-5 w-5 text-slate-700" />
           </div>
         </div>
-        <div className="mt-2 text-3xl font-semibold text-slate-900">
-          {value}
-        </div>
+        <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
       </div>
     </div>
   );
@@ -536,9 +553,7 @@ function StatusPill({ value }) {
   const cls = map[v] || "bg-slate-50 text-slate-600 ring-slate-200";
   const label = v || "—";
   return (
-    <span
-      className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}
-    >
+    <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs ring-1 ${cls}`}>
       {label.replaceAll("_", " ")}
     </span>
   );
