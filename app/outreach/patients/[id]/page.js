@@ -909,10 +909,21 @@ function LabTab({
 }) {
   const [selectedTestIds, setSelectedTestIds] = useState([]);
   const [notes, setNotes] = useState("");
+  const [testSearch, setTestSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [resultModal, setResultModal] = useState(null);
 
   const tests = useMemo(() => (labCatalog || []).filter((t) => t?.is_active !== false), [labCatalog]);
+
+  const filteredTests = useMemo(() => {
+    const q = (testSearch || "").trim().toLowerCase();
+    if (!q) return tests;
+    return tests.filter((t) => {
+      const blob = `${t?.code || ""} ${t?.name || ""} ${t?.unit || ""}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [tests, testSearch]);
 
   async function createOrder(e) {
     e.preventDefault();
@@ -954,75 +965,135 @@ function LabTab({
 
   // Result entry
   const [resultOrderId, setResultOrderId] = useState("");
-  const [resultMap, setResultMap] = useState({}); // itemId -> value
-  const [resultNotes, setResultNotes] = useState("");
-  const [resultAttachment, setResultAttachment] = useState(null);
+  const [resultDraft, setResultDraft] = useState({}); // itemId -> { rows: [{name,value,unit,ref_range}], notes: "", file: File|null }
 
   const orderOptions = useMemo(() => (labOrders || []).slice().sort((a, b) => (b.id || 0) - (a.id || 0)), [labOrders]);
   const selectedOrder = useMemo(() => orderOptions.find((o) => String(o.id) === String(resultOrderId)), [orderOptions, resultOrderId]);
 
-  async function submitResults(e) {
-    e.preventDefault();
-    if (!canResult) return;
-    if (!selectedOrder) {
-      setErr("Select a lab order.");
-      return;
+useEffect(() => {
+  if (!selectedOrder || !Array.isArray(selectedOrder.items)) return;
+  setResultDraft((prev) => {
+    const next = { ...(prev || {}) };
+    for (const it of selectedOrder.items) {
+      const id = it?.id;
+      if (!id) continue;
+      if (!next[id]) {
+        next[id] = { rows: [{ name: "", value: "", unit: "", ref_range: "" }], notes: "", file: null };
+      } else if (!Array.isArray(next[id].rows) || next[id].rows.length === 0) {
+        next[id] = { ...next[id], rows: [{ name: "", value: "", unit: "", ref_range: "" }] };
+      }
     }
-    const items = Array.isArray(selectedOrder.items) ? selectedOrder.items : [];
-    if (!items.length && !resultAttachment) {
-      setErr("This order has no items.");
-      return;
-    }
+    return next;
+  });
+}, [resultOrderId]); // re-init when switching orders
 
-    setBusy(true);
-    setErr("");
-    try {
-      const createdResults = [];
+const updateItemDraft = (itemId, updater) => {
+  setResultDraft((prev) => {
+    const base = prev?.[itemId] || { rows: [{ name: "", value: "", unit: "", ref_range: "" }], notes: "", file: null };
+    const nextItem = typeof updater === "function" ? updater(base) : updater;
+    return { ...(prev || {}), [itemId]: nextItem };
+  });
+};
 
-      // Typed results (per item)
-      for (const item of items) {
-        const val = resultMap[item.id];
-        if (val == null || String(val).trim() === "") continue;
+const addResultRow = (itemId) => {
+  updateItemDraft(itemId, (d) => ({
+    ...d,
+    rows: [...(Array.isArray(d.rows) ? d.rows : []), { name: "", value: "", unit: "", ref_range: "" }],
+  }));
+};
+
+const removeResultRow = (itemId, idx) => {
+  updateItemDraft(itemId, (d) => {
+    const rows = Array.isArray(d.rows) ? d.rows : [];
+    const nextRows = rows.filter((_, i) => i !== idx);
+    return { ...d, rows: nextRows.length ? nextRows : [{ name: "", value: "", unit: "", ref_range: "" }] };
+  });
+};
+
+
+  
+async function submitResults(e) {
+  e.preventDefault();
+  if (!canResult) return;
+  if (!selectedOrder) {
+    setErr("Select a lab order.");
+    return;
+  }
+  const items = Array.isArray(selectedOrder.items) ? selectedOrder.items : [];
+  if (!items.length) {
+    setErr("This order has no items.");
+    return;
+  }
+
+  const isMeaningfulRow = (row) =>
+    row &&
+    typeof row === "object" &&
+    ["name", "value", "unit", "ref_range"].some((k) => String(row?.[k] || "").trim() !== "");
+
+  setBusy(true);
+  setErr("");
+  try {
+    const createdResults = [];
+
+    for (const item of items) {
+      const d = resultDraft?.[item.id] || {};
+      const rowsRaw = Array.isArray(d.rows) ? d.rows : [];
+      const rows = rowsRaw
+        .map((r) => ({
+          name: String(r?.name || "").trim(),
+          value: String(r?.value || "").trim(),
+          unit: String(r?.unit || "").trim(),
+          ref_range: String(r?.ref_range || "").trim(),
+        }))
+        .filter(isMeaningfulRow);
+
+      const file = d.file || null;
+      const notes = String(d.notes || "").trim();
+
+      if (!rows.length && !file) continue;
+
+      const testName = item.test_name || item.test?.name || "";
+
+      if (file) {
+        const fd = new FormData();
+        fd.append("lab_order", String(selectedOrder.id));
+        fd.append("item", String(item.id));
+        fd.append("test_name", testName);
+        if (notes) fd.append("notes", notes);
+        if (rows.length) fd.append("result_data", JSON.stringify(rows));
+        fd.append("result_attachment", file);
+
+        const created = await outreachFetch("/outreach/labs/results/", { eventId, method: "POST", body: fd });
+        createdResults.push(created);
+      } else {
         const payload = {
           lab_order: selectedOrder.id,
           item: item.id,
-          test_name: item.test_name || item.test?.name || "",
-          unit: item.test?.unit || "",
-          result_value: String(val),
-          notes: resultNotes || "",
+          test_name: testName,
+          notes: notes || "",
+          result_data: rows,
         };
         const created = await outreachFetch("/outreach/labs/results/", { eventId, method: "POST", body: JSON.stringify(payload) });
         createdResults.push(created);
       }
-
-      // Attachment-only (order-level)
-      if (resultAttachment) {
-        const fd = new FormData();
-        fd.append("lab_order", String(selectedOrder.id));
-        fd.append("test_name", "Lab report attachment");
-        fd.append("notes", resultNotes || "");
-        fd.append("result_attachment", resultAttachment);
-        const created = await outreachFetch("/outreach/labs/results/", { eventId, method: "POST", body: fd });
-        createdResults.push(created);
-      }
-
-      if (!createdResults.length) {
-        setErr("Enter at least one result value or attach a result file.");
-      } else {
-        setLabResults([...(createdResults || []), ...(labResults || [])]);
-        setResultMap({});
-        setResultNotes("");
-        setResultOrderId("");
-        setResultAttachment(null);
-      }
-    } catch (e2) {
-      setErr(e2?.message || "Failed to save result.");
-    } finally {
-      setBusy(false);
     }
-  }
 
-  return (
+    if (!createdResults.length) {
+      setErr("Enter results or upload an attachment for at least one test.");
+    } else {
+      setLabResults([...(createdResults || []), ...(labResults || [])]);
+      setResultDraft({});
+      setResultOrderId("");
+    }
+  } catch (e2) {
+    setErr(e2?.message || "Failed to save result.");
+  } finally {
+    setBusy(false);
+  }
+}
+
+return (
+
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Create lab order" icon={FlaskConical}>
@@ -1037,38 +1108,50 @@ function LabTab({
 
           <form onSubmit={createOrder} className="grid gap-3">
             <Field label="Select tests">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {tests.map((t) => {
-                  const checked = selectedTestIds.includes(t.id);
-                  return (
-                    <label key={t.id} className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          const on = e.target.checked;
-                          setSelectedTestIds((prev) => {
-                            const set = new Set(prev);
-                            if (on) set.add(t.id);
-                            else set.delete(t.id);
-                            return Array.from(set);
-                          });
-                        }}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0">
-                        <div className="font-medium text-slate-900 truncate">{t.name}</div>
-                        {(t.unit || t.ref_low || t.ref_high) ? (
-                          <div className="text-xs text-slate-600">
-                            {[t.unit, (t.ref_low || t.ref_high) ? `Ref: ${[t.ref_low, t.ref_high].filter(Boolean).join("–")}` : ""].filter(Boolean).join(" • ")}
+                <div className="grid gap-2">
+                  <TextInput
+                    value={testSearch}
+                    onChange={(e) => setTestSearch(e.target.value)}
+                    placeholder="Search tests… (code / name)"
+                  />
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {filteredTests.map((t) => {
+                      const checked = selectedTestIds.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${checked ? "border-blue-200 bg-blue-50/60" : "border-slate-200"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4"
+                            checked={checked}
+                            onChange={(e) => {
+                              const on = e.target.checked;
+                              setSelectedTestIds((prev) => {
+                                if (on) return [...prev, t.id];
+                                return prev.filter((x) => x !== t.id);
+                              });
+                            }}
+                          />
+                          <div>
+                            <div className="font-semibold text-slate-900">{t.name}</div>
+                            <div className="text-xs text-slate-500">
+                              {t.code ? `#${t.code} • ` : ""}
+                              {t.unit ? `Unit: ${t.unit}` : ""}
+                            </div>
                           </div>
-                        ) : null}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </Field>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {!filteredTests.length ? (
+                    <div className="text-xs text-slate-500">No tests match your search.</div>
+                  ) : null}
+                </div>
+              </Field>
 
             <Field label="Notes (optional)">
               <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -1107,36 +1190,130 @@ function LabTab({
               </Select>
             </Field>
 
-            {selectedOrder ? (
-              <div className="rounded-xl border border-slate-200 p-3">
-                <div className="text-xs font-semibold text-slate-600">Items (type results or attach file below)</div>
-                <div className="mt-2 grid gap-2">
-                  {(selectedOrder.items || []).map((it) => (
-                    <div key={it.id} className="grid gap-2 sm:grid-cols-2">
-                      <div className="text-sm font-medium text-slate-900">{it.test_name}</div>
-                      <TextInput
-                        placeholder="Result value"
-                        value={resultMap[it.id] || ""}
-                        onChange={(e) => setResultMap((p) => ({ ...p, [it.id]: e.target.value }))}
-                      />
-                    </div>
-                  ))}
+            
+{selectedOrder ? (
+  <div className="space-y-3">
+    {(selectedOrder.items || []).map((it) => {
+      const d = resultDraft?.[it.id] || { rows: [{ name: "", value: "", unit: "", ref_range: "" }], notes: "", file: null };
+      const rows = Array.isArray(d.rows) && d.rows.length ? d.rows : [{ name: "", value: "", unit: "", ref_range: "" }];
+      return (
+        <div key={it.id} className="rounded-xl border border-slate-200 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-slate-900">{it.test_name}</div>
+            <button
+              type="button"
+              onClick={() => addResultRow(it.id)}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add row
+            </button>
+          </div>
+
+          <div className="mt-2 space-y-2">
+            {rows.map((row, idx) => (
+              <div key={idx} className="grid gap-2 md:grid-cols-4 md:items-end">
+                <div>
+                  <div className="text-xs font-semibold text-slate-600">Parameter</div>
+                  <TextInput
+                    placeholder="e.g. Hb (optional)"
+                    value={row.name || ""}
+                    onChange={(e) =>
+                      updateItemDraft(it.id, (cur) => {
+                        const rws = Array.isArray(cur.rows) ? [...cur.rows] : [];
+                        while (rws.length < rows.length) rws.push({ name: "", value: "", unit: "", ref_range: "" });
+                        rws[idx] = { ...(rws[idx] || {}), name: e.target.value };
+                        return { ...cur, rows: rws };
+                      })
+                    }
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs font-semibold text-slate-600">Value</div>
+                  <TextInput
+                    placeholder="e.g. 13.2"
+                    value={row.value || ""}
+                    onChange={(e) =>
+                      updateItemDraft(it.id, (cur) => {
+                        const rws = Array.isArray(cur.rows) ? [...cur.rows] : [];
+                        while (rws.length < rows.length) rws.push({ name: "", value: "", unit: "", ref_range: "" });
+                        rws[idx] = { ...(rws[idx] || {}), value: e.target.value };
+                        return { ...cur, rows: rws };
+                      })
+                    }
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs font-semibold text-slate-600">Unit</div>
+                  <TextInput
+                    placeholder="g/dL (optional)"
+                    value={row.unit || ""}
+                    onChange={(e) =>
+                      updateItemDraft(it.id, (cur) => {
+                        const rws = Array.isArray(cur.rows) ? [...cur.rows] : [];
+                        while (rws.length < rows.length) rws.push({ name: "", value: "", unit: "", ref_range: "" });
+                        rws[idx] = { ...(rws[idx] || {}), unit: e.target.value };
+                        return { ...cur, rows: rws };
+                      })
+                    }
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs font-semibold text-slate-600">Ref range</div>
+                  <div className="flex gap-2">
+                    <TextInput
+                      placeholder="12–16 (optional)"
+                      value={row.ref_range || ""}
+                      onChange={(e) =>
+                        updateItemDraft(it.id, (cur) => {
+                          const rws = Array.isArray(cur.rows) ? [...cur.rows] : [];
+                          while (rws.length < rows.length) rws.push({ name: "", value: "", unit: "", ref_range: "" });
+                          rws[idx] = { ...(rws[idx] || {}), ref_range: e.target.value };
+                          return { ...cur, rows: rws };
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeResultRow(it.id, idx)}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               </div>
-            ) : null}
+            ))}
+          </div>
 
-            <Field label="Result attachment (optional)">
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <div className="text-xs font-semibold text-slate-600">Attachment (optional)</div>
               <input
                 type="file"
-                onChange={(e) => setResultAttachment(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-200"
+                onChange={(e) => updateItemDraft(it.id, (cur) => ({ ...cur, file: e.target.files?.[0] || null }))}
+                className="mt-1 block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-200"
               />
-              {resultAttachment ? <div className="mt-1 text-xs text-slate-600">Selected: {resultAttachment.name}</div> : null}
-            </Field>
+              {d.file ? <div className="mt-1 text-xs text-slate-600">Selected: {d.file.name}</div> : null}
+            </div>
 
-            <Field label="Notes (optional)">
-              <TextArea value={resultNotes} onChange={(e) => setResultNotes(e.target.value)} />
-            </Field>
+            <div>
+              <div className="text-xs font-semibold text-slate-600">Notes (optional)</div>
+              <TextArea
+                rows={3}
+                value={d.notes || ""}
+                onChange={(e) => updateItemDraft(it.id, (cur) => ({ ...cur, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+) : null}
 
             <button
               disabled={busy || !canResult}
@@ -1190,33 +1367,47 @@ function LabTab({
           {(labResults || []).length ? (
             <div className="space-y-3">
               {labResults.map((r) => (
-                <div key={r.id} className="rounded-xl border border-slate-200 p-4">
+              <div
+                key={r.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setResultModal(r)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") setResultModal(r);
+                }}
+                className="rounded-xl border border-slate-200 p-4 cursor-pointer hover:bg-slate-50"
+              >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm font-semibold text-slate-900">{r.test_name || "Result"}</div>
                     <span className="text-xs text-slate-500">{fmtDT(r.recorded_at)}</span>
                   </div>
 
-                  {r.result_value ? (
-                    <div className="mt-2 text-sm text-slate-700">
-                      Value: <b>{r.result_value}</b> {r.unit || ""}
-                    </div>
-                  ) : r.result_attachment ? (
-                    <div className="mt-2 text-sm text-slate-700">
-                      Result: <b>Attachment uploaded</b>
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-sm text-slate-700">Result: <b>—</b></div>
-                  )}
-
-                  {r.result_attachment ? (
-                    <div className="mt-2">
-                      <a href={r.result_attachment} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-700 underline">
-                        View attachment
-                      </a>
-                    </div>
-                  ) : null}
-
-                  {r.notes ? <div className="mt-2 text-sm text-slate-600">{r.notes}</div> : null}
+                  
+{Array.isArray(r.result_data) && r.result_data.length ? (
+  <div className="mt-2 space-y-1 text-sm text-slate-700">
+    {r.result_data.slice(0, 4).map((row, idx) => (
+      <div key={idx}>
+        {row?.name ? <b>{row.name}:</b> : <b>Value:</b>}{" "}
+        <span className="font-semibold">{row?.value || "—"}</span>{" "}
+        {row?.unit || ""}{" "}
+        {row?.ref_range ? <span className="text-slate-500">({row.ref_range})</span> : null}
+      </div>
+    ))}
+    {r.result_data.length > 4 ? (
+      <div className="text-xs text-slate-500">+{r.result_data.length - 4} more…</div>
+    ) : null}
+  </div>
+) : r.result_value ? (
+  <div className="mt-2 text-sm text-slate-700">
+    Value: <b>{r.result_value}</b> {r.unit || ""}
+  </div>
+) : r.result_attachment ? (
+  <div className="mt-2 text-sm text-slate-700">
+    Result: <b>Attachment uploaded</b>
+  </div>
+) : (
+  <div className="mt-2 text-sm text-slate-700">Result: <b>—</b></div>
+)}
                 </div>
               ))}
             </div>
@@ -1224,6 +1415,83 @@ function LabTab({
             <div className="text-sm text-slate-600">No lab results yet.</div>
           )}
         </Section>
+
+        {resultModal ? (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setResultModal(null);
+            }}
+          >
+            <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+              <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-4">
+                <div>
+                  <div className="text-lg font-semibold text-slate-900">{resultModal.test_name || "Lab result"}</div>
+                  <div className="mt-1 text-xs text-slate-500">{fmtDT(resultModal.recorded_at)}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setResultModal(null)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid gap-4 p-4">
+                {Array.isArray(resultModal.result_data) && resultModal.result_data.length ? (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Parameter</th>
+                          <th className="px-3 py-2 text-left">Value</th>
+                          <th className="px-3 py-2 text-left">Unit</th>
+                          <th className="px-3 py-2 text-left">Ref range</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resultModal.result_data.map((row, idx) => (
+                          <tr key={idx} className="border-t border-slate-100">
+                            <td className="px-3 py-2 font-medium text-slate-900">{row?.name || "—"}</td>
+                            <td className="px-3 py-2 text-slate-700">{row?.value || "—"}</td>
+                            <td className="px-3 py-2 text-slate-700">{row?.unit || ""}</td>
+                            <td className="px-3 py-2 text-slate-700">{row?.ref_range || ""}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
+                    Result: <b>{resultModal.result_value || (resultModal.result_attachment ? "Attachment uploaded" : "—")}</b> {resultModal.unit || ""}
+                  </div>
+                )}
+
+                {resultModal.notes ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-sm text-slate-700">
+                    <div className="text-xs font-semibold text-slate-500">Notes</div>
+                    <div className="mt-1 whitespace-pre-wrap">{resultModal.notes}</div>
+                  </div>
+                ) : null}
+
+                {resultModal.result_attachment ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3">
+                    <div className="text-sm text-slate-700">Attachment: <b>Uploaded</b></div>
+                    <a
+                      href={`/api/proxy/outreach/labs/results/${resultModal.id}/attachment/?event_id=${encodeURIComponent(eventId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      Open attachment
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1236,13 +1504,25 @@ function PharmacyTab({ patientId, eventId, drugCatalog, dispenses, setDispenses,
   const [quantity, setQuantity] = useState("");
   const [instruction, setInstruction] = useState("");
 
+  const [drugSearch, setDrugSearch] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   const drugs = useMemo(() => (drugCatalog || []).filter((d) => d?.is_active !== false), [drugCatalog]);
 
+  const filteredDrugs = useMemo(() => {
+    const q = (drugSearch || "").trim().toLowerCase();
+    if (!q) return drugs;
+    return drugs.filter((d) => {
+      const blob = `${d?.code || ""} ${d?.name || ""} ${d?.strength || ""} ${d?.form || ""}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [drugs, drugSearch]);
+
   function onPickDrug(id) {
     setDrugId(id);
+    setDrugSearch("");
     const d = drugs.find((x) => String(x.id) === String(id));
     if (d) {
       setDrugName(d.name || "");
@@ -1297,15 +1577,24 @@ function PharmacyTab({ patientId, eventId, drugCatalog, dispenses, setDispenses,
 
         <form onSubmit={submit} className="grid gap-3">
           <Field label="Pick from catalog (optional)">
-            <Select value={drugId} onChange={(e) => onPickDrug(e.target.value)}>
-              <option value="">Manual entry…</option>
-              {drugs.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} {d.strength ? `(${d.strength})` : ""}
-                </option>
-              ))}
-            </Select>
-          </Field>
+  <div className="grid gap-2">
+    <TextInput
+      value={drugSearch}
+      onChange={(e) => setDrugSearch(e.target.value)}
+      placeholder="Search drugs… (name / code / strength)"
+    />
+    <Select value={drugId} onChange={(e) => onPickDrug(e.target.value)}>
+      <option value="">Manual entry…</option>
+      {filteredDrugs.map((d) => (
+        <option key={d.id} value={d.id}>
+          {d.name} {d.strength ? `(${d.strength})` : ""}
+        </option>
+      ))}
+    </Select>
+
+    {!filteredDrugs.length ? <div className="text-xs text-slate-500">No drugs match your search.</div> : null}
+  </div>
+</Field>
 
           {!drugId ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1370,6 +1659,17 @@ function ImmunizationTab({ patientId, eventId, rows, setRows, canCreate, canMana
   const [vaccines, setVaccines] = useState([]);
   const [loadingVaccines, setLoadingVaccines] = useState(false);
 
+  const [vaccineSearch, setVaccineSearch] = useState("");
+
+  const filteredVaccines = useMemo(() => {
+    const q = (vaccineSearch || "").trim().toLowerCase();
+    if (!q) return vaccines || [];
+    return (vaccines || []).filter((v) => {
+      const blob = `${v?.code || ""} ${v?.name || ""} ${v?.manufacturer || ""}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [vaccines, vaccineSearch]);
+
   const [form, setForm] = useState({
     vaccine_name: "",
     dose_number: "",
@@ -1404,6 +1704,7 @@ function ImmunizationTab({ patientId, eventId, rows, setRows, canCreate, canMana
   }, [eventId]);
 
   function onPickVaccine(name) {
+    setVaccineSearch("");
     setForm((p) => ({ ...p, vaccine_name: name }));
   }
 
@@ -1526,18 +1827,31 @@ function ImmunizationTab({ patientId, eventId, rows, setRows, canCreate, canMana
 
         <form onSubmit={submit} className="grid gap-3">
           <Field label="Pick from vaccine catalog">
-            <Select value={form.vaccine_name} onChange={(e) => onPickVaccine(e.target.value)}>
-              <option value="">{loadingVaccines ? "Loading…" : "Select vaccine…"}</option>
-              {(vaccines || []).map((v) => (
-                <option key={v.id} value={v.name}>
-                  {v.name}{v.manufacturer ? ` — ${v.manufacturer}` : ""}
-                </option>
-              ))}
-            </Select>
-            <div className="mt-2 text-xs text-slate-500">
-              Tip: if it’s not in the list, use “Add vaccine” to add it for this outreach.
-            </div>
-          </Field>
+  <div className="grid gap-2">
+    <TextInput
+      value={vaccineSearch}
+      onChange={(e) => setVaccineSearch(e.target.value)}
+      placeholder="Search vaccines… (name / manufacturer / code)"
+    />
+
+    <Select value={form.vaccine_name} onChange={(e) => onPickVaccine(e.target.value)}>
+      <option value="">{loadingVaccines ? "Loading…" : "Select vaccine…"}</option>
+      {(filteredVaccines || []).map((v) => (
+        <option key={v.id} value={v.name}>
+          {v.name}{v.manufacturer ? ` — ${v.manufacturer}` : ""}
+        </option>
+      ))}
+    </Select>
+
+    {!filteredVaccines.length && vaccineSearch ? (
+      <div className="text-xs text-slate-500">No vaccines match your search.</div>
+    ) : null}
+
+    <div className="text-xs text-slate-500">
+      Tip: if it’s not in the list, use “Add vaccine” to add it for this outreach.
+    </div>
+  </div>
+</Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Dose number">

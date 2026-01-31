@@ -105,10 +105,26 @@ export default function OutreachHomePage() {
             <div className="text-xs font-semibold text-slate-500">Patients</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">{stats.patients ?? "—"}</div>
           </div>
-          <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
-            <div className="text-xs font-semibold text-slate-500">Staff</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">{stats.staff ?? "—"}</div>
-          </div>
+          {isOutreachSuperAdmin ? (
+            <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
+              <div className="text-xs font-semibold text-slate-500">Staff</div>
+              <div className="mt-1 text-2xl font-semibold text-slate-900">{stats.staff ?? "—"}</div>
+            </div>
+          ) : (
+            <Link
+              href="/outreach/colleagues"
+              className="group rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-slate-500">Colleagues</div>
+                  <div className="mt-1 text-2xl font-semibold text-slate-900">{stats.staff ?? "—"}</div>
+                </div>
+                <div className="mt-0.5 text-xs font-semibold text-blue-700 opacity-0 transition group-hover:opacity-100">View →</div>
+              </div>
+              <div className="mt-2 text-xs text-slate-500">See staff assigned to this outreach.</div>
+            </Link>
+          )}
           <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
             <div className="text-xs font-semibold text-slate-500">Sites</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">{stats.sites ?? "—"}</div>

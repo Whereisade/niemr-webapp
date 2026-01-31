@@ -39,7 +39,7 @@ export default function LoginChooser() {
     },
     {
       href: "/login/outreach",
-      title: "Outreach Staff",
+      title: "Outreach",
       desc: "For outreach teams capturing vitals, encounters, labs, pharmacy, and reports during community programs.",
       icon: HeartHandshake,
       accent: "from-amber-600/10 to-amber-600/20 text-amber-700",

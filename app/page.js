@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import {
   Activity,
   ArrowRight,
@@ -15,9 +16,11 @@ import {
   FileLock2,
   FileText,
   FlaskConical,
+  HeartHandshake,
   History,
   Image as ImagingIcon,
   Lock,
+  Mail,
   Pill,
   Sparkles,
   Stethoscope,
@@ -104,13 +107,54 @@ function FeatureCard({ icon: Icon, title, desc, tone = "blue" }) {
 }
 
 function MockAppPreview({ role }) {
-  const roleLabel = role === "facility" ? "Facility Dashboard" : role === "provider" ? "Provider Workspace" : "Patient Portal";
+  const roleLabel =
+    role === "facility"
+      ? "Facility Dashboard"
+      : role === "provider"
+      ? "Provider Workspace"
+      : role === "patient"
+      ? "Patient Portal"
+      : "Outreach Dashboard";
   const roleBadge =
     role === "facility"
       ? "bg-blue-600/10 text-blue-700 border-blue-200/60"
       : role === "provider"
       ? "bg-emerald-600/10 text-emerald-700 border-emerald-200/60"
-      : "bg-violet-600/10 text-violet-700 border-violet-200/60";
+      : role === "patient"
+      ? "bg-violet-600/10 text-violet-700 border-violet-200/60"
+      : "bg-amber-600/10 text-amber-800 border-amber-200/60";
+
+  const sidebarItems =
+    role === "outreach"
+      ? [
+          { label: "Overview", active: true },
+          { label: "Patients" },
+          { label: "Encounters" },
+          { label: "Labs" },
+          { label: "Pharmacy" },
+          { label: "Reports" },
+        ]
+      : [
+          { label: "Overview", active: true },
+          { label: "Appointments" },
+          { label: "Encounters" },
+          { label: "Labs / Imaging" },
+          { label: "Pharmacy" },
+          { label: "Reports" },
+        ];
+
+  const snapshot =
+    role === "outreach"
+      ? [
+          { label: "Registered", value: "86", tint: "bg-amber-500/10 text-amber-700" },
+          { label: "In service", value: "19", tint: "bg-blue-500/10 text-blue-700" },
+          { label: "Completed", value: "67", tint: "bg-emerald-500/10 text-emerald-700" },
+        ]
+      : [
+          { label: "Pending", value: role === "patient" ? "2" : "14", tint: "bg-amber-500/10 text-amber-700" },
+          { label: "In progress", value: role === "patient" ? "1" : "7", tint: "bg-blue-500/10 text-blue-700" },
+          { label: "Completed", value: role === "patient" ? "5" : "23", tint: "bg-emerald-500/10 text-emerald-700" },
+        ];
 
   return (
     <div className="relative rounded-3xl border border-slate-200 bg-white/70 shadow-xl backdrop-blur">
@@ -143,14 +187,7 @@ function MockAppPreview({ role }) {
             </div>
 
             <div className="mt-5 space-y-2">
-              {[
-                { label: "Overview", active: true },
-                { label: "Appointments" },
-                { label: "Encounters" },
-                { label: "Labs / Imaging" },
-                { label: "Pharmacy" },
-                { label: "Reports" },
-              ].map((i) => (
+              {sidebarItems.map((i) => (
                 <div
                   key={i.label}
                   className={cn(
@@ -170,7 +207,9 @@ function MockAppPreview({ role }) {
                 Status-driven
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                Check-in → Encounter → Orders → Results → Billing
+                {role === "outreach"
+                  ? "Registration → Vitals → Encounter → Orders → Results → Reports"
+                  : "Check-in → Encounter → Orders → Results → Billing"}
               </div>
             </div>
           </div>
@@ -193,11 +232,7 @@ function MockAppPreview({ role }) {
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {[
-                { label: "Pending", value: role === "patient" ? "2" : "14", tint: "bg-amber-500/10 text-amber-700" },
-                { label: "In progress", value: role === "patient" ? "1" : "7", tint: "bg-blue-500/10 text-blue-700" },
-                { label: "Completed", value: role === "patient" ? "5" : "23", tint: "bg-emerald-500/10 text-emerald-700" },
-              ].map((k) => (
+              {snapshot.map((k) => (
                 <div key={k.label} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="text-xs text-slate-500">{k.label}</div>
                   <div className="mt-1 flex items-end justify-between">
@@ -219,6 +254,8 @@ function MockAppPreview({ role }) {
                       ? "View your latest lab results"
                       : role === "provider"
                       ? "Finish encounter note for the next patient"
+                      : role === "outreach"
+                      ? "Select your outreach event and start registering patients"
                       : "Review pending approvals & daily throughput"}
                   </div>
                 </div>
@@ -301,12 +338,12 @@ export default function HomePage() {
           "Daily throughput + operational insights",
           "Audit trails for accreditation readiness",
         ],
-        ctaPrimary: { label: "Create facility account", href: "/register" },
-        ctaSecondary: { label: "Facility sign in", href: "/login/hospital" },
+        ctaPrimary: { label: "Create facility account", href: "/register/facility" },
+        ctaSecondary: { label: "Facility sign in", href: "/login/facility" },
         badgeClass: "border-blue-200/60 bg-blue-600/10 text-blue-700",
       },
       provider: {
-        label: "Independent Provider",
+        label: "Solo Practice",
         title: "A streamlined workspace for solo and specialist practice.",
         desc: "Fast documentation, orders, and e-Rx — without heavyweight setup.",
         bullets: [
@@ -314,7 +351,7 @@ export default function HomePage() {
           "Simple billing and receipts",
           "Works great for specialists & standalone providers",
         ],
-        ctaPrimary: { label: "Create provider account", href: "/register" },
+        ctaPrimary: { label: "Create provider account", href: "/register/provider" },
         ctaSecondary: { label: "Provider sign in", href: "/login/provider" },
         badgeClass: "border-emerald-200/60 bg-emerald-600/10 text-emerald-700",
       },
@@ -327,9 +364,22 @@ export default function HomePage() {
           "Manage dependents with access controls",
           "Stay updated with visit & prescription history",
         ],
-        ctaPrimary: { label: "Create patient account", href: "/register" },
+        ctaPrimary: { label: "Create patient account", href: "/register/patient" },
         ctaSecondary: { label: "Patient sign in", href: "/login/patient" },
         badgeClass: "border-violet-200/60 bg-violet-600/10 text-violet-700",
+      },
+      outreach: {
+        label: "Outreach",
+        title: "Run community outreaches with event-scoped records and fast capture.",
+        desc: "Temporary staff logins, rapid patient registration, and report exports — designed for outreach programs.",
+        bullets: [
+          "Create an outreach event and assign temporary staff",
+          "Register patients, capture vitals, encounters, and orders",
+          "Generate outreach reports (lab, pharmacy, immunization, etc.)",
+        ],
+        ctaPrimary: { label: "Outreach Registration", href: "/register/outreach" },
+        ctaSecondary: { label: "Open outreach workspace", href: "/login/outreach" },
+        badgeClass: "border-amber-200/60 bg-amber-600/10 text-amber-800",
       },
     }),
     []
@@ -348,7 +398,7 @@ export default function HomePage() {
       </div>
 
       {/* Top nav */}
-      <header className="sticky top-0 z-40 -mx-4 mb-8 border-b border-slate-200/70 bg-white/70 px-4 py-3 backdrop-blur">
+      {/* <header className="sticky top-0 z-40 -mx-4 mb-8 border-b border-slate-200/70 bg-white/70 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
@@ -365,6 +415,7 @@ export default function HomePage() {
             <a href="#workflow" className="hover:text-slate-900">Workflow</a>
             <a href="#security" className="hover:text-slate-900">Security</a>
             <a href="#faq" className="hover:text-slate-900">FAQ</a>
+            <a href="#contact" className="hover:text-slate-900">Contact</a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -383,7 +434,7 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
-      </header>
+      </header> */}
 
       <div className="mx-auto max-w-6xl px-0">
         {/* HERO */}
@@ -420,8 +471,8 @@ export default function HomePage() {
                     <div className="text-xs text-slate-500">Tailored value props & preview</div>
                   </div>
 
-                  <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-                    {["facility", "provider", "patient"].map((k) => (
+                  <div className="flex flex-wrap rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                    {["facility", "provider", "patient", "outreach"].map((k) => (
                       <button
                         key={k}
                         onClick={() => setRole(k)}
@@ -797,10 +848,10 @@ export default function HomePage() {
         </section>
 
         {/* Quick links */}
-        <section className="mt-10 grid gap-4 sm:grid-cols-3">
+        <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
             {
-              href: "/login/hospital",
+              href: "/login/facility",
               title: "Hospital / Facility",
               desc: "Teams, locations, permissions",
               icon: Stethoscope,
@@ -819,6 +870,13 @@ export default function HomePage() {
               desc: "Results, meds & dependents",
               icon: CalendarCheck,
               tint: "text-violet-700",
+            },
+            {
+              href: "/login/outreach",
+              title: "Outreach",
+              desc: "Event-scoped records & reports",
+              icon: HeartHandshake,
+              tint: "text-amber-800",
             },
           ].map((l) => (
             <Link
@@ -839,6 +897,41 @@ export default function HomePage() {
           ))}
         </section>
 
+        {/* ENQUIRY */}
+        <section id="contact" className="mt-16">
+          <SectionHeader
+            kicker="Enquiries"
+            title="Send us a message"
+            desc="Drop an enquiry and we'll get back to you."
+          />
+
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-600/10">
+                  <HeartHandshake className="h-5 w-5 text-amber-800" />
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-900">NIEMR Support</div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Use this form for product enquiries, partnerships, demos, and onboarding support.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-semibold text-slate-700">We typically reply within</div>
+                <div className="mt-1 text-sm text-slate-600">24–48 hours (business days)</div>
+                {/* <div className="mt-3 text-xs text-slate-500">
+                  Your message is delivered to <span className="font-medium">niemr.ai@outlook.com</span>.
+                </div> */}
+              </div>
+            </div>
+
+            <EnquiryForm />
+          </div>
+        </section>
+
         <footer className="mt-14 pb-10 text-center text-xs text-slate-500">
           © {new Date().getFullYear()} NIEMR • Built for modern healthcare workflows
         </footer>
@@ -854,5 +947,151 @@ function ShieldInline() {
         <Lock className="h-3 w-3 text-emerald-700" />
       </span>
     </span>
+  );
+}
+
+
+function EnquiryForm() {
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    subject: "",
+    message: "",
+    website: "", // honeypot
+  });
+  const [status, setStatus] = useState({ loading: false, success: false, error: "" });
+
+  function onChange(e) {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setStatus({ loading: true, success: false, error: "" });
+    try {
+      await apiFetch("/emails/enquiries/", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      setStatus({ loading: false, success: true, error: "" });
+      setForm({ name: "", email: "", phone: "", subject: "", message: "", website: "" });
+    } catch (err) {
+      setStatus({ loading: false, success: false, error: err?.message || "Something went wrong" });
+    }
+  }
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="font-semibold text-slate-900">Enquiry form</div>
+          <p className="mt-1 text-sm text-slate-600">Tell us what you need — we’ll respond by email.</p>
+        </div>
+        {status.success ? (
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-600/10 px-3 py-1 text-xs font-semibold text-emerald-800">
+            <CircleCheck className="h-4 w-4" />
+            Sent
+          </span>
+        ) : null}
+      </div>
+
+      {status.error ? (
+        <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {status.error}
+        </div>
+      ) : null}
+
+      <form onSubmit={onSubmit} className="mt-4 grid gap-3">
+        {/* Honeypot: keep hidden and empty */}
+        <input
+          type="text"
+          name="website"
+          value={form.website}
+          onChange={onChange}
+          className="hidden"
+          tabIndex={-1}
+          autoComplete="off"
+        />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="text-xs font-semibold text-slate-700">Full name</label>
+            <input
+              name="name"
+              value={form.name}
+              onChange={onChange}
+              required
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              placeholder="Your name"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-700">Email</label>
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={onChange}
+              required
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              placeholder="you@company.com"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="text-xs font-semibold text-slate-700">Phone (optional)</label>
+            <input
+              name="phone"
+              value={form.phone}
+              onChange={onChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              placeholder="+234..."
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-700">Subject (optional)</label>
+            <input
+              name="subject"
+              value={form.subject}
+              onChange={onChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              placeholder="Demo, onboarding, partnership..."
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-slate-700">Message</label>
+          <textarea
+            name="message"
+            value={form.message}
+            onChange={onChange}
+            required
+            rows={5}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            placeholder="Share a bit more about your use case..."
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <button
+            type="submit"
+            disabled={status.loading}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm",
+              status.loading ? "opacity-70" : "hover:brightness-110"
+            )}
+          >
+            {status.loading ? "Sending..." : "Send enquiry"}
+            <ArrowRight className="h-4 w-4" />
+          </button>
+          <p className="text-xs text-slate-500">No spam. We only use your details to respond.</p>
+        </div>
+      </form>
+    </div>
   );
 }
