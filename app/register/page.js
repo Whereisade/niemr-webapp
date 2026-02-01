@@ -24,7 +24,7 @@ export default function RegisterChooser() {
     },
     {
       href: "/register/provider",
-      title: "Independent Provider",
+      title: "Solo Practice",
       desc: "For clinicians, lab scientists, and pharmarcists who need a simple yet powerful EMR with e-Rx and visit tracking built in.",
       icon: Stethoscope,
       accent: "from-emerald-600/10 to-emerald-600/20 text-emerald-700",
@@ -61,7 +61,7 @@ export default function RegisterChooser() {
           Choose your NIEMR account type
         </h1>
         <p className="mt-3 text-slate-600 text-base md:text-lg max-w-2xl mx-auto">
-          Whether you run a healthcare facility, practice as an independent provider, or want to access your medical records as a patient, NIEMR helps you do it all — securely and efficiently.
+          Whether you run a healthcare facility, planning your next medical outreach, practice as an independent provider or you are a patient looking to securely store and access your medical records, NIEMR helps you do it all - securely and efficiently
         </p>
       </section>
 

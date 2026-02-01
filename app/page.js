@@ -73,6 +73,59 @@ function PillStat({ icon: Icon, label, value, hint, accent = "text-blue-700" }) 
   );
 }
 
+const FAQ_ITEMS = [
+  {
+    q: "Can I use NIEMR for a single-provider practice?",
+    a: "Yes — Independent Provider mode is streamlined for solo workflows (consults, e-Rx, results).",
+  },
+  {
+    q: "Do patients get access to their results?",
+    a: "Yes — patients can log in to view labs/imaging and manage dependents.",
+  },
+  {
+    q: "How are uploads handled?",
+    a: "Files are uploaded securely, linked to encounters or orders, and available in reports.",
+  },
+  {
+    q: "Is there support for multiple locations?",
+    a: "Yes — Facilities can be multi-site with location-aware permissions.",
+  },
+];
+
+function FAQCard() {
+  return (
+    <div id="faq" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-indigo-600/10">
+          <FileText className="h-5 w-5 text-indigo-700" />
+        </div>
+        <div>
+          <div className="font-semibold text-slate-900">FAQ</div>
+          <p className="mt-1 text-sm text-slate-600">
+            Quick answers before you send an enquiry.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-3">
+        {FAQ_ITEMS.map((item, idx) => (
+          <details
+            key={idx}
+            className="group rounded-2xl border border-slate-200 bg-slate-50 p-4"
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+              <span className="font-semibold text-slate-800">{item.q}</span>
+              <ChevronDown className="h-4 w-4 text-slate-400 transition group-open:rotate-180" />
+            </summary>
+            <p className="mt-2 text-sm text-slate-600">{item.a}</p>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function FeatureCard({ icon: Icon, title, desc, tone = "blue" }) {
   const toneMap = {
     blue: "from-blue-500/10 to-indigo-500/10 text-blue-700",
@@ -331,12 +384,13 @@ export default function HomePage() {
     () => ({
       facility: {
         label: "Facility",
-        title: "Run your clinic like a modern system — not a paper pile.",
+        title: "Run your Hospital/Healthcare like a modern system — not a paper pile.",
         desc: "Multi-role workflows, location-aware permissions, and operations that scale.",
         bullets: [
           "Multi-site support with role permissions",
           "Daily throughput + operational insights",
           "Audit trails for accreditation readiness",
+          "HIPAA/GDPR compliance ready",
         ],
         ctaPrimary: { label: "Create facility account", href: "/register/facility" },
         ctaSecondary: { label: "Facility sign in", href: "/login/facility" },
@@ -344,12 +398,13 @@ export default function HomePage() {
       },
       provider: {
         label: "Solo Practice",
-        title: "A streamlined workspace for solo and specialist practice.",
-        desc: "Fast documentation, orders, and e-Rx — without heavyweight setup.",
+        title: "Take the guess work out of your practice",
+        desc: "Take advantage of a streamlined workspace for your solo, independent or freelance clinical practice",
         bullets: [
           "Quick visit notes and order flow",
           "Simple billing and receipts",
           "Works great for specialists & standalone providers",
+          "HIPAA/GDPR compliance ready",
         ],
         ctaPrimary: { label: "Create provider account", href: "/register/provider" },
         ctaSecondary: { label: "Provider sign in", href: "/login/provider" },
@@ -357,12 +412,13 @@ export default function HomePage() {
       },
       patient: {
         label: "Patient",
-        title: "Results, meds, and dependents — all in one secure portal.",
-        desc: "See your records, track orders, and stay prepared for every visit.",
+        title: "Tired of loosing your test results and other vital medical records and information?",
+        desc: "Create an account for yourself and your dependants and securely store your vital medical information, results, labs, imaging, referrals, self-monitoring etc - all in one dedicated and secure portal for easy access anytime, anywhere",
         bullets: [
           "View lab/imaging results securely",
           "Manage dependents with access controls",
           "Stay updated with visit & prescription history",
+          "HIPAA/GDPR compliance ready",
         ],
         ctaPrimary: { label: "Create patient account", href: "/register/patient" },
         ctaSecondary: { label: "Patient sign in", href: "/login/patient" },
@@ -370,12 +426,13 @@ export default function HomePage() {
       },
       outreach: {
         label: "Outreach",
-        title: "Run community outreaches with event-scoped records and fast capture.",
-        desc: "Temporary staff logins, rapid patient registration, and report exports — designed for outreach programs.",
+        title: "Planning your next medical mission/ community health outreach?",
+        desc: "Run community outreaches with event scoped records and fast capture",
         bullets: [
-          "Create an outreach event and assign temporary staff",
+          "Create an outreach event and assign roles to staff",
           "Register patients, capture vitals, encounters, and orders",
           "Generate outreach reports (lab, pharmacy, immunization, etc.)",
+          "HIPAA/GDPR compliance ready",
         ],
         ctaPrimary: { label: "Outreach Registration", href: "/register/outreach" },
         ctaSecondary: { label: "Open outreach workspace", href: "/login/outreach" },
@@ -445,7 +502,12 @@ export default function HomePage() {
               <Activity className="h-3.5 w-3.5 text-blue-700" />
               NIEMR Platform
               <span className="mx-1 h-3 w-px bg-slate-200" />
-              <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", activePersona.badgeClass)}>
+              <span
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                  activePersona.badgeClass,
+                )}
+              >
                 {activePersona.label}
               </span>
             </div>
@@ -459,7 +521,8 @@ export default function HomePage() {
             </h1>
 
             <p className="mt-3 text-slate-600 text-base md:text-lg">
-              Appointments, encounters, labs, imaging, pharmacy, and billing — fast, secure, and designed for real clinical flow.
+              Appointments, encounters, labs, imaging, pharmacy, and billing —
+              fast, secure, and designed for real clinical flow.
             </p>
 
             {/* Persona switch */}
@@ -467,41 +530,61 @@ export default function HomePage() {
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold text-slate-900">Choose your mode</div>
-                    <div className="text-xs text-slate-500">Tailored value props & preview</div>
+                    <div className="text-xs font-semibold text-slate-900">
+                      Choose your mode
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Tailored value props & preview
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-                    {["facility", "provider", "patient", "outreach"].map((k) => (
-                      <button
-                        key={k}
-                        onClick={() => setRole(k)}
-                        className={cn(
-                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition",
-                          role === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
-                        )}
-                        type="button"
-                      >
-                        {personas[k].label}
-                      </button>
-                    ))}
+                    {["facility", "provider", "patient", "outreach"].map(
+                      (k) => (
+                        <button
+                          key={k}
+                          onClick={() => setRole(k)}
+                          className={cn(
+                            "rounded-xl px-3 py-1.5 text-xs font-semibold transition",
+                            role === k
+                              ? "bg-slate-900 text-white"
+                              : "text-slate-600 hover:bg-slate-100",
+                          )}
+                          type="button"
+                        >
+                          {personas[k].label}
+                        </button>
+                      ),
+                    )}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold text-slate-900">{activePersona.title}</div>
-                      <p className="mt-1 text-sm text-slate-600">{activePersona.desc}</p>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {activePersona.title}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {activePersona.desc}
+                      </p>
                     </div>
-                    <span className={cn("hidden sm:inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold", activePersona.badgeClass)}>
+                    <span
+                      className={cn(
+                        "hidden sm:inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold",
+                        activePersona.badgeClass,
+                      )}
+                    >
                       Optimized
                     </span>
                   </div>
 
                   <ul className="mt-3 grid gap-2 sm:grid-cols-2 text-sm">
                     {activePersona.bullets.map((b) => (
-                      <li key={b} className="flex items-start gap-2 text-slate-700">
+                      <li
+                        key={b}
+                        className="flex items-start gap-2 text-slate-700"
+                      >
                         <CircleCheck className="mt-0.5 h-4 w-4 text-emerald-600" />
                         <span>{b}</span>
                       </li>
@@ -523,11 +606,6 @@ export default function HomePage() {
                       {activePersona.ctaSecondary.label}
                     </Link>
                   </div>
-
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                    <ShieldInline />
-                    Privacy-first defaults • JWT auth • Audit logs
-                  </div>
                 </div>
               </div>
             </div>
@@ -536,40 +614,6 @@ export default function HomePage() {
           {/* Right - mock preview */}
           <div className="lg:pl-6">
             <MockAppPreview role={role} />
-          </div>
-        </section>
-
-        {/* STATS */}
-        <section className="mt-12">
-          <div className="grid gap-4 md:grid-cols-4">
-            <PillStat
-              icon={Building2}
-              label="Facilities"
-              value="1,240+"
-              hint="Multi-site clinics & hospitals"
-              accent="text-blue-700"
-            />
-            <PillStat
-              icon={Users}
-              label="Providers"
-              value="9,800+"
-              hint="Doctors, nurses & staff"
-              accent="text-emerald-700"
-            />
-            <PillStat
-              icon={Cpu}
-              label="Uptime"
-              value="99.95%"
-              hint="Monitored & resilient"
-              accent="text-indigo-700"
-            />
-            <PillStat
-              icon={Cloud}
-              label="Records"
-              value="12M+"
-              hint="Encrypted documents"
-              accent="text-violet-700"
-            />
           </div>
         </section>
 
@@ -592,10 +636,11 @@ export default function HomePage() {
             <div className="grid gap-6 md:grid-cols-3 md:items-center">
               <div className="md:col-span-2">
                 <div className="text-sm font-semibold text-slate-900">
-                  Designed for speed, clarity, and accreditation readiness.
+                  Designed for speed, clarity, and compliance readiness.
                 </div>
                 <p className="mt-1 text-sm text-slate-600">
-                  Status tracking, clean audit logs, and secure exports — without slowing clinicians down.
+                  Status tracking, clean audit logs, and secure exports —
+                  without slowing clinicians down.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 md:justify-end">
@@ -659,7 +704,8 @@ export default function HomePage() {
                 <p className="mt-1 text-sm text-slate-600">{body}</p>
                 <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
                 <div className="mt-3 text-xs text-slate-500">
-                  Built for {role === "patient" ? "patient clarity" : "clinical speed"}.
+                  Built for{" "}
+                  {role === "patient" ? "patient clarity" : "clinical speed"}.
                 </div>
               </div>
             ))}
@@ -679,22 +725,21 @@ export default function HomePage() {
                   Privacy-first defaults, strict roles, and audit trails.
                 </h3>
                 <p className="mt-2 text-sm md:text-base text-white/75">
-                  Built for clinical environments where trust, access control, and traceability matter.
+                  Built for clinical environments where trust, access control,
+                  and traceability matter.
                 </p>
 
                 <div className="mt-6 flex flex-wrap gap-2">
-                  {[
-                    "Encryption in transit & at rest",
-                    "Role-based permissions",
-                    "Audit logs on critical actions",
-                  ].map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/80"
-                    >
-                      {t}
-                    </span>
-                  ))}
+                  {["Encryption in transit & at rest", "Audit logs"].map(
+                    (t) => (
+                      <span
+                        key={t}
+                        className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/80"
+                      >
+                        {t}
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
 
@@ -713,12 +758,12 @@ export default function HomePage() {
 
                 <ul className="mt-5 grid gap-2 text-sm text-white/85">
                   {[
-                    "JWT-based authentication (access + refresh)",
-                    "Role-based access: Admin / Doctor / Nurse / Patient, etc.",
-                    "Audit trails for edits, amendments, and closures",
-                    "Secure file uploads with controlled URLs",
-                    "Rate limiting and IP-aware throttling",
-                    "Backup and recovery-friendly storage patterns",
+                    "Safe and private access for every user",
+                    "Only approved users can view sensitive information",
+                    "Reliable record-keeping with accountability",
+                    "Secure handling of documents and uploads",
+                    "Changes are tracked for accountability",
+                    "Designed to protect data and support recovery",
                   ].map((t) => (
                     <li key={t} className="flex items-start gap-2">
                       <CircleCheck className="mt-0.5 h-4 w-4 text-emerald-300" />
@@ -742,17 +787,20 @@ export default function HomePage() {
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
               {
-                quote: "Transition was seamless — labs, imaging, and pharmacy finally sync.",
+                quote:
+                  "Transition was seamless — labs, imaging, and pharmacy finally sync.",
                 name: "Dr. Adaeze O.",
                 role: "Consultant Physician",
               },
               {
-                quote: "Audit trails saved us hours during accreditation. Worth it.",
+                quote:
+                  "Audit trails saved us hours during accreditation. Worth it.",
                 name: "Oyinkan T.",
                 role: "Hospital Administrator",
               },
               {
-                quote: "Patients actually check results and show up prepared. Big win.",
+                quote:
+                  "Patients actually check results and show up prepared. Big win.",
                 name: "Musa A.",
                 role: "Radiographer",
               },
@@ -761,55 +809,18 @@ export default function HomePage() {
                 key={t.name}
                 className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
-                <p className="text-slate-800 text-sm md:text-base">“{t.quote}”</p>
+                <p className="text-slate-800 text-sm md:text-base">
+                  “{t.quote}”
+                </p>
                 <div className="mt-4 text-sm text-slate-500">
-                  <span className="font-medium text-slate-700">{t.name}</span> • {t.role}
+                  <span className="font-medium text-slate-700">{t.name}</span> •{" "}
+                  {t.role}
                 </div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* FAQ */}
-        <section id="faq" className="mt-16">
-          <SectionHeader
-            kicker="Quick answers"
-            title="Frequently asked questions"
-            desc="If you need anything custom for your workflow, you can extend modules as you grow."
-          />
-
-          <div className="mt-8 grid gap-3">
-            {[
-              {
-                q: "Can I use NIEMR for a single-provider practice?",
-                a: "Yes — Independent Provider mode is streamlined for solo workflows (consults, e-Rx, results).",
-              },
-              {
-                q: "Do patients get access to their results?",
-                a: "Yes — patients can log in to view labs/imaging and manage dependents.",
-              },
-              {
-                q: "How are uploads handled?",
-                a: "Files are uploaded securely, linked to encounters or orders, and available in reports.",
-              },
-              {
-                q: "Is there support for multiple locations?",
-                a: "Yes — Facilities can be multi-site with location-aware permissions.",
-              },
-            ].map((item, idx) => (
-              <details
-                key={idx}
-                className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                  <span className="font-semibold text-slate-800">{item.q}</span>
-                  <ChevronDown className="h-4 w-4 text-slate-400 transition group-open:rotate-180" />
-                </summary>
-                <p className="mt-2 text-sm text-slate-600">{item.a}</p>
-              </details>
-            ))}
-          </div>
-        </section>
 
         {/* CTA */}
         <section className="mt-16">
@@ -824,7 +835,8 @@ export default function HomePage() {
                   Ready to get started?
                 </h3>
                 <p className="mt-2 text-sm md:text-base text-white/80">
-                  Create a facility space or onboard as an independent provider. Patients can access results securely.
+                  Create a facility space or onboard as an independent provider.
+                  Patients can access results securely.
                 </p>
               </div>
 
@@ -906,34 +918,14 @@ export default function HomePage() {
           />
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-600/10">
-                  <HeartHandshake className="h-5 w-5 text-amber-800" />
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-900">NIEMR Support</div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Use this form for product enquiries, partnerships, demos, and onboarding support.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-semibold text-slate-700">We typically reply within</div>
-                <div className="mt-1 text-sm text-slate-600">24–48 hours (business days)</div>
-                {/* <div className="mt-3 text-xs text-slate-500">
-                  Your message is delivered to <span className="font-medium">niemr.ai@outlook.com</span>.
-                </div> */}
-              </div>
-            </div>
-
+            <FAQCard />
             <EnquiryForm />
           </div>
         </section>
 
         <footer className="mt-14 pb-10 text-center text-xs text-slate-500">
-          © {new Date().getFullYear()} NIEMR • Built for modern healthcare workflows
+          © {new Date().getFullYear()} NIEMR • Built for modern healthcare
+          workflows
         </footer>
       </div>
     </main>
