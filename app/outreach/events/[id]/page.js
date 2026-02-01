@@ -28,6 +28,228 @@ import {
   Lock,
 } from "lucide-react";
 
+function titleCase(s) {
+  if (!s) return "—";
+  return String(s)
+    .replace(/_/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function buildMatrixFromGroups(permissionGroups) {
+  // Each group becomes a section. Within a section we parse permission keys into resource + action.
+  // Examples:
+  // - patients.view => resource: patients, action: view
+  // - lab.catalog.manage => resource: catalog, action: manage
+  const sections = (permissionGroups || []).map((g) => {
+    const perms = Array.isArray(g?.perms) ? g.perms : [];
+    const byResource = new Map();
+    const actions = new Set();
+
+    perms.forEach((p) => {
+      const key = p?.key;
+      if (!key) return;
+      const parts = String(key).split(".");
+      let resource = "";
+      let action = "";
+      if (parts.length === 2) {
+        // module.action
+        resource = parts[0];
+        action = parts[1];
+      } else if (parts.length >= 3) {
+        // module.resource.action
+        resource = parts[1];
+        action = parts.slice(2).join(".");
+      } else {
+        resource = "misc";
+        action = "";
+      }
+      actions.add(action);
+      if (!byResource.has(resource)) byResource.set(resource, {});
+      byResource.get(resource)[action] = key;
+    });
+
+    const actionOrder = ["view", "create", "edit", "manage", "export", "view_sensitive"];
+    const orderedActions = actionOrder.filter((a) => actions.has(a)).concat(
+      [...actions].filter((a) => !actionOrder.includes(a)).sort()
+    );
+
+    const rows = [...byResource.entries()]
+      .map(([resource, cells]) => ({
+        resource,
+        resourceLabel: resource === (g?.key || "") ? g?.label : titleCase(resource),
+        cells,
+      }))
+      .sort((a, b) => a.resourceLabel.localeCompare(b.resourceLabel));
+
+    // Keep top row as the group itself when resource is same as module (patients, reports, etc.)
+    rows.sort((a, b) => {
+      const aIsMain = a.resource === (g?.key || "");
+      const bIsMain = b.resource === (g?.key || "");
+      if (aIsMain && !bIsMain) return -1;
+      if (!aIsMain && bIsMain) return 1;
+      return a.resourceLabel.localeCompare(b.resourceLabel);
+    });
+
+    return {
+      key: g?.key || g?.label,
+      label: g?.label || "Permissions",
+      actions: orderedActions,
+      rows,
+      allKeys: perms.map((x) => x?.key).filter(Boolean),
+    };
+  });
+
+  const allKeys = sections.flatMap((s) => s.allKeys);
+  return { sections, allKeys };
+}
+
+function PermissionMatrix({
+  permissionGroups,
+  value,
+  onChange,
+  title = "Permissions",
+  subtitle,
+  compact = false,
+  extraActions,
+  labelForKey,
+}) {
+  const { sections, allKeys } = useMemo(() => buildMatrixFromGroups(permissionGroups), [permissionGroups]);
+  const selected = useMemo(() => new Set(Array.isArray(value) ? value : []), [value]);
+
+  const setValue = (next) => {
+    const arr = Array.from(new Set(next)).filter(Boolean).sort();
+    onChange?.(arr);
+  };
+
+  const toggle = (key, checked) => {
+    const next = new Set(selected);
+    if (checked) next.add(key);
+    else next.delete(key);
+    setValue([...next]);
+  };
+
+  const clearAll = () => setValue([]);
+  const selectAll = () => setValue(allKeys);
+  const viewOnly = () => {
+    const viewKeys = allKeys.filter((k) => String(k).endsWith(".view") || String(k).endsWith(".view_sensitive"));
+    setValue(viewKeys);
+  };
+
+  return (
+    <div className={`rounded-2xl border border-slate-200 ${compact ? "p-4" : "p-5"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">{title}</div>
+          {subtitle ? <div className="mt-0.5 text-xs text-slate-600">{subtitle}</div> : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={selectAll}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+          >
+            Select all
+          </button>
+          <button
+            type="button"
+            onClick={viewOnly}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+            title="Keeps only View permissions"
+          >
+            View-only
+          </button>
+          <button
+            type="button"
+            onClick={clearAll}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+          >
+            Clear
+          </button>
+          {extraActions}
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-5">
+        {sections.map((sec) => (
+          <div key={sec.key} className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 bg-slate-50 px-4 py-2">
+              <div className="text-xs font-semibold text-slate-700">{sec.label}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = new Set(selected);
+                  sec.allKeys.forEach((k) => next.add(k));
+                  setValue([...next]);
+                }}
+                className="text-xs font-medium text-blue-700 hover:text-blue-800"
+              >
+                Select section
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-xs">
+                <thead className="bg-white">
+                  <tr className="border-b border-slate-200">
+                    <th className="px-4 py-2 font-semibold text-slate-700">Area</th>
+                    {sec.actions.map((a) => (
+                      <th key={a} className="px-4 py-2 font-semibold text-slate-700 whitespace-nowrap">
+                        {titleCase(a)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  {sec.rows.map((row) => (
+                    <tr key={row.resource} className="border-b border-slate-100 last:border-b-0">
+                      <td className="px-4 py-2 font-medium text-slate-800 whitespace-nowrap">{row.resourceLabel}</td>
+                      {sec.actions.map((a) => {
+                        const key = row.cells?.[a];
+                        if (!key) {
+                          return (
+                            <td key={a} className="px-4 py-2 text-slate-300">
+                              —
+                            </td>
+                          );
+                        }
+                        const checked = selected.has(key);
+                        return (
+                          <td key={a} className="px-4 py-2">
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => toggle(key, e.target.checked)}
+                                className="h-4 w-4"
+                                title={labelForKey ? labelForKey(key) : key}
+                              />
+                              <span className="sr-only">{key}</span>
+                            </label>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+
+        {!sections.length ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+            No permissions available for enabled modules.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function fmtDT(v) {
   if (!v) return "—";
   try {
@@ -62,7 +284,13 @@ export default function OutreachEventDetailPage() {
   const [sites, setSites] = useState([]);
   const [staff, setStaff] = useState([]);
   const [newStaff, setNewStaff] = useState({ email: "", full_name: "", role_template: "CLINICIAN", permissions: null, all_sites: true, site_ids: [] });
+  const [newStaffPermMode, setNewStaffPermMode] = useState("preset"); // preset | custom
   const [newSite, setNewSite] = useState({ name: "", community: "", address: "" });
+
+  // Permission editor state per staff
+  const [permOpenByStaffId, setPermOpenByStaffId] = useState({});
+  const [permDraftByStaffId, setPermDraftByStaffId] = useState({});
+  const [presetPickByStaffId, setPresetPickByStaffId] = useState({});
 
   const [passwordResetInfo, setPasswordResetInfo] = useState(null);
   const permissionGroups = useMemo(
@@ -209,8 +437,10 @@ export default function OutreachEventDetailPage() {
     try {
       const role = newStaff.role_template || "CLINICIAN";
       const perms =
-        Array.isArray(newStaff.permissions) && newStaff.permissions.length
-          ? newStaff.permissions
+        newStaffPermMode === "custom"
+          ? Array.isArray(newStaff.permissions) && newStaff.permissions.length
+            ? newStaff.permissions
+            : defaultPermsFor(role)
           : defaultPermsFor(role);
 
       const created = await apiFetch(`/outreach/events/${eventId}/staff/`, {
@@ -226,6 +456,7 @@ export default function OutreachEventDetailPage() {
       });
       setStaff((p) => [created, ...p]);
       setNewStaff({ email: "", full_name: "", role_template: "CLINICIAN", permissions: null, all_sites: true, site_ids: [] });
+      setNewStaffPermMode("preset");
 
       // Backend returns one-time credentials in `credentials`
       const credEmail = created?.credentials?.email || newStaff.email.trim();
@@ -568,7 +799,15 @@ export default function OutreachEventDetailPage() {
               />
               <select
                 value={newStaff.role_template}
-                onChange={(e) => setNewStaff((p) => ({ ...p, role_template: e.target.value, permissions: null }))}
+                onChange={(e) => {
+                  const nextRole = e.target.value;
+                  setNewStaff((p) => ({
+                    ...p,
+                    role_template: nextRole,
+                    permissions: newStaffPermMode === "custom" ? defaultPermsFor(nextRole) : null,
+                  }));
+                  if (newStaffPermMode !== "custom") setNewStaffPermMode("preset");
+                }}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
                 {OUTREACH_ROLE_TEMPLATES.map((r) => (
@@ -593,32 +832,71 @@ export default function OutreachEventDetailPage() {
                 </div>
               </label>
 
-              <label className="block space-y-1">
-                <div className="text-sm font-medium text-slate-700">Custom permissions (optional)</div>
-                <select
-                  multiple
-                  value={
-                    Array.isArray(newStaff.permissions) && newStaff.permissions.length
-                      ? newStaff.permissions
-                      : defaultPermsFor(newStaff.role_template)
-                  }
-                  onChange={(e) => {
-                    const values = Array.from(e.target.selectedOptions).map((o) => o.value);
-                    setNewStaff((p) => ({ ...p, permissions: values }));
-                  }}
-                  className="h-28 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                >
-                  {permissionGroups.map((g) => (
-                          <optgroup key={g.key || g.label} label={g.label}>
-                            {(g.perms || []).map((perm) => (
-                              <option key={perm.key} value={perm.key}>
-                                {perm.label}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-              </label>
+              <div className="rounded-xl border border-slate-200 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">Permissions</div>
+                    <div className="mt-0.5 text-xs text-slate-600">Start with a role preset, or switch to custom to tick boxes.</div>
+                  </div>
+
+                  <div className="flex items-center rounded-xl bg-slate-100 p-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewStaffPermMode("preset");
+                        setNewStaff((p) => ({ ...p, permissions: null }));
+                      }}
+                      className={`rounded-lg px-3 py-1 font-medium ${newStaffPermMode === "preset" ? "bg-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                    >
+                      Preset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewStaffPermMode("custom");
+                        setNewStaff((p) => ({
+                          ...p,
+                          permissions: Array.isArray(p.permissions) && p.permissions.length ? p.permissions : defaultPermsFor(p.role_template),
+                        }));
+                      }}
+                      className={`rounded-lg px-3 py-1 font-medium ${newStaffPermMode === "custom" ? "bg-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                </div>
+
+                {newStaffPermMode === "preset" ? (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                    <div className="font-semibold text-slate-600">Preset preview ({newStaff.role_template})</div>
+                    <div className="mt-1 leading-relaxed">
+                      {defaultPermsFor(newStaff.role_template).map((k) => permLabel(k)).join(", ") || "—"}
+                    </div>
+                    <div className="mt-2 text-slate-500">Tip: switch to <b>Custom</b> if you want to remove or add specific permissions.</div>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <PermissionMatrix
+                      permissionGroups={permissionGroups}
+                      value={Array.isArray(newStaff.permissions) ? newStaff.permissions : defaultPermsFor(newStaff.role_template)}
+                      onChange={(vals) => setNewStaff((p) => ({ ...p, permissions: vals }))}
+                      title="Custom permissions"
+                      subtitle="Tick what this staff can do. Use the buttons above to bulk-select."
+                      compact
+                      labelForKey={permLabel}
+                      extraActions={
+                        <button
+                          type="button"
+                          onClick={() => setNewStaff((p) => ({ ...p, permissions: defaultPermsFor(p.role_template) }))}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+                        >
+                          Reset to preset
+                        </button>
+                      }
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <button
@@ -650,31 +928,63 @@ export default function OutreachEventDetailPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <label className="block space-y-1">
-                      <div className="text-sm font-medium text-slate-700">Permissions</div>
-                      <select
-                        multiple
-                        value={Array.isArray(s.permissions) ? s.permissions : []}
-                        onChange={(e) => {
-                          const values = Array.from(e.target.selectedOptions).map((o) => o.value);
-                          updateStaff(s.id, { permissions: values });
-                        }}
-                        className="h-28 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      >
-                        {permissionGroups.map((g) => (
-                          <optgroup key={g.key || g.label} label={g.label}>
-                            {(g.perms || []).map((perm) => (
-                              <option key={perm.key} value={perm.key}>
-                                {perm.label}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </label>
+                  {(() => {
+                    const currentPerms = Array.isArray(s.permissions) ? s.permissions : [];
+                    const isOpen = !!permOpenByStaffId[s.id];
+                    const draft = Array.isArray(permDraftByStaffId[s.id]) ? permDraftByStaffId[s.id] : currentPerms;
+                    const presetPick = presetPickByStaffId[s.id] || s.role_template || "CLINICIAN";
+                    const preview = currentPerms.slice(0, 4).map((k) => permLabel(k));
+                    const more = Math.max(0, currentPerms.length - preview.length);
 
-                    <div className="space-y-3">
+                    return (
+                      <>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl border border-slate-200 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-slate-700">Permissions</div>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {preview.length ? (
+                                    preview.map((t, idx) => (
+                                      <span key={idx} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">
+                                        {t}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-slate-500">No permissions selected</span>
+                                  )}
+                                  {more ? (
+                                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">+{more} more</span>
+                                  ) : null}
+                                </div>
+                                <div className="mt-2 text-xs text-slate-500">
+                                  Preset: <b>{s.role_template}</b> • {currentPerms.length} selected
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPermOpenByStaffId((p) => ({ ...p, [s.id]: !isOpen }));
+                                  if (!isOpen) {
+                                    setPermDraftByStaffId((p) => ({
+                                      ...p,
+                                      [s.id]: currentPerms.length ? currentPerms : defaultPermsFor(s.role_template || "CLINICIAN"),
+                                    }));
+                                    setPresetPickByStaffId((p) => ({
+                                      ...p,
+                                      [s.id]: p?.[s.id] || s.role_template || "CLINICIAN",
+                                    }));
+                                  }
+                                }}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                              >
+                                {isOpen ? "Close" : "Edit"}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
                       <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm">
                         <input
                           type="checkbox"
@@ -711,8 +1021,82 @@ export default function OutreachEventDetailPage() {
                       <div className="text-xs text-slate-500">
                         Default perms for <b>{s.role_template}</b>: {defaultPermsFor(s.role_template).map(permLabel).join(", ") || "—"}
                       </div>
-                    </div>
-                  </div>
+                          </div>
+                        </div>
+
+                        {isOpen ? (
+                          <div className="mt-3 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="text-sm font-medium text-slate-700">Preset</div>
+                                <select
+                                  value={presetPick}
+                                  onChange={(e) => setPresetPickByStaffId((p) => ({ ...p, [s.id]: e.target.value }))}
+                                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                >
+                                  {OUTREACH_ROLE_TEMPLATES.filter((r) => r.key !== "CUSTOM").map((r) => (
+                                    <option key={r.key} value={r.key}>
+                                      {r.label}
+                                    </option>
+                                  ))}
+                                  <option value="CUSTOM">Custom</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => setPermDraftByStaffId((p) => ({ ...p, [s.id]: defaultPermsFor(presetPick) }))}
+                                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+                                >
+                                  Apply preset
+                                </button>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPermOpenByStaffId((p) => ({ ...p, [s.id]: false }));
+                                    setPermDraftByStaffId((p) => ({ ...p, [s.id]: currentPerms }));
+                                  }}
+                                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateStaff(s.id, { permissions: draft });
+                                    setPermOpenByStaffId((p) => ({ ...p, [s.id]: false }));
+                                  }}
+                                  className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+                                >
+                                  Save permissions
+                                </button>
+                              </div>
+                            </div>
+
+                            <PermissionMatrix
+                              permissionGroups={permissionGroups}
+                              value={draft}
+                              onChange={(vals) => setPermDraftByStaffId((p) => ({ ...p, [s.id]: vals }))}
+                              title="Permission matrix"
+                              subtitle="Tick boxes to grant permissions. Changes only apply when you click Save."
+                              compact
+                              labelForKey={permLabel}
+                              extraActions={
+                                <button
+                                  type="button"
+                                  onClick={() => setPermDraftByStaffId((p) => ({ ...p, [s.id]: defaultPermsFor(presetPick) }))}
+                                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+                                >
+                                  Reset to preset
+                                </button>
+                              }
+                            />
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
 

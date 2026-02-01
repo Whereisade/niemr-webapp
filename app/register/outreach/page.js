@@ -170,7 +170,7 @@ export default function OutreachSuperAdminRegisterPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                  This account is system-level (not tied to a facility)
+                  This account is system-level 
                 </div>
 
                 <button
