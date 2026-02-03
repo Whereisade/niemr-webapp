@@ -22,6 +22,7 @@ import {
   UserRound,
   MapPin,
   Phone,
+  X,
 } from "lucide-react";
 
 const PRIORITY_OPTIONS = [
@@ -79,6 +80,8 @@ export default function ProviderEncounterLabsPage() {
 
   // Selection
   const [selectedCodes, setSelectedCodes] = useState(() => new Set());
+  // Keep lightweight details for selected catalog items so summary/list don't break on search
+  const [selectedMeta, setSelectedMeta] = useState(() => ({}));
   const [manualName, setManualName] = useState("");
   const [manualTests, setManualTests] = useState([]);
 
@@ -86,6 +89,7 @@ export default function ProviderEncounterLabsPage() {
   const [labsProviders, setLabsProviders] = useState([]);
   const [labsProvidersLoading, setLabsProvidersLoading] = useState(false);
   const [outsourcedToUserId, setOutsourcedToUserId] = useState(""); // user id (p.user)
+  const [wantsOutsource, setWantsOutsource] = useState(false);
 
   // Order meta
   const [priority, setPriority] = useState("ROUTINE");
@@ -175,9 +179,11 @@ export default function ProviderEncounterLabsPage() {
 
   // ✅ Reload catalog when outsourced lab changes
   useEffect(() => {
+    if (outsourcedToUserId) setWantsOutsource(true);
     loadCatalog(q);
     // Clear selections when switching catalogs
     setSelectedCodes(new Set());
+    setSelectedMeta({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outsourcedToUserId]);
 
@@ -192,12 +198,42 @@ export default function ProviderEncounterLabsPage() {
     return ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role);
   }, [me]);
 
+  const selectionSummary = useMemo(() => {
+    const catalogCount = selectedCodes.size;
+    const manualCount = manualTests.length;
+    const totalCount = catalogCount + manualCount;
+    const estTotal = Object.values(selectedMeta || {}).reduce((sum, m) => {
+      const n = Number(m?.price);
+      return sum + (Number.isFinite(n) ? n : 0);
+    }, 0);
+    return { catalogCount, manualCount, totalCount, estTotal };
+  }, [selectedCodes, manualTests, selectedMeta]);
+
   function toggleCode(code) {
     setSelectedCodes((prev) => {
       const next = new Set(prev);
       const k = String(code);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
+      const willSelect = !next.has(k);
+
+      if (willSelect) next.add(k);
+      else next.delete(k);
+
+      setSelectedMeta((pm) => {
+        const nextMeta = { ...(pm || {}) };
+        if (willSelect) {
+          const t = catalog?.find((x) => String(x?.code) === k);
+          nextMeta[k] = {
+            code: k,
+            name: t?.name || k,
+            unit: t?.unit || "",
+            price: t?.price ?? null,
+          };
+        } else {
+          delete nextMeta[k];
+        }
+        return nextMeta;
+      });
+
       return next;
     });
   }
@@ -214,6 +250,13 @@ export default function ProviderEncounterLabsPage() {
 
   function removeManual(name) {
     setManualTests((prev) => prev.filter((x) => x !== name));
+  }
+
+  function clearAllSelections() {
+    setSelectedCodes(new Set());
+    setSelectedMeta({});
+    setManualTests([]);
+    setManualName("");
   }
 
   async function handleSkipLabs() {
@@ -260,9 +303,13 @@ export default function ProviderEncounterLabsPage() {
       return;
     }
 
-    // ✅ Validate outsourcing for independent providers
-    if (isIndependentProvider && !outsourcedToUserId && selectedCodes.size > 0) {
-      setError("Independent providers should outsource lab orders to a lab scientist.");
+    // ✅ Validate outsourcing intent
+    if ((isIndependentProvider || wantsOutsource) && !outsourcedToUserId && selectedCodes.size > 0) {
+      setError(
+        isIndependentProvider
+          ? "Select a lab scientist to outsource to (independent providers should not run labs without a lab scientist)."
+          : "Select a lab scientist to outsource to, or switch back to your catalog."
+      );
       return;
     }
 
@@ -554,61 +601,159 @@ export default function ProviderEncounterLabsPage() {
           <h2 className="text-sm font-semibold text-slate-900">Order Details</h2>
 
           <div className="mt-3 grid gap-3">
-            {/* ✅ Enhanced outsource section with full provider details */}
-            <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
-                  <Building2 className="h-4 w-4" />
-                  Outsource to Lab Scientist
-                </div>
-                {isIndependentProvider && (
-                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                    Recommended
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-blue-800">
-                {isIndependentProvider 
-                  ? "Select a lab scientist from your network to handle sample collection and testing."
-                  : "Optional. Recommended for independent providers (so labs are routed to a lab scientist)."}
-              </p>
-
-              <div className="mt-2">
-                <select
-                  value={outsourcedToUserId}
-                  onChange={(e) => setOutsourcedToUserId(e.target.value)}
-                  disabled={labsProvidersLoading}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
-                >
-                  <option value="">— Select lab scientist —</option>
-                  {labsProviders.map((p) => (
-                    <option key={String(p?.user)} value={String(p?.user)}>
-                      {getProviderDisplayName(p)}
-                    </option>
-                  ))}
-                </select>
-
-                {/* ✅ Show full provider details when selected */}
-                {selectedProvider && (
-                  <div className="mt-2 space-y-1 rounded-lg border border-blue-100 bg-white p-2 text-xs">
-                    <div className="flex items-center gap-1.5 font-semibold text-blue-900">
-                      <Building2 className="h-3.5 w-3.5" />
-                      {getProviderDisplayName(selectedProvider)}
-                    </div>
-                    {selectedProvider.address && (
-                      <div className="flex items-start gap-1.5 text-blue-800">
-                        <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                        <span>{selectedProvider.address}</span>
-                      </div>
-                    )}
-                    {selectedProvider.phone && (
-                      <div className="flex items-center gap-1.5 text-blue-800">
-                        <Phone className="h-3.5 w-3.5" />
-                        <span>{selectedProvider.phone}</span>
-                      </div>
+            {/* Summary selection box (routing + quick stats) */}
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Summary
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {selectionSummary.totalCount
+                      ? `${selectionSummary.totalCount} test${selectionSummary.totalCount === 1 ? "" : "s"} selected`
+                      : "No tests selected yet"}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600">
+                    {selectionSummary.estTotal ? (
+                      <>
+                        Estimated total: <span className="font-semibold text-slate-900">₦{selectionSummary.estTotal.toLocaleString()}</span>
+                        {selectionSummary.manualCount ? <span className="text-slate-500"> (manual tests not priced)</span> : null}
+                      </>
+                    ) : selectionSummary.manualCount ? (
+                      "Manual tests selected (no price estimate)"
+                    ) : (
+                      "Pick tests on the left to build your order."
                     )}
                   </div>
-                )}
+                </div>
+
+                {(selectionSummary.totalCount || wantsOutsource || note || priority !== "ROUTINE") ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearAllSelections();
+                      setNote("");
+                      setPriority("ROUTINE");
+                      setWantsOutsource(false);
+                      setOutsourcedToUserId("");
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    title="Reset order details"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reset
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Catalog</div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900">{selectionSummary.catalogCount}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Manual</div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900">{selectionSummary.manualCount}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Route</div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900">
+                    {wantsOutsource ? (outsourcedToUserId ? "Lab scientist" : "Pick one") : "Default"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Processing</div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWantsOutsource(false);
+                      setOutsourcedToUserId("");
+                    }}
+                    className={
+                      wantsOutsource
+                        ? "rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:bg-slate-50"
+                        : "rounded-xl border border-slate-900 bg-white px-3 py-2 text-left text-sm shadow-sm"
+                    }
+                  >
+                    <div className="font-semibold text-slate-900">Default Catalog</div>
+                    <div className="mt-0.5 text-xs text-slate-600">Use non-outsourced catalog</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setWantsOutsource(true)}
+                    className={
+                      wantsOutsource
+                        ? "rounded-xl border border-slate-900 bg-white px-3 py-2 text-left text-sm shadow-sm"
+                        : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    }
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-slate-700" />
+                        <div className="font-semibold text-slate-900">Lab Scientist</div>
+                      </div>
+                      {isIndependentProvider ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          Recommended
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-600">See their catalog & outsource</div>
+                  </button>
+                </div>
+
+                {wantsOutsource ? (
+                  <div className="mt-3">
+                    <select
+                      value={outsourcedToUserId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setOutsourcedToUserId(v);
+                        setWantsOutsource(true);
+                      }}
+                      disabled={labsProvidersLoading}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
+                    >
+                      <option value="">— Select lab scientist —</option>
+                      {labsProviders.map((p) => (
+                        <option key={String(p?.user)} value={String(p?.user)}>
+                          {getProviderDisplayName(p)}
+                        </option>
+                      ))}
+                    </select>
+
+                    {!outsourcedToUserId ? (
+                      <div className="mt-2 text-xs text-slate-600">
+                        Pick a lab scientist to switch the catalog and route this order.
+                      </div>
+                    ) : null}
+
+                    {selectedProvider ? (
+                      <div className="mt-2 space-y-1 rounded-lg border border-slate-200 bg-white p-2 text-xs">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                          <Building2 className="h-3.5 w-3.5" />
+                          {getProviderDisplayName(selectedProvider)}
+                        </div>
+                        {selectedProvider.address ? (
+                          <div className="flex items-start gap-1.5 text-slate-600">
+                            <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                            <span>{selectedProvider.address}</span>
+                          </div>
+                        ) : null}
+                        {selectedProvider.phone ? (
+                          <div className="flex items-center gap-1.5 text-slate-600">
+                            <Phone className="h-3.5 w-3.5" />
+                            <span>{selectedProvider.phone}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -641,6 +786,54 @@ export default function ProviderEncounterLabsPage() {
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
             </label>
+
+            <div className="rounded-2xl border border-slate-100 bg-white p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Selected Tests
+              </div>
+
+              <div className="mt-2 text-sm text-slate-900">
+                {selectedCodes.size + manualTests.length ? (
+                  <div className="space-y-1">
+                    {Array.from(selectedCodes).slice(0, 8).map((c) => {
+                      const meta = selectedMeta?.[String(c)];
+                      const testName = meta?.name || c;
+                      return (
+                        <div key={c} className="flex items-center justify-between">
+                          <span className="text-xs">{testName}</span>
+                          <button
+                            type="button"
+                            className="text-xs text-slate-500 hover:text-slate-900"
+                            onClick={() => toggleCode(c)}
+                          >
+                            remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {manualTests.slice(0, 8).map((m) => (
+                      <div key={m} className="flex items-center justify-between">
+                        <span className="text-xs">{m}</span>
+                        <button
+                          type="button"
+                          className="text-xs text-slate-500 hover:text-slate-900"
+                          onClick={() => removeManual(m)}
+                        >
+                          remove
+                        </button>
+                      </div>
+                    ))}
+                    {(selectedCodes.size + manualTests.length) > 16 ? (
+                      <div className="text-xs text-slate-500">
+                        +{(selectedCodes.size + manualTests.length) - 16} more…
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-600">Nothing selected yet.</div>
+                )}
+              </div>
+            </div>
 
             <button
               type="submit"

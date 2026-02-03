@@ -3,7 +3,8 @@
 // ✅ Properly loads their catalog when selected
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+ useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -22,6 +23,7 @@ import {
   AlertTriangle,
   MapPin,
   Phone,
+  RefreshCw,
 } from "lucide-react";
 
 function normalizeList(body) {
@@ -81,6 +83,9 @@ export default function ProviderEncounterPrescriptionPage() {
   const [items, setItems] = useState([]);
   const [freeTextName, setFreeTextName] = useState("");
 
+  // Keep lightweight name/strength map so drug names stay visible even when catalog is filtered
+  const [selectedDrugMeta, setSelectedDrugMeta] = useState({});
+
   // Meta
   const [note, setNote] = useState("");
 
@@ -91,6 +96,40 @@ export default function ProviderEncounterPrescriptionPage() {
     if (!outsourcedToUserId) return null;
     return pharmProviders.find((p) => String(p?.user) === String(outsourcedToUserId)) || null;
   }, [outsourcedToUserId, pharmProviders]);
+
+  const summary = useMemo(() => {
+    const total = items.length;
+    const catalogCount = items.filter((it) => String(it?.drug_code || "").trim()).length;
+    const freeTextCount = total - catalogCount;
+
+    const namesRaw = items
+      .map((it) => {
+        const code = String(it?.drug_code || "").trim();
+        if (code) {
+          const fromItem = String(it?.drug_name || "").trim();
+          const fromMeta = String(selectedDrugMeta?.[code]?.name || "").trim();
+          const fromCatalog = String(
+            catalog.find((d) => String(d?.code) === String(code))?.name || ""
+          ).trim();
+          return fromItem || fromMeta || fromCatalog || code;
+        }
+        return String(it?.drug_name || "").trim();
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    const uniqueNames = [];
+    for (const n of namesRaw) {
+      const k = String(n).toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      uniqueNames.push(String(n));
+    }
+
+    const route = outsourcedToUserId ? "Outsourced Pharmacist" : "Facility Pharmacy";
+    return { total, catalogCount, freeTextCount, uniqueNames, route };
+  }, [items, catalog, selectedDrugMeta, outsourcedToUserId]);
+
 
   const isIndependentProvider = me && !me.facility_id;
 
@@ -196,18 +235,39 @@ export default function ProviderEncounterPrescriptionPage() {
   const isCrossedOut = String(encounter?.status || "").toUpperCase() === "CROSSED_OUT";
   const readOnly = !canEdit || isLocked || isWaitingLabs || isCrossedOut;
 
+
+  function resetBuilder() {
+    if (readOnly) return;
+    setItems([]);
+    setFreeTextName("");
+    setNote("");
+    setOutsourcedToUserId("");
+    setSelectedDrugMeta({});
+    setQ("");
+  }
+
+
   function addCatalogDrug(drug) {
     const code = String(drug?.code || "").trim();
     if (!code) return;
 
+
+    // Persist catalog meta so selected drug names don't vanish when searching/filtering
+    setSelectedDrugMeta((prev) => ({
+      ...prev,
+      [code]: {
+        name: String(drug?.name || "").trim(),
+        strength: String(drug?.strength || "").trim(),
+      },
+    }));
     setItems((prev) => {
       if (prev.some((x) => String(x?.drug_code) === code && !x?.drug_name)) return prev;
       return [
         ...prev,
         {
           drug_code: code,
-          drug_name: "",
-          dose: "",
+          drug_name: String(drug?.name || "").trim(),
+          dose: String(drug?.strength || "").trim(),
           frequency: "",
           duration_days: 1,
           qty_prescribed: 0,
@@ -593,64 +653,145 @@ export default function ProviderEncounterPrescriptionPage() {
 
           <div className="mt-3 grid gap-3">
             {/* ✅ Enhanced outsource section with full provider details */}
-            <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
-                  <Building2 className="h-4 w-4" />
-                  Outsource to Pharmacist
-                </div>
-                {isIndependentProvider && (
-                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                    Recommended
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-blue-800">
-                {isIndependentProvider 
-                  ? "Select a pharmacist from your network to handle medication dispensing and counseling."
-                  : "Optional. One pharmacy gets the entire prescription."}
-              </p>
 
-              <div className="mt-2">
-                <select
-                  value={outsourcedToUserId}
-                  onChange={(e) => setOutsourcedToUserId(e.target.value)}
-                  disabled={pharmLoading || readOnly}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
-                >
-                  <option value="">— Select pharmacist —</option>
-                  {pharmProviders.map((p) => (
-                    <option key={String(p?.user)} value={String(p?.user)}>
-                      {getProviderDisplayName(p)}
-                    </option>
-                  ))}
-                </select>
-
-                {/* ✅ Show full provider details when selected */}
-                {selectedProvider && (
-                  <div className="mt-2 space-y-1 rounded-lg border border-blue-100 bg-white p-2 text-xs">
-                    <div className="flex items-center gap-1.5 font-semibold text-blue-900">
-                      <Building2 className="h-3.5 w-3.5" />
-                      {getProviderDisplayName(selectedProvider)}
-                    </div>
-                    {selectedProvider.address && (
-                      <div className="flex items-start gap-1.5 text-blue-800">
-                        <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                        <span>{selectedProvider.address}</span>
-                      </div>
-                    )}
-                    {selectedProvider.phone && (
-                      <div className="flex items-center gap-1.5 text-blue-800">
-                        <Phone className="h-3.5 w-3.5" />
-                        <span>{selectedProvider.phone}</span>
-                      </div>
-                    )}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <Info className="h-4 w-4" />
+                    Summary
                   </div>
-                )}
+                  <div className="mt-1 text-xs text-slate-600">
+                    Quick overview of selected drugs and where this prescription will be processed.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resetBuilder}
+                  disabled={readOnly}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+                  title="Reset prescription builder"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Reset
+                </button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">{summary.total}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Catalog</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">{summary.catalogCount}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Free-text</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">{summary.freeTextCount}</div>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Processing</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {outsourcedToUserId && selectedProvider
+                        ? getProviderDisplayName(selectedProvider)
+                        : summary.route}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      {outsourcedToUserId
+                        ? "This prescription will be routed to the selected pharmacist."
+                        : isIndependentProvider
+                        ? "Independent providers typically outsource prescriptions to a pharmacist when using catalog drugs."
+                        : "This prescription will stay within the facility pharmacy workflow."}
+                    </div>
+                  </div>
+
+                  {isIndependentProvider ? (
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Recommended</span>
+                  ) : null}
+                </div>
+
+                <div className="mt-3">
+                  <select
+                    value={outsourcedToUserId}
+                    onChange={(e) => setOutsourcedToUserId(e.target.value)}
+                    disabled={pharmLoading || readOnly}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:opacity-60"
+                  >
+                    <option value="">— Do not outsource —</option>
+                    {pharmProviders.map((p) => (
+                      <option key={String(p?.user)} value={String(p?.user)}>
+                        {getProviderDisplayName(p)}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedProvider ? (
+                    <div className="mt-2 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                        <Building2 className="h-3.5 w-3.5" />
+                        {getProviderDisplayName(selectedProvider)}
+                      </div>
+                      {selectedProvider.address ? (
+                        <div className="flex items-start gap-1.5 text-slate-700">
+                          <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                          <span>{selectedProvider.address}</span>
+                        </div>
+                      ) : null}
+                      {selectedProvider.phone ? (
+                        <div className="flex items-center gap-1.5 text-slate-700">
+                          <Phone className="h-3.5 w-3.5" />
+                          <span>{selectedProvider.phone}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {isIndependentProvider && !outsourcedToUserId && summary.catalogCount > 0 ? (
+                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <div>You added catalog drugs. Please select a pharmacist to outsource this prescription.</div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Drugs</div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {summary.uniqueNames.length ? (
+                    <>
+                      {summary.uniqueNames.slice(0, 10).map((n) => (
+                        <span
+                          key={n}
+                          className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+                          title={n}
+                        >
+                          <span className="truncate">{n}</span>
+                        </span>
+                      ))}
+                      {summary.uniqueNames.length > 10 ? (
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600">
+                          +{summary.uniqueNames.length - 10} more
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-600">No drugs selected yet.</span>
+                  )}
+                </div>
               </div>
             </div>
 
             <label className="grid gap-1">
+
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Note
               </span>
@@ -672,7 +813,23 @@ export default function ProviderEncounterPrescriptionPage() {
                       <div>
                         <div className="text-sm font-semibold text-slate-900">
                           {it?.drug_code ? (
-                            <span className="font-mono text-xs">{it.drug_code}</span>
+                            <>
+                              <div className="text-sm font-semibold text-slate-900">
+                                {it?.drug_name ||
+                                  selectedDrugMeta?.[
+                                    String(it?.drug_code || "").trim()
+                                  ]?.name ||
+                                  catalog.find(
+                                    (d) =>
+                                      String(d?.code) ===
+                                      String(it?.drug_code || "").trim()
+                                  )?.name ||
+                                  it.drug_code}
+                              </div>
+                              <div className="mt-0.5 font-mono text-[11px] text-slate-500">
+                                {it.drug_code}
+                              </div>
+                            </>
                           ) : (
                             it?.drug_name || "Free-text"
                           )}

@@ -99,7 +99,7 @@ export default function OutreachModuleCards({ modulesEnabled, permissions, isOut
     { key: "surgicals", title: OUTREACH_MODULES.surgicals.label, desc: OUTREACH_MODULES.surgicals.description },
     { key: "eye_checks", title: OUTREACH_MODULES.eye_checks.label, desc: OUTREACH_MODULES.eye_checks.description },
     { key: "dental_checks", title: OUTREACH_MODULES.dental_checks.label, desc: OUTREACH_MODULES.dental_checks.description },
-    { key: "reports", title: "Reports", desc: "Generate outreach exports (CSV/JSON/PDF)" },
+    { key: "reports", title: "Reports", desc: "Generate/view outreach exports" },
   ].filter((x) => canSeeModule({ ...x, modulesEnabled, permissions, isOutreachSuperAdmin }));
 
   return (
