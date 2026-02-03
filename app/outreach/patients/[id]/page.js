@@ -19,6 +19,9 @@ import {
   Droplet,
   MessageCircleHeart,
   Baby,
+  Send,
+  Scissors,
+  Eye,
   Save,
   Plus,
   CheckCircle2,
@@ -147,6 +150,10 @@ export default function OutreachPatientDetailPage() {
   const [bloodDonations, setBloodDonations] = useState([]);
   const [counseling, setCounseling] = useState([]);
   const [maternal, setMaternal] = useState([]);
+  const [referrals, setReferrals] = useState([]);
+  const [surgicals, setSurgicals] = useState([]);
+  const [eyeChecks, setEyeChecks] = useState([]);
+  const [dentalChecks, setDentalChecks] = useState([]);
 
   const canEditPatient = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.PATIENTS_EDIT);
 
@@ -160,6 +167,10 @@ export default function OutreachPatientDetailPage() {
     if (isModuleEnabled(modulesEnabled, "blood_donation")) arr.push({ key: "blood", label: "Blood Donation", icon: Droplet });
     if (isModuleEnabled(modulesEnabled, "counseling")) arr.push({ key: "counseling", label: "Counseling", icon: MessageCircleHeart });
     if (isModuleEnabled(modulesEnabled, "maternal")) arr.push({ key: "maternal", label: "Maternal", icon: Baby });
+    if (isModuleEnabled(modulesEnabled, "referral")) arr.push({ key: "referral", label: "Referral", icon: Send });
+    if (isModuleEnabled(modulesEnabled, "surgicals")) arr.push({ key: "surgicals", label: "Surgicals", icon: Scissors });
+    if (isModuleEnabled(modulesEnabled, "eye_checks")) arr.push({ key: "eye_checks", label: "Eye checks", icon: Eye });
+    if (isModuleEnabled(modulesEnabled, "dental_checks")) arr.push({ key: "dental_checks", label: "Dental checks", icon: Scissors });
     return arr;
   }, [modulesEnabled]);
 
@@ -222,6 +233,18 @@ export default function OutreachPatientDetailPage() {
         } else if (tab === "maternal") {
           const data = await outreachFetch(`/outreach/maternal/?patient_id=${patientId}`, { eventId: selectedEventId });
           setMaternal(normalizeList(data));
+        } else if (tab === "referral") {
+          const data = await outreachFetch(`/outreach/referrals/?patient_id=${patientId}`, { eventId: selectedEventId });
+          setReferrals(normalizeList(data));
+        } else if (tab === "surgicals") {
+          const data = await outreachFetch(`/outreach/surgicals/?patient_id=${patientId}`, { eventId: selectedEventId });
+          setSurgicals(normalizeList(data));
+        } else if (tab === "eye_checks") {
+          const data = await outreachFetch(`/outreach/eye-checks/?patient_id=${patientId}`, { eventId: selectedEventId });
+          setEyeChecks(normalizeList(data));
+        } else if (tab === "dental_checks") {
+          const data = await outreachFetch(`/outreach/dental-checks/?patient_id=${patientId}`, { eventId: selectedEventId });
+          setDentalChecks(normalizeList(data));
         }
       } catch (e) {
         // keep page usable; show a small error banner per tab if needed
@@ -244,6 +267,10 @@ export default function OutreachPatientDetailPage() {
   const canBlood = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.BLOOD_CREATE);
   const canCounsel = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.COUNSELING_CREATE);
   const canMaternal = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.MATERNAL_CREATE);
+  const canReferral = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.REFERRAL_CREATE);
+  const canSurgicals = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.SURGICALS_CREATE);
+  const canEyeChecks = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.EYE_CHECKS_CREATE);
+  const canDentalChecks = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.DENTAL_CHECKS_CREATE);
 
   // ===== Overview edit form =====
   const [edit, setEdit] = useState(null); // local editable copy
@@ -255,6 +282,7 @@ export default function OutreachPatientDetailPage() {
         date_of_birth: patient.date_of_birth || "",
         age_years: patient.age_years ?? "",
         phone: patient.phone || "",
+        email: patient.email || "",
         community: patient.community || "",
         address: patient.address || "",
         site: patient.site?.id || patient.site || "",
@@ -271,6 +299,7 @@ export default function OutreachPatientDetailPage() {
         full_name: edit.full_name?.trim(),
         sex: edit.sex,
         phone: edit.phone?.trim(),
+        email: (edit.email || "").trim(),
         community: edit.community?.trim(),
         address: edit.address?.trim(),
       };
@@ -447,6 +476,16 @@ export default function OutreachPatientDetailPage() {
                     />
                   </Field>
 
+                  <Field label="Email">
+                    <TextInput
+                      type="email"
+                      value={edit?.email || ""}
+                      onChange={(e) => setEdit((p) => ({ ...p, email: e.target.value }))}
+                      disabled={!canEditPatient}
+                      placeholder="name@example.com"
+                    />
+                  </Field>
+
                   {siteOptions.length ? (
                     <Field label="Site">
                       <Select
@@ -573,11 +612,783 @@ export default function OutreachPatientDetailPage() {
               canCreate={canMaternal}
             />
           ) : null}
+
+          {tab === "referral" ? (
+            <ReferralTab
+              patientId={patientId}
+              eventId={selectedEventId}
+              rows={referrals}
+              setRows={setReferrals}
+              canCreate={canReferral}
+            />
+          ) : null}
+
+          {tab === "surgicals" ? (
+            <SurgicalsTab
+              patientId={patientId}
+              eventId={selectedEventId}
+              rows={surgicals}
+              setRows={setSurgicals}
+              canCreate={canSurgicals}
+            />
+          ) : null}
+
+          {tab === "eye_checks" ? (
+            <EyeChecksTab
+              patientId={patientId}
+              eventId={selectedEventId}
+              rows={eyeChecks}
+              setRows={setEyeChecks}
+              canCreate={canEyeChecks}
+            />
+          ) : null}
+
+          {tab === "dental_checks" ? (
+            <DentalChecksTab
+              patientId={patientId}
+              eventId={selectedEventId}
+              rows={dentalChecks}
+              setRows={setDentalChecks}
+              canCreate={canDentalChecks}
+            />
+          ) : null}
         </>
       ) : null}
     </div>
   );
 }
+
+
+function DatalistInput({ listId, value, onChange, options = [], placeholder }) {
+  return (
+    <div className="space-y-1">
+      <TextInput list={listId} value={value} onChange={onChange} placeholder={placeholder} />
+      <datalist id={listId}>
+        {options.map((opt) => (
+          <option key={opt} value={opt} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
+function ReferralTab({ patientId, eventId, rows, setRows, canCreate }) {
+  const [form, setForm] = useState({
+    referred_to: "",
+    referral_type: "",
+    reason_for_referral: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const referralTypeOptions = [
+    "Internal",
+    "External",
+    "Emergency referral",
+    "Specialist referral",
+    "Diagnostics/Imaging",
+    "Lab",
+    "Pharmacy",
+  ];
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!canCreate || !eventId) return;
+    setErr("");
+    setBusy(true);
+    try {
+      const payload = {
+        patient: Number(patientId),
+        referred_to: (form.referred_to || "").trim(),
+        referral_type: (form.referral_type || "").trim(),
+        reason_for_referral: form.reason_for_referral || "",
+      };
+      const created = await outreachFetch("/outreach/referrals/", {
+        eventId,
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setRows([created, ...(rows || [])]);
+      setForm({ referred_to: "", referral_type: "", reason_for_referral: "" });
+    } catch (e2) {
+      setErr(e2?.message || "Failed to save referral.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Section title="Referral" icon={Send}>
+        {!canCreate ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            You don’t have permission to create referral records.
+          </div>
+        ) : null}
+        {err ? (
+          <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{err}</div>
+        ) : null}
+
+        <form onSubmit={submit} className="grid gap-3">
+          <Field label="Referred to (Destination)">
+            <TextInput
+              value={form.referred_to}
+              onChange={(e) => setForm((s) => ({ ...s, referred_to: e.target.value }))}
+              placeholder="e.g., General Hospital, Eye clinic, External lab…"
+            />
+          </Field>
+
+          <Field label="Referral type">
+            <DatalistInput
+              listId="referral-type-options"
+              value={form.referral_type}
+              onChange={(e) => setForm((s) => ({ ...s, referral_type: e.target.value }))}
+              options={referralTypeOptions}
+              placeholder="Pick or type…"
+            />
+          </Field>
+
+          <Field label="Reason for referral">
+            <TextArea
+              value={form.reason_for_referral}
+              onChange={(e) => setForm((s) => ({ ...s, reason_for_referral: e.target.value }))}
+              placeholder="Why was the patient referred?"
+            />
+          </Field>
+
+          <button
+            disabled={busy || !canCreate}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </Section>
+
+      <Section
+        title="Referral history"
+        icon={Send}
+        right={<div className="text-sm text-slate-600">{(rows || []).length} record(s)</div>}
+      >
+        {(rows || []).length ? (
+          <div className="space-y-3">
+            {rows.map((r) => (
+              <div key={r.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-slate-900">{fmtDT(r.recorded_at || r.created_at)}</div>
+                  {r.updated_at ? <span className="text-xs text-slate-500">Updated: {fmtDT(r.updated_at)}</span> : null}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Destination</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.referred_to || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Type</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.referral_type || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Reason</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">
+                    {r.reason_for_referral || (r.notes ? r.notes : "—")}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600">No referral records yet.</div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+function SurgicalsTab({ patientId, eventId, rows, setRows, canCreate }) {
+  const [form, setForm] = useState({
+    procedure_category: "",
+    procedure_name: "",
+    indication: "",
+    consent_obtained: "NA",
+    status: "PLANNED",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const categoryOptions = [
+    "Minor",
+    "Major",
+    "Dressing/Wound care",
+    "I&D (Incision & drainage)",
+    "Suturing",
+    "Circumcision",
+    "Excision",
+    "Biopsy",
+    "Other",
+  ];
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!canCreate || !eventId) return;
+    setErr("");
+    setBusy(true);
+    try {
+      const payload = {
+        patient: Number(patientId),
+        procedure_category: (form.procedure_category || "").trim(),
+        procedure_name: (form.procedure_name || "").trim(),
+        indication: form.indication || "",
+        consent_obtained: form.consent_obtained,
+        status: form.status,
+      };
+      const created = await outreachFetch("/outreach/surgicals/", {
+        eventId,
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setRows([created, ...(rows || [])]);
+      setForm({ procedure_category: "", procedure_name: "", indication: "", consent_obtained: "NA", status: "PLANNED" });
+    } catch (e2) {
+      setErr(e2?.message || "Failed to save surgical record.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Section title="Surgicals" icon={Scissors}>
+        {!canCreate ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            You don’t have permission to create surgical records.
+          </div>
+        ) : null}
+        {err ? (
+          <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{err}</div>
+        ) : null}
+
+        <form onSubmit={submit} className="grid gap-3">
+          <Field label="Procedure category">
+            <DatalistInput
+              listId="surgical-category-options"
+              value={form.procedure_category}
+              onChange={(e) => setForm((s) => ({ ...s, procedure_category: e.target.value }))}
+              options={categoryOptions}
+              placeholder="Pick or type…"
+            />
+          </Field>
+
+          <Field label="Procedure name">
+            <TextInput
+              value={form.procedure_name}
+              onChange={(e) => setForm((s) => ({ ...s, procedure_name: e.target.value }))}
+              placeholder="e.g., Wound dressing, Suturing…"
+            />
+          </Field>
+
+          <Field label="Indication (why procedure was done)">
+            <TextArea
+              value={form.indication}
+              onChange={(e) => setForm((s) => ({ ...s, indication: e.target.value }))}
+              placeholder="Clinical reason / indication…"
+            />
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Consent obtained">
+              <Select value={form.consent_obtained} onChange={(e) => setForm((s) => ({ ...s, consent_obtained: e.target.value }))}>
+                <option value="YES">Yes</option>
+                <option value="NO">No</option>
+                <option value="NA">Not applicable</option>
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={form.status} onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))}>
+                <option value="PLANNED">Planned</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="DONE">Done</option>
+                <option value="ABORTED">Aborted</option>
+                <option value="REFERRED">Referred</option>
+              </Select>
+            </Field>
+          </div>
+
+          <button
+            disabled={busy || !canCreate}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </Section>
+
+      <Section
+        title="Surgical history"
+        icon={Scissors}
+        right={<div className="text-sm text-slate-600">{(rows || []).length} record(s)</div>}
+      >
+        {(rows || []).length ? (
+          <div className="space-y-3">
+            {rows.map((r) => (
+              <div key={r.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-slate-900">{fmtDT(r.recorded_at || r.created_at)}</div>
+                  {r.updated_at ? <span className="text-xs text-slate-500">Updated: {fmtDT(r.updated_at)}</span> : null}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Category</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.procedure_category || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Procedure</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.procedure_name || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Consent</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.consent_obtained || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Status</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.status || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Indication</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.indication || (r.notes ? r.notes : "—")}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600">No surgical records yet.</div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+function EyeChecksTab({ patientId, eventId, rows, setRows, canCreate }) {
+  const [form, setForm] = useState({
+    visit_type: "SCREENING",
+    chief_complaint: "",
+    visual_acuity_right: "",
+    visual_acuity_left: "",
+    eye_exam_findings: "",
+    assessment_diagnosis: "",
+    plan: "",
+    status: "COMPLETED",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!canCreate || !eventId) return;
+    setErr("");
+    setBusy(true);
+    try {
+      const payload = {
+        patient: Number(patientId),
+        visit_type: form.visit_type,
+        chief_complaint: form.chief_complaint || "",
+        visual_acuity_right: (form.visual_acuity_right || "").trim(),
+        visual_acuity_left: (form.visual_acuity_left || "").trim(),
+        eye_exam_findings: form.eye_exam_findings || "",
+        assessment_diagnosis: (form.assessment_diagnosis || "").trim(),
+        plan: form.plan || "",
+        status: form.status,
+      };
+      const created = await outreachFetch("/outreach/eye-checks/", {
+        eventId,
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setRows([created, ...(rows || [])]);
+      setForm({
+        visit_type: "SCREENING",
+        chief_complaint: "",
+        visual_acuity_right: "",
+        visual_acuity_left: "",
+        eye_exam_findings: "",
+        assessment_diagnosis: "",
+        plan: "",
+        status: "COMPLETED",
+      });
+    } catch (e2) {
+      setErr(e2?.message || "Failed to save eye check.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Section title="Eye checks" icon={Eye}>
+        {!canCreate ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            You don’t have permission to create eye check records.
+          </div>
+        ) : null}
+        {err ? (
+          <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{err}</div>
+        ) : null}
+
+        <form onSubmit={submit} className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Visit type">
+              <Select value={form.visit_type} onChange={(e) => setForm((s) => ({ ...s, visit_type: e.target.value }))}>
+                <option value="SCREENING">Screening</option>
+                <option value="COMPLAINT_BASED">Complaint-based</option>
+                <option value="FOLLOW_UP">Follow-up</option>
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={form.status} onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))}>
+                <option value="COMPLETED">Completed</option>
+                <option value="NEEDS_FOLLOW_UP">Needs follow-up</option>
+                <option value="REFERRED">Referred</option>
+              </Select>
+            </Field>
+          </div>
+
+          <Field label="Chief complaint">
+            <TextArea
+              value={form.chief_complaint}
+              onChange={(e) => setForm((s) => ({ ...s, chief_complaint: e.target.value }))}
+              placeholder="Patient complaint…"
+            />
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Visual acuity (Right)">
+              <TextInput value={form.visual_acuity_right} onChange={(e) => setForm((s) => ({ ...s, visual_acuity_right: e.target.value }))} placeholder="e.g., 6/6" />
+            </Field>
+            <Field label="Visual acuity (Left)">
+              <TextInput value={form.visual_acuity_left} onChange={(e) => setForm((s) => ({ ...s, visual_acuity_left: e.target.value }))} placeholder="e.g., 6/9" />
+            </Field>
+          </div>
+
+          <Field label="Eye exam findings">
+            <TextArea
+              value={form.eye_exam_findings}
+              onChange={(e) => setForm((s) => ({ ...s, eye_exam_findings: e.target.value }))}
+              placeholder="Findings…"
+            />
+          </Field>
+
+          <Field label="Assessment/Diagnosis">
+            <TextInput
+              value={form.assessment_diagnosis}
+              onChange={(e) => setForm((s) => ({ ...s, assessment_diagnosis: e.target.value }))}
+              placeholder="Diagnosis / assessment…"
+            />
+          </Field>
+
+          <Field label="Plan">
+            <TextArea value={form.plan} onChange={(e) => setForm((s) => ({ ...s, plan: e.target.value }))} placeholder="Plan…" />
+          </Field>
+
+          <button
+            disabled={busy || !canCreate}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </Section>
+
+      <Section
+        title="Eye checks history"
+        icon={Eye}
+        right={<div className="text-sm text-slate-600">{(rows || []).length} record(s)</div>}
+      >
+        {(rows || []).length ? (
+          <div className="space-y-3">
+            {rows.map((r) => (
+              <div key={r.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-slate-900">{fmtDT(r.recorded_at || r.created_at)}</div>
+                  {r.updated_at ? <span className="text-xs text-slate-500">Updated: {fmtDT(r.updated_at)}</span> : null}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Visit type</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.visit_type || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Status</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.status || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Chief complaint</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.chief_complaint || "—"}</div>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">VA Right</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.visual_acuity_right || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">VA Left</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.visual_acuity_left || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Exam findings</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.eye_exam_findings || "—"}</div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Assessment/Diagnosis</div>
+                  <div className="mt-1 text-sm text-slate-700 break-words">{r.assessment_diagnosis || "—"}</div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Plan</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.plan || "—"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600">No eye check records yet.</div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+function DentalChecksTab({ patientId, eventId, rows, setRows, canCreate }) {
+  const [form, setForm] = useState({
+    visit_type: "SCREENING",
+    chief_complaint: "",
+    oral_examination_findings: "",
+    diagnosis_assessment: "",
+    procedure_done: "",
+    tooth_area_involved: "",
+    plan: "",
+    status: "COMPLETED",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const procedureOptions = [
+    "None",
+    "Scaling/Polishing",
+    "Extraction",
+    "Filling",
+    "Medication only",
+    "Referral",
+    "Other",
+  ];
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!canCreate || !eventId) return;
+    setErr("");
+    setBusy(true);
+    try {
+      const payload = {
+        patient: Number(patientId),
+        visit_type: form.visit_type,
+        chief_complaint: form.chief_complaint || "",
+        oral_examination_findings: form.oral_examination_findings || "",
+        diagnosis_assessment: (form.diagnosis_assessment || "").trim(),
+        procedure_done: (form.procedure_done || "").trim(),
+        tooth_area_involved: (form.tooth_area_involved || "").trim(),
+        plan: form.plan || "",
+        status: form.status,
+      };
+      const created = await outreachFetch("/outreach/dental-checks/", {
+        eventId,
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setRows([created, ...(rows || [])]);
+      setForm({
+        visit_type: "SCREENING",
+        chief_complaint: "",
+        oral_examination_findings: "",
+        diagnosis_assessment: "",
+        procedure_done: "",
+        tooth_area_involved: "",
+        plan: "",
+        status: "COMPLETED",
+      });
+    } catch (e2) {
+      setErr(e2?.message || "Failed to save dental check.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Section title="Dental checks" icon={Scissors}>
+        {!canCreate ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            You don’t have permission to create dental check records.
+          </div>
+        ) : null}
+        {err ? (
+          <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{err}</div>
+        ) : null}
+
+        <form onSubmit={submit} className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Visit type">
+              <Select value={form.visit_type} onChange={(e) => setForm((s) => ({ ...s, visit_type: e.target.value }))}>
+                <option value="SCREENING">Screening</option>
+                <option value="COMPLAINT_BASED">Complaint-based</option>
+                <option value="FOLLOW_UP">Follow-up</option>
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={form.status} onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))}>
+                <option value="COMPLETED">Completed</option>
+                <option value="NEEDS_FOLLOW_UP">Needs follow-up</option>
+                <option value="REFERRED">Referred</option>
+              </Select>
+            </Field>
+          </div>
+
+          <Field label="Chief complaint">
+            <TextArea value={form.chief_complaint} onChange={(e) => setForm((s) => ({ ...s, chief_complaint: e.target.value }))} placeholder="Patient complaint…" />
+          </Field>
+
+          <Field label="Oral examination findings">
+            <TextArea
+              value={form.oral_examination_findings}
+              onChange={(e) => setForm((s) => ({ ...s, oral_examination_findings: e.target.value }))}
+              placeholder="Findings…"
+            />
+          </Field>
+
+          <Field label="Diagnosis/Assessment">
+            <TextInput
+              value={form.diagnosis_assessment}
+              onChange={(e) => setForm((s) => ({ ...s, diagnosis_assessment: e.target.value }))}
+              placeholder="Diagnosis / assessment…"
+            />
+          </Field>
+
+          <Field label="Procedure done">
+            <DatalistInput
+              listId="dental-procedure-options"
+              value={form.procedure_done}
+              onChange={(e) => setForm((s) => ({ ...s, procedure_done: e.target.value }))}
+              options={procedureOptions}
+              placeholder="Pick or type…"
+            />
+          </Field>
+
+          <Field label="Tooth/Area involved">
+            <TextInput
+              value={form.tooth_area_involved}
+              onChange={(e) => setForm((s) => ({ ...s, tooth_area_involved: e.target.value }))}
+              placeholder="e.g., Upper left molar, Tooth 16…"
+            />
+          </Field>
+
+          <Field label="Plan">
+            <TextArea value={form.plan} onChange={(e) => setForm((s) => ({ ...s, plan: e.target.value }))} placeholder="Plan…" />
+          </Field>
+
+          <button
+            disabled={busy || !canCreate}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </Section>
+
+      <Section
+        title="Dental checks history"
+        icon={Scissors}
+        right={<div className="text-sm text-slate-600">{(rows || []).length} record(s)</div>}
+      >
+        {(rows || []).length ? (
+          <div className="space-y-3">
+            {rows.map((r) => (
+              <div key={r.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-slate-900">{fmtDT(r.recorded_at || r.created_at)}</div>
+                  {r.updated_at ? <span className="text-xs text-slate-500">Updated: {fmtDT(r.updated_at)}</span> : null}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Visit type</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.visit_type || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Status</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.status || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Chief complaint</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.chief_complaint || "—"}</div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Oral exam findings</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.oral_examination_findings || "—"}</div>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Diagnosis</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.diagnosis_assessment || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Procedure</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.procedure_done || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Tooth/Area</div>
+                    <div className="mt-0.5 text-sm text-slate-900 break-words">{r.tooth_area_involved || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-slate-500">Plan</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.plan || "—"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600">No dental check records yet.</div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
 
 function VitalsTab({ patientId, eventId, vitals, setVitals, canCreate }) {
   const [form, setForm] = useState({
@@ -837,8 +1648,16 @@ function EncounterTab({ patientId, eventId, encounters, setEncounters, canCreate
                     <span className="text-xs font-medium text-emerald-700">Attachment</span>
                   ) : null}
                 </div>
-                {e.complaint ? <div className="mt-2 text-sm text-slate-900"><b>Complaint:</b> {e.complaint}</div> : null}
-                {e.plan ? <div className="mt-2 text-sm text-slate-700"><b>Plan:</b> {e.plan}</div> : null}
+                {e.complaint ? (
+                  <div className="mt-2 text-sm text-slate-900">
+                    <b>Complaint:</b> <span className="whitespace-pre-wrap break-words">{e.complaint}</span>
+                  </div>
+                ) : null}
+                {e.plan ? (
+                  <div className="mt-2 text-sm text-slate-700">
+                    <b>Plan:</b> <span className="whitespace-pre-wrap break-words">{e.plan}</span>
+                  </div>
+                ) : null}
               </button>
             ))}
           </div>
@@ -864,16 +1683,32 @@ function EncounterTab({ patientId, eventId, encounters, setEncounters, canCreate
               </div>
 
               <div className="mt-4 space-y-3">
-                {selected.complaint ? <div className="text-sm"><b>Complaint:</b> {selected.complaint}</div> : null}
-                {selected.notes ? <div className="text-sm"><b>Notes:</b> {selected.notes}</div> : null}
+                {selected.complaint ? (
+                  <div className="text-sm">
+                    <b>Complaint:</b> <span className="whitespace-pre-wrap break-words">{selected.complaint}</span>
+                  </div>
+                ) : null}
+                {selected.notes ? (
+                  <div className="text-sm">
+                    <b>Notes:</b> <span className="whitespace-pre-wrap break-words">{selected.notes}</span>
+                  </div>
+                ) : null}
                 {Array.isArray(selected.diagnosis_tags) && selected.diagnosis_tags.length ? (
                   <div className="text-sm">
                     <b>Tags:</b>{" "}
                     <span className="text-slate-700">{selected.diagnosis_tags.join(", ")}</span>
                   </div>
                 ) : null}
-                {selected.plan ? <div className="text-sm"><b>Plan:</b> {selected.plan}</div> : null}
-                {selected.referral_note ? <div className="text-sm"><b>Referral note:</b> {selected.referral_note}</div> : null}
+                {selected.plan ? (
+                  <div className="text-sm">
+                    <b>Plan:</b> <span className="whitespace-pre-wrap break-words">{selected.plan}</span>
+                  </div>
+                ) : null}
+                {selected.referral_note ? (
+                  <div className="text-sm">
+                    <b>Referral note:</b> <span className="whitespace-pre-wrap break-words">{selected.referral_note}</span>
+                  </div>
+                ) : null}
 
                 {selected.soap_note_attachment ? (
                   <div className="pt-2">
@@ -1340,7 +2175,7 @@ return (
                   </div>
                   <div className="mt-2 text-xs text-slate-600">Ordered: {fmtDT(o.ordered_at)}</div>
                   {(o.items || []).length ? (
-                    <div className="mt-2 text-sm text-slate-700">
+                    <div className="mt-2 text-sm text-slate-700 break-words">
                       {(o.items || []).map((it) => it.test_name).filter(Boolean).join(", ")}
                     </div>
                   ) : null}
@@ -1471,7 +2306,7 @@ return (
                 {resultModal.notes ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-sm text-slate-700">
                     <div className="text-xs font-semibold text-slate-500">Notes</div>
-                    <div className="mt-1 whitespace-pre-wrap">{resultModal.notes}</div>
+                    <div className="mt-1 whitespace-pre-wrap break-words">{resultModal.notes}</div>
                   </div>
                 ) : null}
 
@@ -1642,7 +2477,7 @@ function PharmacyTab({ patientId, eventId, drugCatalog, dispenses, setDispenses,
                 <div className="mt-2 text-sm text-slate-700">
                   {d.strength ? `${d.strength} • ` : ""}Qty: <b>{d.quantity}</b>
                 </div>
-                {d.instruction ? <div className="mt-2 text-sm text-slate-600">{d.instruction}</div> : null}
+                {d.instruction ? <div className="mt-2 text-sm text-slate-600 whitespace-pre-wrap break-words">{d.instruction}</div> : null}
               </div>
             ))}
           </div>
@@ -1899,7 +2734,7 @@ function ImmunizationTab({ patientId, eventId, rows, setRows, canCreate, canMana
                   {r.batch_number ? ` • Batch: ${r.batch_number}` : null}
                   {r.route ? ` • Route: ${r.route}` : null}
                 </div>
-                {r.notes ? <div className="mt-2 text-sm text-slate-600">{r.notes}</div> : null}
+                {r.notes ? <div className="mt-2 text-sm text-slate-600 whitespace-pre-wrap break-words">{r.notes}</div> : null}
               </div>
             ))}
           </div>
@@ -1914,7 +2749,12 @@ function ImmunizationTab({ patientId, eventId, rows, setRows, canCreate, canMana
 
 
 function BloodDonationTab({ patientId, eventId, rows, setRows, canCreate }) {
+  const BLOOD_GROUP_OPTIONS = ["UNKNOWN", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+  const GENOTYPE_OPTIONS = ["UNKNOWN", "AA", "AS", "AC", "SS", "SC", "CC"];
+
   const [form, setForm] = useState({
+    blood_group: "UNKNOWN",
+    genotype: "UNKNOWN",
     eligibility_status: "ELIGIBLE",
     outcome: "COMPLETED",
     deferral_reason: "",
@@ -1931,6 +2771,8 @@ function BloodDonationTab({ patientId, eventId, rows, setRows, canCreate }) {
     try {
       const payload = {
         patient: Number(patientId),
+        blood_group: form.blood_group,
+        genotype: form.genotype,
         eligibility_status: form.eligibility_status,
         outcome: form.outcome,
         deferral_reason: form.eligibility_status === "NOT_ELIGIBLE" || form.outcome === "DEFERRED" ? (form.deferral_reason || "") : "",
@@ -1938,7 +2780,7 @@ function BloodDonationTab({ patientId, eventId, rows, setRows, canCreate }) {
       };
       const created = await outreachFetch("/outreach/blood-donations/", { eventId, method: "POST", body: JSON.stringify(payload) });
       setRows([created, ...(rows || [])]);
-      setForm({ eligibility_status: "ELIGIBLE", outcome: "COMPLETED", deferral_reason: "", notes: "" });
+      setForm({ blood_group: "UNKNOWN", genotype: "UNKNOWN", eligibility_status: "ELIGIBLE", outcome: "COMPLETED", deferral_reason: "", notes: "" });
     } catch (e2) {
       setErr(e2?.message || "Failed to save record.");
     } finally {
@@ -1957,6 +2799,27 @@ function BloodDonationTab({ patientId, eventId, rows, setRows, canCreate }) {
         {err ? <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{err}</div> : null}
 
         <form onSubmit={submit} className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Blood group">
+              <Select value={form.blood_group} onChange={(e) => setForm((p) => ({ ...p, blood_group: e.target.value }))}>
+                {BLOOD_GROUP_OPTIONS.map((v) => (
+                  <option key={v} value={v}>
+                    {v === "UNKNOWN" ? "Unknown" : v}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Genotype">
+              <Select value={form.genotype} onChange={(e) => setForm((p) => ({ ...p, genotype: e.target.value }))}>
+                {GENOTYPE_OPTIONS.map((v) => (
+                  <option key={v} value={v}>
+                    {v === "UNKNOWN" ? "Unknown" : v}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Eligibility status">
               <Select value={form.eligibility_status} onChange={(e) => setForm((p) => ({ ...p, eligibility_status: e.target.value }))}>
@@ -2003,8 +2866,19 @@ function BloodDonationTab({ patientId, eventId, rows, setRows, canCreate }) {
                   </div>
                   <span className="text-xs text-slate-500">{fmtDT(r.recorded_at || r.created_at)}</span>
                 </div>
-                {r.deferral_reason ? <div className="mt-2 text-sm text-slate-700"><b>Reason:</b> {r.deferral_reason}</div> : null}
-                {r.notes ? <div className="mt-2 text-sm text-slate-600">{r.notes}</div> : null}
+
+                <div className="mt-2 text-sm text-slate-700">
+                  Blood group: <b>{r.blood_group || "—"}</b> • Genotype: <b>{r.genotype || "—"}</b>
+                </div>
+
+                {r.deferral_reason ? (
+                  <div className="mt-2 text-sm text-slate-700">
+                    <b>Reason:</b> <span className="whitespace-pre-wrap break-words">{r.deferral_reason}</span>
+                  </div>
+                ) : null}
+                {r.notes ? (
+                  <div className="mt-2 text-sm text-slate-600 whitespace-pre-wrap break-words">{r.notes}</div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -2110,7 +2984,7 @@ function CounselingTab({ patientId, eventId, rows, setRows, canCreate }) {
                   <span className="text-xs text-slate-500">{fmtDT(r.recorded_at || r.created_at)}</span>
                 </div>
                 {r.duration_minutes != null ? <div className="mt-2 text-sm text-slate-700">Duration: <b>{r.duration_minutes}</b> min</div> : null}
-                {r.session_notes ? <div className="mt-2 text-sm text-slate-600">{r.session_notes}</div> : null}
+                {r.session_notes ? <div className="mt-2 text-sm text-slate-600 whitespace-pre-wrap break-words">{r.session_notes}</div> : null}
                 {r.visibility_level ? (
                   <div className="mt-2 text-xs text-slate-500">
                     Visibility: {String(r.visibility_level).toUpperCase() === "PRIVATE" ? "Private" : "Internal"}
@@ -2233,11 +3107,11 @@ function MaternalTab({ patientId, eventId, rows, setRows, canCreate }) {
 
                 {(Array.isArray(r.risk_flags) ? r.risk_flags.length : !!r.risk_flags) ? (
                   <div className="mt-2 text-sm text-slate-700">
-                    Risks: {Array.isArray(r.risk_flags) ? r.risk_flags.join(", ") : String(r.risk_flags)}
+                    Risks: <span className="whitespace-pre-wrap break-words">{Array.isArray(r.risk_flags) ? r.risk_flags.join(", ") : String(r.risk_flags)}</span>
                   </div>
                 ) : null}
 
-                {r.notes ? <div className="mt-2 text-sm text-slate-600">{r.notes}</div> : null}
+                {r.notes ? <div className="mt-2 text-sm text-slate-600 whitespace-pre-wrap break-words">{r.notes}</div> : null}
               </div>
             ))}
           </div>

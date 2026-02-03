@@ -283,7 +283,7 @@ export default function OutreachEventDetailPage() {
 
   const [sites, setSites] = useState([]);
   const [staff, setStaff] = useState([]);
-  const [newStaff, setNewStaff] = useState({ email: "", full_name: "", role_template: "CLINICIAN", permissions: null, all_sites: true, site_ids: [] });
+  const [newStaff, setNewStaff] = useState({ email: "", phone: "", full_name: "", role_template: "CLINICIAN", permissions: null, all_sites: true, site_ids: [] });
   const [newStaffPermMode, setNewStaffPermMode] = useState("preset"); // preset | custom
   const [newSite, setNewSite] = useState({ name: "", community: "", address: "" });
 
@@ -447,6 +447,7 @@ export default function OutreachEventDetailPage() {
         method: "POST",
         body: JSON.stringify({
           email: newStaff.email.trim(),
+          phone: newStaff.phone?.trim() || "",
           full_name: newStaff.full_name?.trim() || newStaff.email.trim(),
           role_template: role,
           permissions: perms,
@@ -455,7 +456,7 @@ export default function OutreachEventDetailPage() {
         }),
       });
       setStaff((p) => [created, ...p]);
-      setNewStaff({ email: "", full_name: "", role_template: "CLINICIAN", permissions: null, all_sites: true, site_ids: [] });
+      setNewStaff({ email: "", phone: "", full_name: "", role_template: "CLINICIAN", permissions: null, all_sites: true, site_ids: [] });
       setNewStaffPermMode("preset");
 
       // Backend returns one-time credentials in `credentials`
@@ -679,7 +680,7 @@ export default function OutreachEventDetailPage() {
             <div className="text-lg font-semibold text-slate-900">Add site</div>
             <p className="mt-1 text-sm text-slate-600">Sites are optional but help reporting and coordination.</p>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
               <input
                 value={newSite.name}
                 onChange={(e) => setNewSite((p) => ({ ...p, name: e.target.value }))}
@@ -784,7 +785,7 @@ export default function OutreachEventDetailPage() {
             <div className="text-lg font-semibold text-slate-900">Add staff</div>
             <p className="mt-1 text-sm text-slate-600">Creates a temporary staff account scoped to this outreach.</p>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
               <input
                 value={newStaff.email}
                 onChange={(e) => setNewStaff((p) => ({ ...p, email: e.target.value }))}
@@ -796,6 +797,12 @@ export default function OutreachEventDetailPage() {
                 onChange={(e) => setNewStaff((p) => ({ ...p, full_name: e.target.value }))}
                 className="h-10 rounded-xl border border-slate-200 px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                 placeholder="Full name"
+              />
+              <input
+                value={newStaff.phone}
+                onChange={(e) => setNewStaff((p) => ({ ...p, phone: e.target.value }))}
+                className="h-10 rounded-xl border border-slate-200 px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="Phone (optional)"
               />
               <select
                 value={newStaff.role_template}
@@ -921,6 +928,7 @@ export default function OutreachEventDetailPage() {
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-slate-900 truncate">{(s?.full_name || [s?.user?.first_name, s?.user?.last_name].filter(Boolean).join(" ").trim() || s?.user?.email || s?.email || "—")}</div>
                       <div className="mt-1 text-xs text-slate-600">{s?.user?.email || s?.email || "—"}</div>
+                      {s?.phone ? <div className="mt-0.5 text-xs text-slate-600">{s.phone}</div> : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Pill tone={s.is_active === false ? "rose" : "green"}>{s.is_active === false ? "Disabled" : "Active"}</Pill>

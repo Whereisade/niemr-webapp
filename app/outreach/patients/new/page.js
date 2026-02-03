@@ -43,6 +43,7 @@ export default function OutreachNewPatientPage() {
   const [dob, setDob] = useState("");
   const [ageYears, setAgeYears] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [community, setCommunity] = useState("");
   const [address, setAddress] = useState("");
   const [siteId, setSiteId] = useState("");
@@ -70,10 +71,11 @@ export default function OutreachNewPatientPage() {
       const payload = {
         full_name: fullName.trim(),
         sex,
-        phone: phone.trim(),
         community: community.trim(),
         address: address.trim(),
       };
+      if (phone.trim()) payload.phone = phone.trim();
+      if (email.trim()) payload.email = email.trim();
       if (dob) payload.date_of_birth = dob;
       if (ageYears !== "") payload.age_years = Number(ageYears);
       if (siteId) payload.site = Number(siteId);
@@ -211,6 +213,17 @@ export default function OutreachNewPatientPage() {
               onChange={(e) => setPhone(e.target.value)}
               className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
               placeholder="e.g. 080..."
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700">Email (optional)</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="e.g. name@example.com"
             />
           </div>
 

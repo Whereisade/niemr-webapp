@@ -13,6 +13,10 @@ import {
   Users,
   FileText,
   ArrowRight,
+  Send,
+  Scissors,
+  Eye,
+  
 } from "lucide-react";
 import { OUTREACH_MODULES, hasPerm, OUTREACH_PERMS, isModuleEnabled } from "@/lib/outreachConfig";
 
@@ -26,6 +30,10 @@ const ICONS = {
   blood_donation: Droplet,
   counseling: MessageCircleHeart,
   maternal: Baby,
+  referral: Send,
+  surgicals: Scissors,
+  eye_checks: Eye,
+  dental_checks: Scissors,
   reports: FileText,
 };
 
@@ -39,6 +47,10 @@ const ROUTES = {
   blood_donation: "/outreach/blood-donations",
   counseling: "/outreach/counseling",
   maternal: "/outreach/maternal",
+  referral: "/outreach/referrals",
+  surgicals: "/outreach/surgicals",
+  eye_checks: "/outreach/eye-checks",
+  dental_checks: "/outreach/dental-checks",
   reports: "/outreach/reports",
 };
 
@@ -64,6 +76,10 @@ function canSeeModule({ key, modulesEnabled, permissions, isOutreachSuperAdmin }
   if (key === "blood_donation") return hasPerm(permissions, OUTREACH_PERMS.BLOOD_CREATE) || hasPerm(permissions, OUTREACH_PERMS.BLOOD_EDIT);
   if (key === "counseling") return hasPerm(permissions, OUTREACH_PERMS.COUNSELING_CREATE) || hasPerm(permissions, OUTREACH_PERMS.COUNSELING_EDIT);
   if (key === "maternal") return hasPerm(permissions, OUTREACH_PERMS.MATERNAL_CREATE) || hasPerm(permissions, OUTREACH_PERMS.MATERNAL_EDIT);
+  if (key === "referral") return hasPerm(permissions, OUTREACH_PERMS.REFERRAL_CREATE) || hasPerm(permissions, OUTREACH_PERMS.REFERRAL_EDIT);
+  if (key === "surgicals") return hasPerm(permissions, OUTREACH_PERMS.SURGICALS_CREATE) || hasPerm(permissions, OUTREACH_PERMS.SURGICALS_EDIT);
+  if (key === "eye_checks") return hasPerm(permissions, OUTREACH_PERMS.EYE_CHECKS_CREATE) || hasPerm(permissions, OUTREACH_PERMS.EYE_CHECKS_EDIT);
+  if (key === "dental_checks") return hasPerm(permissions, OUTREACH_PERMS.DENTAL_CHECKS_CREATE) || hasPerm(permissions, OUTREACH_PERMS.DENTAL_CHECKS_EDIT);
   if (key === "reports") return hasPerm(permissions, OUTREACH_PERMS.REPORTS_VIEW) || hasPerm(permissions, OUTREACH_PERMS.REPORTS_EXPORT);
   return false;
 }
@@ -79,6 +95,10 @@ export default function OutreachModuleCards({ modulesEnabled, permissions, isOut
     { key: "blood_donation", title: OUTREACH_MODULES.blood_donation.label, desc: OUTREACH_MODULES.blood_donation.description },
     { key: "counseling", title: OUTREACH_MODULES.counseling.label, desc: OUTREACH_MODULES.counseling.description },
     { key: "maternal", title: OUTREACH_MODULES.maternal.label, desc: OUTREACH_MODULES.maternal.description },
+    { key: "referral", title: OUTREACH_MODULES.referral.label, desc: OUTREACH_MODULES.referral.description },
+    { key: "surgicals", title: OUTREACH_MODULES.surgicals.label, desc: OUTREACH_MODULES.surgicals.description },
+    { key: "eye_checks", title: OUTREACH_MODULES.eye_checks.label, desc: OUTREACH_MODULES.eye_checks.description },
+    { key: "dental_checks", title: OUTREACH_MODULES.dental_checks.label, desc: OUTREACH_MODULES.dental_checks.description },
     { key: "reports", title: "Reports", desc: "Generate outreach exports (CSV/JSON/PDF)" },
   ].filter((x) => canSeeModule({ ...x, modulesEnabled, permissions, isOutreachSuperAdmin }));
 
