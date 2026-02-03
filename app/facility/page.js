@@ -1094,14 +1094,25 @@ export default async function FacilityDashboard() {
             </div>
             <div className="p-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {/* Role-specific actions */}
-              <QuickLink
-                href="/facility/appointments/new"
-                icon={Plus}
-                label={
-                  isFrontdesk ? "Schedule / Check-in" : "New Appointment"
-                }
-                primary
-              />
+              {(() => {
+                const primaryAction =
+                  role === "LAB"
+                    ? { href: "/facility/labs/new", label: "New Lab Order" }
+                    : role === "PHARMACY"
+                      ? { href: "/facility/pharmacy/prescribe", label: "New Prescription" }
+                      : {
+                          href: "/facility/appointments/new",
+                          label: isFrontdesk ? "Schedule / Check-in" : "New Appointment",
+                        };
+                return (
+                  <QuickLink
+                    href={primaryAction.href}
+                    icon={Plus}
+                    label={primaryAction.label}
+                    primary
+                  />
+                );
+              })()}
 
               {(isOwner || isFrontdesk || role === "DOCTOR" || role === "NURSE") && (
                 <QuickLink
@@ -1340,16 +1351,7 @@ export default async function FacilityDashboard() {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-lg bg-white p-2.5 shadow-sm">
-                    <p className="text-slate-600">Last backup</p>
-                    <p className="font-semibold text-slate-900">2 hours ago</p>
-                  </div>
-                  <div className="rounded-lg bg-white p-2.5 shadow-sm">
-                    <p className="text-slate-600">Uptime</p>
-                    <p className="font-semibold text-emerald-600">99.9%</p>
-                  </div>
-                </div>
+              
               </div>
             </div>
           </aside>

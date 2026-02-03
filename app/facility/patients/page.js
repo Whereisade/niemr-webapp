@@ -24,6 +24,21 @@ function formatDate(value) {
   }
 }
 
+function formatAge(value) {
+  if (!value) return "â€”";
+  try {
+    const dob = new Date(value);
+    if (Number.isNaN(dob.getTime())) return "â€”";
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age -= 1;
+    return age >= 0 ? String(age) : "â€”";
+  } catch {
+    return "â€”";
+  }
+}
+
 export default function FacilityPatientsPage() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -185,7 +200,7 @@ export default function FacilityPatientsPage() {
                   Name
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  DOB
+                  Age
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Gender
@@ -240,8 +255,8 @@ export default function FacilityPatientsPage() {
                       </td>
                       <td className="p-3 text-sm text-slate-800">
                         <div className="inline-flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                          {formatDate(p.date_of_birth)}
+                          
+                          {formatAge(p.dob || p.date_of_birth)}
                         </div>
                       </td>
                       <td className="p-3 text-sm text-slate-800">
