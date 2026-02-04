@@ -256,7 +256,33 @@ function FacilityAppointmentsPageInner() {
           title="All Appointments"
           subtitle={`Showing ${sortedRows.length} of ${total}`}
         />
-        <div className="overflow-x-auto">
+        {/* Mobile + tablet list */}
+        <div className="divide-y divide-slate-100 lg:hidden">
+          {isLoading && !data ? (
+            <div className="p-6 text-slate-600">Loading appointmentsâ€¦</div>
+          ) : error ? (
+            <div className="p-6 text-rose-700 bg-rose-50">
+              Failed to load: {error.message || "Unknown error"}
+            </div>
+          ) : sortedRows.length ? (
+            sortedRows.map((a) => (
+              <AppointmentCard
+                key={a.id}
+                appointment={a}
+                isDoctor={isDoctor}
+                onAction={handleAction}
+              />
+            ))
+          ) : (
+            <div className="p-8">
+              <EmptyState
+                title="No appointments found"
+                subtitle="Try adjusting your search or status filters."
+              />
+            </div>
+          )}
+        </div>
+        <div className="hidden lg:block overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
@@ -459,6 +485,128 @@ function CardHead({ title, subtitle }) {
           <h2 className="text-slate-900 font-medium">{title}</h2>
         </div>
         {subtitle ? <div className="ml-11 text-xs text-slate-500">{subtitle}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function AppointmentCard({ appointment, isDoctor, onAction }) {
+  const a = appointment;
+  const apptStatus = (a.status || "SCHEDULED").toUpperCase();
+  const isTerminal = TERMINAL_STATUSES.includes(apptStatus);
+
+  const encStatus = String(a.encounter_status || "").toUpperCase();
+  const hasOpenEncounter = Boolean(
+    a.encounter_id && !["CLOSED", "CROSSED_OUT"].includes(encStatus)
+  );
+  const continueHref = hasOpenEncounter
+    ? encounterWorkflowHref(a.encounter_id, a.encounter_stage)
+    : null;
+
+  // Use backend-computed values if available, otherwise calculate
+  const showStartEncounter =
+    typeof a.can_start_encounter === "boolean"
+      ? a.can_start_encounter
+      : canStartEncounter(a);
+
+  // Get available actions - use backend computed if available
+  const actions = Array.isArray(a.available_actions)
+    ? a.available_actions
+    : getAvailableActions(apptStatus, {
+        hasEncounter: a.has_encounter || !!a.encounter_id,
+        encounterStatus: a.encounter_status,
+      });
+
+  return (
+    <div className={`p-4 ${isTerminal ? "opacity-70" : ""}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
+              <Users2 className="h-4 w-4 text-blue-700" />
+            </span>
+            {a.patient_name || a.patient || "â€”"}
+          </div>
+          <div className="mt-2 space-y-1 text-xs text-slate-600">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-slate-700">
+                {a.provider_name || a.provider || "â€”"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <UserRound className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-slate-700">{a.nurse_name || "â€”"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <StatusBadge value={a.status} />
+          <div className="mt-2 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
+            {formatDateTime(a.start_at || a.scheduled_for || a.date)}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+        {a.encounter_id || a.has_encounter ? (
+          <>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+              Linked #{a.encounter_id}
+            </span>
+            {a.encounter_status && (
+              <span className="text-[11px] text-slate-500">{a.encounter_status}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-[11px] text-slate-400">No encounter</span>
+        )}
+
+        {isTerminal && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
+            <AlertCircle className="h-3 w-3" />
+            Final
+          </span>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {showStartEncounter && (
+          <StartEncounterButton scope="facility" appointment={a} />
+        )}
+
+        {isDoctor && continueHref ? (
+          <Link
+            href={continueHref}
+            className="inline-flex items-center gap-1 rounded-[15px] bg-blue-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-blue-700 shadow-sm"
+          >
+            Continue Encounter
+          </Link>
+        ) : null}
+
+        {actions.length > 0 && (
+          <div className="inline-flex flex-wrap gap-1">
+            {actions.map((action) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => onAction(a.id, action)}
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {APPT_ACTION_LABELS[action] || action}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <a
+          href={`/facility/appointments/${a.id}`}
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+        >
+          Open
+          <ChevronRight className="h-4 w-4" />
+        </a>
       </div>
     </div>
   );

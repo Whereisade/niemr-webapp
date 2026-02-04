@@ -191,8 +191,90 @@ export default function FacilityPatientsPage() {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Mobile/tablet cards */}
+        <div className="lg:hidden">
+          {loading && (
+            <div className="p-4 text-center text-sm text-slate-500">
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                Loading patients…
+              </span>
+            </div>
+          )}
+
+          {!loading && filteredPatients.length > 0 && (
+            <div className="space-y-3 p-3 sm:p-4">
+              {filteredPatients.map((p) => {
+                const fullName = [p.first_name, p.last_name]
+                  .filter(Boolean)
+                  .join(" ");
+                const displayName = fullName || p.email || `Patient #${p.id}`;
+
+                return (
+                  <div
+                    key={p.id}
+                    className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <Link
+                          href={`/facility/patients/${p.id}`}
+                          className="text-sm font-semibold text-blue-600 hover:underline"
+                        >
+                          {displayName}
+                        </Link>
+                        {p.mrn && (
+                          <div className="mt-0.5 text-[11px] font-mono text-slate-500">
+                            MRN: {p.mrn}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs font-medium text-slate-600">
+                        Age {formatAge(p.dob || p.date_of_birth)}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                      <div className="flex items-center gap-2">
+                        <UsersRound className="h-3.5 w-3.5 text-slate-400" />
+                        <span>{p.gender || "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="break-all">
+                          {p.email || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="break-all">
+                          {p.phone || "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!loading && !filteredPatients.length && !error && (
+            <div className="p-4 text-center text-sm text-slate-500">
+              {patients.length === 0 && !filter ? (
+                <>
+                  No patients registered yet. Use{" "}
+                  <span className="font-medium">New patient</span> to create
+                  one.
+                </>
+              ) : (
+                "No patients match your search."
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden overflow-x-auto lg:block">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
@@ -255,7 +337,6 @@ export default function FacilityPatientsPage() {
                       </td>
                       <td className="p-3 text-sm text-slate-800">
                         <div className="inline-flex items-center gap-1">
-                          
                           {formatAge(p.dob || p.date_of_birth)}
                         </div>
                       </td>

@@ -648,7 +648,7 @@ export default function EnhancedHMOPage() {
       )}
 
       {/* Tabs */}
-      <div className="mb-6 flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm md:flex-nowrap md:gap-1">
         <TabButton
           active={activeTab === "hmos"}
           onClick={() => setActiveTab("hmos")}
@@ -799,7 +799,7 @@ function TabButton({ active, onClick, icon: Icon, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+      className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition md:px-4 md:py-2.5 md:text-sm ${
         active
           ? "bg-slate-900 text-white shadow-sm"
           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -940,7 +940,151 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="md:hidden">
+          {loading ? (
+            <div className="px-4 py-10 text-center">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
+                <p className="text-sm text-slate-500">Loading HMOs...</p>
+              </div>
+            </div>
+          ) : hmos.length ? (
+            <div className="space-y-3 p-4">
+              {hmos.map((h) => {
+                const systemHmo = h.system_hmo || {};
+                const hmoName = systemHmo.name || h.name || "Unknown HMO";
+                const tiers = systemHmo.tiers || [];
+                const nhisNumber = systemHmo.nhis_number;
+                const hmoCode = systemHmo.hmo_code;
+
+                return (
+                  <div key={h.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className={`grid h-10 w-10 place-items-center rounded-xl ${
+                        h.is_active
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}>
+                        <Shield className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-semibold text-slate-900">{hmoName}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          {hmoCode && <span className="font-mono">{hmoCode}</span>}
+                          {nhisNumber && (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px]">
+                              NHIS: {nhisNumber}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-2">
+                          <MultiTierBadges tiers={tiers} />
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <RelationshipBadge status={h.relationship_status} />
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                            h.is_active
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-slate-100 text-slate-700"
+                          }`}>
+                            {h.is_active ? (
+                              <CheckCircle2 className="h-3 w-3" />
+                            ) : (
+                              <AlertCircle className="h-3 w-3" />
+                            )}
+                            {h.is_active ? "Active" : "Disabled"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 text-xs text-slate-600">
+                      {h.contract_reference ? (
+                        <div>
+                          <div className="flex items-center gap-1 font-medium text-slate-700">
+                            <FileCheck className="h-3 w-3" />
+                            {h.contract_reference}
+                          </div>
+                          {(h.contract_start_date || h.contract_end_date) && (
+                            <div className="mt-0.5 text-slate-500">
+                              {h.contract_start_date && new Date(h.contract_start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              {h.contract_start_date && h.contract_end_date && " â€“ "}
+                              {h.contract_end_date && new Date(h.contract_end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">No contract</span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex flex-col gap-2">
+                      <a
+                        href={`/facility/hmos/${h.id}`}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
+                      >
+                        <Eye className="h-4 w-4" />
+                        Details
+                      </a>
+                      <button
+                        onClick={() => toggleActive(h)}
+                        disabled={!isSuperAdmin || busy}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        {h.is_active ? (
+                          <>
+                            <ToggleRight className="h-4 w-4" />
+                            Disable
+                          </>
+                        ) : (
+                          <>
+                            <ToggleLeft className="h-4 w-4" />
+                            Enable
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => disableHmo(h)}
+                        disabled={!isSuperAdmin || busy}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50 disabled:opacity-60"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="px-4 py-12">
+              <div className="flex flex-col items-center gap-3">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100">
+                  <Shield className="h-8 w-8 text-slate-400" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-sm font-semibold text-slate-900">No HMOs enabled</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {isSuperAdmin
+                      ? "Enable HMOs from the system catalog to get started"
+                      : "Contact your admin to enable HMO plans"}
+                  </p>
+                </div>
+                {isSuperAdmin && (
+                  <button
+                    onClick={onAddClick}
+                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Enable HMO
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-100 bg-slate-50/50 text-xs font-semibold uppercase tracking-wide text-slate-600">
               <tr>
@@ -1410,7 +1554,121 @@ function AppointmentPricingTab({
             No services in catalog. Add appointment service types first.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <>
+            <div className="md:hidden space-y-3">
+              {catalog.map((item) => {
+                const itemId = item.service_id;
+                const code = item.service_code;
+                const name = item.service_name;
+                const catalogPrice = Number(item.catalog_price || 0);
+                const hmoPrice = Number(item.hmo_price || catalogPrice);
+                const discount = catalogPrice > 0
+                  ? Math.round(((catalogPrice - hmoPrice) / catalogPrice) * 100)
+                  : 0;
+
+                return (
+                  <div key={itemId} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-slate-900">{name || code}</div>
+                        <div className="text-[11px] font-mono text-slate-500">{code}</div>
+                        <div className="mt-1 text-xs text-slate-600">
+                          Duration: {item.duration || "â€”"}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {discount !== 0 ? (
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            discount > 0
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700"
+                          }`}>
+                            {discount > 0 ? <TrendingDown className="h-3 w-3" /> : null}
+                            {discount > 0 ? "-" : "+"}{Math.abs(discount)}%
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">â€”</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <div className="text-slate-500">Catalog</div>
+                        <div className="font-semibold text-slate-900">
+                          â‚¦{catalogPrice.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-slate-500">HMO</div>
+                        {editingId === itemId ? (
+                          <div className="mt-1 flex items-center justify-end gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") savePrice(itemId);
+                                if (e.key === "Escape") cancelEdit();
+                              }}
+                              className="w-24 rounded border border-sky-300 bg-sky-50 px-2 py-1 text-xs text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              autoFocus
+                              disabled={updating}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => savePrice(itemId)}
+                              disabled={updating}
+                              className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 p-1 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                              title="Save"
+                            >
+                              {updating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              disabled={updating}
+                              className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                              title="Cancel"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-center justify-end gap-1">
+                            <span className="font-semibold text-slate-900">
+                              â‚¦{hmoPrice.toLocaleString()}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(item)}
+                              className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-400 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+                              title="Edit price"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {editingId !== itemId && (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(item)}
+                        className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
+                      >
+                        <DollarSign className="h-3 w-3" />
+                        Edit Price
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
                 <tr>
@@ -1525,6 +1783,7 @@ function AppointmentPricingTab({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
     </div>
@@ -1775,7 +2034,123 @@ function CatalogSection({
           No items in catalog. Add items to your {isPharmacy ? "pharmacy" : "lab"} catalog first.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <>
+          <div className="md:hidden space-y-3">
+            {catalog.map((item) => {
+              const itemId = isPharmacy ? item.drug_id : item.test_id;
+              const code = isPharmacy ? item.drug_code : item.test_code;
+              const name = isPharmacy ? item.drug_name : item.test_name;
+              const catalogPrice = Number(item.catalog_price || 0);
+              const hmoPrice = Number(item.hmo_price || catalogPrice);
+              const discount = catalogPrice > 0
+                ? Math.round(((catalogPrice - hmoPrice) / catalogPrice) * 100)
+                : 0;
+              const detailValue = isPharmacy ? item.strength : item.unit;
+              const detailLabel = isPharmacy ? "Strength" : "Unit";
+
+              return (
+                <div key={itemId} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-slate-900">{name || code}</div>
+                      <div className="text-[11px] font-mono text-slate-500">{code}</div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {detailLabel}: {detailValue || "â€”"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {discount !== 0 ? (
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          discount > 0
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-rose-50 text-rose-700"
+                        }`}>
+                          {discount > 0 ? <TrendingDown className="h-3 w-3" /> : null}
+                          {discount > 0 ? "-" : "+"}{Math.abs(discount)}%
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">â€”</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-slate-500">Catalog</div>
+                      <div className="font-semibold text-slate-900">
+                        â‚¦{catalogPrice.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-slate-500">HMO</div>
+                      {editingId === itemId ? (
+                        <div className="mt-1 flex items-center justify-end gap-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") savePrice(itemId);
+                              if (e.key === "Escape") cancelEdit();
+                            }}
+                            className="w-24 rounded border border-sky-300 bg-sky-50 px-2 py-1 text-xs text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            autoFocus
+                            disabled={updating}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => savePrice(itemId)}
+                            disabled={updating}
+                            className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 p-1 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                            title="Save"
+                          >
+                            {updating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            disabled={updating}
+                            className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                            title="Cancel"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex items-center justify-end gap-1">
+                          <span className="font-semibold text-slate-900">
+                            â‚¦{hmoPrice.toLocaleString()}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(item)}
+                            className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-400 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+                            title="Edit price"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {editingId !== itemId && (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(item)}
+                      className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
+                    >
+                      <DollarSign className="h-3 w-3" />
+                      Edit Price
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
               <tr>
@@ -1896,6 +2271,7 @@ function CatalogSection({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </section>
   );

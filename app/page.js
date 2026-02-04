@@ -493,9 +493,9 @@ export default function HomePage() {
         </div>
       </header> */}
 
-      <div className="mx-auto max-w-6xl px-0">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-0 lg:py-0">
         {/* HERO */}
-        <section className="grid gap-10 lg:grid-cols-2 lg:items-center">
+        <section className="grid gap-8 md:gap-10 lg:grid-cols-2 lg:items-center">
           {/* Left */}
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
@@ -528,24 +528,24 @@ export default function HomePage() {
             {/* Persona switch */}
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur">
               <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-900">
-                      Choose your mode
-                    </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">
+                    Choose your mode
+                  </div>
                     <div className="text-xs text-slate-500">
                       Tailored value props & preview
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                  <div className="flex w-full flex-wrap rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:w-auto sm:flex-nowrap">
                     {["facility", "provider", "patient", "outreach"].map(
                       (k) => (
                         <button
                           key={k}
                           onClick={() => setRole(k)}
                           className={cn(
-                            "rounded-xl px-3 py-1.5 text-xs font-semibold transition",
+                            "flex-1 basis-1/2 rounded-xl px-3 py-1.5 text-xs font-semibold transition sm:flex-none sm:basis-auto",
                             role === k
                               ? "bg-slate-900 text-white"
                               : "text-slate-600 hover:bg-slate-100",
@@ -594,14 +594,14 @@ export default function HomePage() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <Link
                       href={activePersona.ctaPrimary.href}
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 sm:w-auto"
                     >
                       {activePersona.ctaPrimary.label}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                     <Link
                       href={activePersona.ctaSecondary.href}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:border-blue-200 hover:text-blue-700"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:border-blue-200 hover:text-blue-700 sm:w-auto"
                     >
                       {activePersona.ctaSecondary.label}
                     </Link>
@@ -612,7 +612,7 @@ export default function HomePage() {
           </div>
 
           {/* Right - mock preview */}
-          <div className="lg:pl-6">
+          <div className="mx-auto max-w-xl lg:mx-0 lg:max-w-none lg:pl-6">
             <MockAppPreview role={role} />
           </div>
         </section>

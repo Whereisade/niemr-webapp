@@ -319,7 +319,7 @@ function FacilityLabOrdersPageInner() {
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-6 md:p-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
             Facility Lab Orders
@@ -399,7 +399,7 @@ function FacilityLabOrdersPageInner() {
 
       {/* Table card */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200/70 px-5 py-4">
+        <div className="flex flex-col gap-3 border-b border-slate-200/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-slate-50">
               <Activity className="h-5 w-5 text-slate-700" />
@@ -420,11 +420,11 @@ function FacilityLabOrdersPageInner() {
             <thead className="bg-slate-50">
               <tr>
                 <Th>Patient</Th>
-                <Th>Insurance / HMO</Th>
-                <Th>Tests</Th>
+                <Th className="hidden md:table-cell">Insurance / HMO</Th>
+                <Th className="hidden md:table-cell">Tests</Th>
                 <Th>Status</Th>
-                <Th>Ordered</Th>
-                <Th className="text-right">Report</Th>
+                <Th className="hidden md:table-cell">Ordered</Th>
+                <Th className="hidden md:table-cell text-right">Report</Th>
                 <Th>Actions</Th>
               </tr>
             </thead>
@@ -450,10 +450,57 @@ function FacilityLabOrdersPageInner() {
                             {order.patient_name || order.patient || "—"}
                           </span>
                         </div>
+                        <div className="mt-2 space-y-1 text-xs text-slate-600 md:hidden">
+                          <div className="flex items-center gap-1.5">
+                            <CalendarRange className="h-3.5 w-3.5 text-slate-400" />
+                            <span>
+                              {formatDateTime(
+                                order.ordered_at || order.created_at
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-start gap-1.5">
+                            <FileText className="mt-0.5 h-3.5 w-3.5 text-slate-400" />
+                            <span className="line-clamp-2">
+                              {Array.isArray(order.items)
+                                ? order.items
+                                    .map(
+                                      (i) =>
+                                        i.test?.name ||
+                                        i.test?.code ||
+                                        i.test_name ||
+                                        i.code
+                                    )
+                                    .join(", ")
+                                : order.tests_display || "â€”"}
+                            </span>
+                          </div>
+                          <div>
+                            <HMOBadge
+                              hmoName={hmoInfo.hmoName}
+                              relationshipStatus={hmoInfo.relationshipStatus}
+                              tierName={hmoInfo.tierName}
+                              tierLevel={hmoInfo.tierLevel}
+                            />
+                          </div>
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(order)}
+                              disabled={downloadingId === order.id}
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <DownloadCloud className="h-3.5 w-3.5" />
+                              {downloadingId === order.id
+                                ? "Generatingâ€¦"
+                                : "PDF"}
+                            </button>
+                          </div>
+                        </div>
                       </Td>
 
                       {/* UPDATED: HMO Column with new system support */}
-                      <Td>
+                      <Td className="hidden md:table-cell">
                         <HMOBadge
                           hmoName={hmoInfo.hmoName}
                           relationshipStatus={hmoInfo.relationshipStatus}
@@ -462,7 +509,7 @@ function FacilityLabOrdersPageInner() {
                         />
                       </Td>
 
-                      <Td>
+                      <Td className="hidden md:table-cell">
                         <div className="max-w-xs truncate text-slate-800">
                           {Array.isArray(order.items)
                             ? order.items
@@ -493,7 +540,7 @@ function FacilityLabOrdersPageInner() {
                         })()}
                       </Td>
 
-                      <Td>
+                      <Td className="hidden md:table-cell">
                         <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           <Clock className="h-3.5 w-3.5 text-slate-400" />
                           {formatDateTime(
@@ -502,7 +549,7 @@ function FacilityLabOrdersPageInner() {
                         </div>
                       </Td>
 
-                      <Td className="text-right">
+                      <Td className="hidden md:table-cell text-right">
                         <button
                           type="button"
                           onClick={() => handleDownload(order)}
@@ -636,16 +683,16 @@ function FacilityLabOrdersPageInner() {
         </div>
 
         {/* Pager */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+        <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
           <div>
             Page {page} · {total} total
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               disabled={page <= 1}
               onClick={() => updateQuery({ page: page - 1 })}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
             >
               <ArrowLeft className="h-4 w-4" />
               Previous
@@ -654,7 +701,7 @@ function FacilityLabOrdersPageInner() {
               type="button"
               disabled={rows.length < limit}
               onClick={() => updateQuery({ page: page + 1 })}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 shadow-sm hover:border-slate-300 disabled:opacity-50"
             >
               Next
               <ArrowRight className="h-4 w-4" />

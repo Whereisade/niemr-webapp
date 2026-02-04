@@ -458,10 +458,10 @@ function FacilityPharmacyPageInner() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-6">
+    <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold text-slate-900">
             Pharmacy workspace
           </h1>
@@ -473,7 +473,7 @@ function FacilityPharmacyPageInner() {
           {canPrescribe && (
             <Link
               href="/facility/pharmacy/prescribe"
-              className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               New prescription
@@ -512,7 +512,7 @@ function FacilityPharmacyPageInner() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:flex-row">
         <TabButton
           active={activeTab === "prescriptions"}
           onClick={() => setActiveTab("prescriptions")}
@@ -623,7 +623,7 @@ function PrescriptionsTab({
             <Filter className="h-3.5 w-3.5 text-slate-400" />
             Filter prescriptions
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <div className="relative w-full sm:w-64">
               <input
                 type="search"
@@ -688,8 +688,145 @@ function PrescriptionsTab({
         <div className="p-4 text-sm text-rose-700">{error.message}</div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
+          {/* Mobile cards */}
+          <div className="block lg:hidden">
+            <div className="divide-y divide-slate-100">
+              {rows.length ? (
+                rows.map((rx) => {
+                  const created = formatDateTime(rx.created_at);
+                  const patientInfo = patientMap.get(rx.patient);
+                  const patientLabel = patientsLoading
+                    ? "Loading..."
+                    : patientInfo
+                    ? patientInfo.name
+                    : rx.patient != null
+                    ? `Patient #${rx.patient}`
+                    : "—";
+
+                  const hmoInfo = getPatientHMOInfo(patientInfo);
+
+                  let hasLowStock = false;
+                  let hasOutOfStock = false;
+
+                  if (Array.isArray(rx.items)) {
+                    for (const item of rx.items) {
+                      if (item.drug?.id) {
+                        const stockQty = stockByDrugId.get(item.drug.id) ?? 0;
+                        const remaining = item.remaining || 0;
+                        if (stockQty === 0 && remaining > 0) {
+                          hasOutOfStock = true;
+                        } else if (stockQty < remaining && remaining > 0) {
+                          hasLowStock = true;
+                        }
+                      }
+                    }
+                  }
+
+                  let itemsSummary = "—";
+                  if (Array.isArray(rx.items) && rx.items.length) {
+                    const names = rx.items
+                      .map(
+                        (it) =>
+                          it.drug?.name ||
+                          it.drug?.code ||
+                          it.drug_name ||
+                          it.dose ||
+                          "Medication"
+                      )
+                      .filter(Boolean);
+                    if (names.length <= 2) {
+                      itemsSummary = names.join(", ");
+                    } else {
+                      itemsSummary = `${names.slice(0, 2).join(", ")} + ${
+                        names.length - 2
+                      } more`;
+                    }
+                  }
+
+                  return (
+                    <div key={rx.id} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-slate-900">
+                            {patientLabel}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {created}
+                          </div>
+                        </div>
+                        <StatusPill value={rx.status} />
+                      </div>
+
+                      <div className="mt-3 text-xs text-slate-700">
+                        {itemsSummary}
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <HMOBadge
+                          hmoName={hmoInfo.hmoName}
+                          relationshipStatus={hmoInfo.relationshipStatus}
+                          tierName={hmoInfo.tierName}
+                          tierLevel={hmoInfo.tierLevel}
+                        />
+                        {hasOutOfStock ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200">
+                            <AlertTriangle className="h-3 w-3" />
+                            Out of stock
+                          </span>
+                        ) : hasLowStock ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                            <TrendingDown className="h-3 w-3" />
+                            Low stock
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-500">
+                            Stock OK
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailsId(rx.id);
+                            setDetailsOpen(true);
+                          }}
+                          className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
+                        >
+                          {canDispense ? "View & dispense" : "View"}
+                        </button>
+                        {canDispense && rx.patient && (
+                          <Link
+                            href={`/facility/billing?patient=${rx.patient}&prescription=${rx.id}`}
+                            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            Billing
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="px-4 py-10 text-center text-sm text-slate-500">
+                  <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                    <Pill className="h-6 w-6 text-slate-400" />
+                  </div>
+                  <div className="text-sm font-medium text-slate-900">
+                    No prescriptions found
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Adjust your filters or create a new prescription.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto lg:block">
+            <table className="min-w-[980px] w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-slate-700">
                 <tr>
                   <Th>Created</Th>
@@ -840,35 +977,18 @@ function PrescriptionsTab({
                       </tr>
                     );
                   })
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-10 text-center text-sm text-slate-500"
-                    >
-                      <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
-                        <Pill className="h-6 w-6 text-slate-400" />
-                      </div>
-                      <div className="text-sm font-medium text-slate-900">
-                        No prescriptions found
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        Adjust your filters or create a new prescription.
-                      </div>
-                    </td>
-                  </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
             <span>
               Page {page} · Showing {rows.length} of {total} prescription
               {total === 1 ? "" : "s"}
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 disabled={page <= 1}
@@ -899,7 +1019,7 @@ function StockTab({ stock, stockLoading, stockError }) {
   return (
     <section className="space-y-4">
       {/* Quick actions */}
-      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
             Stock management
@@ -910,7 +1030,7 @@ function StockTab({ stock, stockLoading, stockError }) {
         </div>
         <Link
           href="/facility/pharmacy/stock"
-          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto"
         >
           <Boxes className="h-4 w-4" />
           Manage stock
@@ -937,8 +1057,8 @@ function StockTab({ stock, stockLoading, stockError }) {
         ) : stockError ? (
           <div className="p-4 text-sm text-rose-700">{stockError}</div>
         ) : (
-          <div className="max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-xs">
+          <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
+            <table className="min-w-[760px] w-full divide-y divide-slate-100 text-xs">
               <thead className="sticky top-0 bg-slate-50 text-slate-700">
                 <tr>
                   <Th>Batch</Th>
@@ -1031,7 +1151,7 @@ function CatalogTab({
   return (
     <section className="space-y-4">
       {/* Quick actions */}
-      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
             Drug catalog
@@ -1042,7 +1162,7 @@ function CatalogTab({
         </div>
         <Link
           href="/facility/pharmacy/catalog"
-          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto"
         >
           <FileText className="h-4 w-4" />
           Manage catalog
@@ -1053,7 +1173,7 @@ function CatalogTab({
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="h-1.5 w-full bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500" />
         <div className="border-b border-slate-100 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">
                 Available medications
@@ -1062,7 +1182,7 @@ function CatalogTab({
                 {filteredCatalog.length} drug{filteredCatalog.length !== 1 ? "s" : ""} in catalog
               </p>
             </div>
-            <div className="relative w-full max-w-xs">
+            <div className="relative w-full sm:max-w-xs">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                 <Search className="h-4 w-4 text-slate-400" />
               </div>
@@ -1083,8 +1203,8 @@ function CatalogTab({
             Loading catalog…
           </div>
         ) : (
-          <div className="max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-xs">
+          <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
+            <table className="min-w-[720px] w-full divide-y divide-slate-100 text-xs">
               <thead className="sticky top-0 bg-slate-50 text-slate-700">
                 <tr>
                   <Th>Code</Th>

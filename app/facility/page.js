@@ -962,10 +962,10 @@ export default async function FacilityDashboard() {
         />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="relative mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
         {/* Enhanced Header */}
         <header className="mb-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-start lg:justify-between">
             {/* Left: Greeting and role badge */}
             <div className="flex-1">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/25">
@@ -975,23 +975,25 @@ export default async function FacilityDashboard() {
               </div>
               <GreetingLine
                 name={greetingTarget}
-                className="text-3xl font-bold tracking-tight text-slate-900 lg:text-4xl"
+                className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl"
               />
-              <p className="mt-2 text-base text-slate-600">
+              <p className="mt-2 text-sm text-slate-600 sm:text-base">
                 {workspace.subtitle}
               </p>
             </div>
 
             {/* Right: Actions */}
-            <div className="flex flex-wrap items-center gap-3">
-              <NotificationsBell href="/facility/notifications" />
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end lg:w-auto">
+              <div className="self-start sm:self-auto">
+                <NotificationsBell href="/facility/notifications" />
+              </div>
 
               {/* Primary action buttons */}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 {(isOwner || isFrontdesk || role === "DOCTOR" || role === "NURSE") && (
                   <Link
                     href="/facility/appointments"
-                    className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:ring-slate-300"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:ring-slate-300 sm:w-auto"
                   >
                     <CalendarRange className="h-4 w-4" />
                     Appointments
@@ -1000,7 +1002,7 @@ export default async function FacilityDashboard() {
                 {(isOwner || isClinical) && (
                   <Link
                     href="/facility/encounters"
-                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/25 transition-all hover:shadow-xl hover:shadow-blue-500/30"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/25 transition-all hover:shadow-xl hover:shadow-blue-500/30 sm:w-auto"
                   >
                     <Stethoscope className="h-4 w-4" />
                     Encounters
@@ -1017,7 +1019,7 @@ export default async function FacilityDashboard() {
             <Link
               key={stat.label}
               href={stat.href}
-              className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:ring-slate-300"
+              className="group relative overflow-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:ring-slate-300 sm:p-6"
             >
               {/* Gradient accent */}
               <div
@@ -1031,8 +1033,8 @@ export default async function FacilityDashboard() {
                     <p className="text-sm font-medium text-slate-600">
                       {stat.label}
                     </p>
-                    <div className="mt-2 flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-slate-900">
+                    <div className="mt-2 flex flex-wrap items-baseline gap-2">
+                      <span className="text-2xl font-bold text-slate-900 sm:text-3xl">
                         {stat.href === "/facility/appointments" && typeof stat.value === 'number' ? (
                           <LiveAppointmentsCount initialCount={stat.value} />
                         ) : (
@@ -1081,7 +1083,7 @@ export default async function FacilityDashboard() {
         {/* Quick Actions */}
         <section className="mb-8">
           <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-            <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
+            <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 sm:p-5">
               <div className="flex items-center gap-2">
                 <Zap className="h-5 w-5 text-blue-600" />
                 <h3 className="font-semibold text-slate-900">
@@ -1092,7 +1094,7 @@ export default async function FacilityDashboard() {
                 Common tasks for your role
               </p>
             </div>
-            <div className="p-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-4">
               {/* Role-specific actions */}
               {(() => {
                 const primaryAction =
@@ -1365,7 +1367,7 @@ export default async function FacilityDashboard() {
 
 function CardHead({ title, subtitle, href, icon: Icon, actionLabel }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-200 p-5">
+    <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div className="flex items-center gap-3">
         <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50">
           <Icon className="h-5 w-5 text-blue-600" />

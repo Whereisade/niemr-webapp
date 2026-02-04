@@ -276,7 +276,7 @@ export default function FacilityBillingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50/30 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -294,31 +294,31 @@ export default function FacilityBillingPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:w-auto"
             >
               <Filter className="h-4 w-4" />
               {showFilters ? "Hide" : "Show"} Filters
             </button>
             <button
               onClick={() => router.push('/facility/appointments/pricing')}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:w-auto"
             >
               <Settings2 className="h-4 w-4" />
               Services Pricing
             </button>
             <button
               onClick={() => router.push('/facility/billing/patients')}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:w-auto"
             >
               <Users className="h-4 w-4" />
               Patient History
             </button>
             <button
               onClick={() => setShowPaymentModal(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 sm:w-auto"
             >
               <DollarSign className="h-4 w-4" />
               Record Payment
@@ -327,10 +327,10 @@ export default function FacilityBillingPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:flex-row sm:items-center">
           <button
             onClick={() => setActiveTab("charges")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+            className={`flex w-full flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:w-auto ${
               activeTab === "charges"
                 ? "bg-slate-900 text-white shadow-sm"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -344,7 +344,7 @@ export default function FacilityBillingPage() {
           </button>
           <button
             onClick={() => setActiveTab("payments")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+            className={`flex w-full flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:w-auto ${
               activeTab === "payments"
                 ? "bg-slate-900 text-white shadow-sm"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -600,7 +600,7 @@ export default function FacilityBillingPage() {
                 </div>
               </div>
             ) : ledger.data ? (
-              <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-5">
+              <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="group rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 transition hover:shadow-md">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="text-xs font-semibold text-slate-600">Total Charges</div>
@@ -669,14 +669,14 @@ export default function FacilityBillingPage() {
         {/* Charges Table */}
         {activeTab === "charges" && (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
+            <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Charges</h2>
                 <p className="text-xs text-slate-600">
                   {chargesLoading ? "Loading…" : `${charges.length} of ${chargesCount || 0} charges`}
                 </p>
               </div>
-              <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto">
                 <Download className="h-4 w-4" />
                 Export
               </button>
@@ -779,7 +779,7 @@ export default function FacilityBillingPage() {
 
             {/* Pagination */}
             {charges.length > 0 && (
-              <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/30 px-5 py-4">
+              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-600">
                   Page <span className="font-semibold text-slate-900">{chargesPage}</span> of{" "}
                   <span className="font-semibold text-slate-900">
@@ -787,18 +787,18 @@ export default function FacilityBillingPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 sm:justify-end">
                   <button
                     onClick={() => setChargesPage((p) => Math.max(1, p - 1))}
                     disabled={chargesPage <= 1}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setChargesPage((p) => p + 1)}
                     disabled={chargesCount ? chargesPage >= Math.ceil(chargesCount / chargesLimit) : charges.length < chargesLimit}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                   >
                     Next
                   </button>
@@ -811,14 +811,14 @@ export default function FacilityBillingPage() {
         {/* Payments Table */}
         {activeTab === "payments" && (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
+            <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Payment Transactions</h2>
                 <p className="text-xs text-slate-600">
                   {paymentsLoading ? "Loading…" : `${payments.length} of ${paymentsCount || 0} payments`}
                 </p>
               </div>
-              <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto">
                 <Download className="h-4 w-4" />
                 Export
               </button>
@@ -915,7 +915,7 @@ export default function FacilityBillingPage() {
 
             {/* Pagination */}
             {payments.length > 0 && (
-              <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/30 px-5 py-4">
+              <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-600">
                   Page <span className="font-semibold text-slate-900">{paymentsPage}</span> of{" "}
                   <span className="font-semibold text-slate-900">
@@ -923,18 +923,18 @@ export default function FacilityBillingPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 sm:justify-end">
                   <button
                     onClick={() => setPaymentsPage((p) => Math.max(1, p - 1))}
                     disabled={paymentsPage <= 1}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setPaymentsPage((p) => p + 1)}
                     disabled={paymentsCount ? paymentsPage >= Math.ceil(paymentsCount / paymentsLimit) : payments.length < paymentsLimit}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                   >
                     Next
                   </button>
