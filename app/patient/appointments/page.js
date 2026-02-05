@@ -271,7 +271,136 @@ function PatientAppointmentsPageInner() {
           title="My Appointments"
           subtitle={`Showing ${rows.length} of ${total}`}
         />
-        <div className="overflow-x-auto">
+        {/* Mobile / tablet cards */}
+        <div className="md:hidden">
+          {isLoading && !data ? (
+            <div className="p-6 text-sm text-slate-600">Loading appointments…</div>
+          ) : error ? (
+            <div className="p-6 text-sm text-rose-700 bg-rose-50">
+              Failed to load: {error.message || "Unknown error"}
+            </div>
+          ) : rows.length ? (
+            <div className="divide-y divide-slate-100">
+              {rows.map((a) => {
+                const statusValue = (a.status || "SCHEDULED").toUpperCase();
+                const actions = getPatientActions(a);
+                const isFinal = isTerminalStatus(statusValue);
+
+                const patientLabel = a.patient_name || a.patient || "—";
+                const isDependent = dependents.some(
+                  (dep) => String(dep.id) === String(a.patient)
+                );
+
+                const hasEncounter = a.has_encounter || !!a.encounter_id;
+                const encounterStatus = a.encounter_status || null;
+                const facilityName = a.facility_name || a.facility?.name || "—";
+
+                return (
+                  <div key={a.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {patientLabel}
+                        </div>
+                        {isDependent && (
+                          <span className="mt-1 inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                            Dependent
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <StatusBadge value={a.status} />
+                        {isFinal && (
+                          <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-slate-500">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Final
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 text-sm text-slate-700">
+                      <div className="flex items-center gap-2">
+                        <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
+                          <Stethoscope className="h-3.5 w-3.5 text-blue-700" />
+                        </span>
+                        <span className="font-medium text-slate-900">
+                          {a.provider_name || a.provider || "—"}
+                        </span>
+                      </div>
+                      <div className="inline-flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-slate-400" />
+                        <span>{facilityName}</span>
+                      </div>
+                      <div className="inline-flex items-center gap-2">
+                        <CalendarRange className="h-4 w-4 text-slate-400" />
+                        <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                          {formatDateTime(
+                            a.start_at || a.scheduled_for || a.date
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        Encounter:{" "}
+                        {hasEncounter ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700">
+                            <Link2 className="h-3 w-3" />
+                            Linked
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                        {encounterStatus ? (
+                          <span className="ml-2 text-[11px] text-slate-500">
+                            {encounterStatus}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex flex-wrap gap-2">
+                        {actions.length > 0 && !isFinal ? (
+                          actions.map((action) => (
+                            <button
+                              key={action}
+                              type="button"
+                              onClick={() => handleAction(a.id, action)}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              {action === "cancel" ? "Cancel" : action}
+                            </button>
+                          ))
+                        ) : isFinal && actions.length === 0 ? (
+                          <span className="text-xs text-slate-400 italic">
+                            No actions
+                          </span>
+                        ) : null}
+                      </div>
+                      <a
+                        href={`/patient/appointments/${a.id}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                      >
+                        View
+                        <ChevronRight className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-6">
+              <EmptyState
+                title="No appointments found"
+                subtitle="Try adjusting your search or status filter."
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>

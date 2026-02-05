@@ -386,6 +386,7 @@ export default function FacilityPharmacyStockPage() {
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Current stock
             </div>
+
             <div className="text-xs text-slate-500">
               Lines:{" "}
               <span className="font-semibold text-slate-800">
@@ -417,7 +418,8 @@ export default function FacilityPharmacyStockPage() {
               {stockError}
             </div>
           ) : (
-            <div className="max-h-[380px] overflow-y-auto rounded-lg border border-slate-100">
+            <>
+            <div className="max-h-[380px] overflow-y-auto rounded-lg border border-slate-100 hidden lg:block">
               <table className="min-w-full divide-y divide-slate-100 text-xs">
                 <thead className="bg-slate-50 text-slate-700">
                   <tr>
@@ -486,6 +488,54 @@ export default function FacilityPharmacyStockPage() {
                 </tbody>
               </table>
             </div>
+
+            <div className="space-y-2 lg:hidden">
+              {stockRows.length ? (
+                stockRows.map((row) => {
+                  const isLow = (row.current_qty || 0) <= 10;
+                  return (
+                    <div
+                      key={row.id || row.drugId}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-slate-900">
+                            {row.name || "-"}
+                            <span className="ml-1 font-mono text-[10px] text-slate-500">
+                              {row.code ? `(${row.code})` : ""}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-600">
+                            {row.strength || "-"}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-600">
+                            {row.form || "-"}
+                            {row.route ? ` - ${row.route}` : ""}
+                          </div>
+                        </div>
+                        <span
+                          className={
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+                            (isLow
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-emerald-50 text-emerald-700")
+                          }
+                        >
+                          {row.current_qty ?? 0}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">
+                  No stock records yet. Use "Adjust stock" to record opening
+                  balances.
+                </div>
+              )}
+            </div>
+            </>
           )}
         </div>
 

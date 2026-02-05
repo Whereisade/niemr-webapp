@@ -306,8 +306,160 @@ function ProviderAppointmentsPageInner() {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <>
+            {/* Mobile + tablet list */}
+            <div className="lg:hidden space-y-3 p-4">
+              {rows.length ? (
+                rows.map((a) => {
+                  const time =
+                    a.start_at || a.scheduled_for || a.start_time || a.date || a.time || "â€”";
+                  const apptStatus = (a.status || "SCHEDULED").toUpperCase();
+                  const isTerminal = TERMINAL_STATUSES.includes(apptStatus);
+
+                  const showStartEncounter =
+                    typeof a.can_start_encounter === "boolean"
+                      ? a.can_start_encounter
+                      : canStartEncounter(a);
+
+                  const actions = Array.isArray(a.available_actions)
+                    ? a.available_actions
+                    : getAvailableActions(apptStatus, {
+                        hasEncounter: a.has_encounter || !!a.encounter_id,
+                        encounterStatus: a.encounter_status,
+                      });
+
+                  return (
+                    <div
+                      key={a.id}
+                      className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
+                        isTerminal ? "opacity-70" : ""
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-600/10">
+                            <UserRound className="h-4 w-4 text-blue-700" />
+                          </span>
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {a.patient_name || a.patient || "â€”"}
+                            </div>
+                            {userHasFacility && (
+                              <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                                <Building2 className="h-3 w-3 text-slate-400" />
+                                {a.facility_name || "â€”"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <StatusPill value={apptStatus} />
+                      </div>
+
+                      <div className="mt-3 space-y-2 text-sm text-slate-700">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Reason
+                          </div>
+                          <div className="mt-1 text-sm text-slate-700">
+                            {a.reason || "Consultation"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Time
+                          </div>
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                            <CalendarRange className="h-3.5 w-3.5 text-slate-400" />
+                            {formatDateTime(time)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Encounter
+                          </div>
+                          <div className="mt-1">
+                            {a.encounter_id || a.has_encounter ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                  Linked #{a.encounter_id}
+                                </span>
+                                {a.encounter_status && (
+                                  <span className="text-xs text-slate-500">
+                                    {a.encounter_status}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">
+                                No encounter
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        {showStartEncounter && (
+                          <StartEncounterButton
+                            scope="provider"
+                            appointment={a}
+                            onSuccess={() => mutate()}
+                          />
+                        )}
+
+                        {actions.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {actions.map((action) => (
+                              <button
+                                key={action}
+                                type="button"
+                                onClick={() => handleAction(a.id, action)}
+                                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                {APPT_ACTION_LABELS[action] || action}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {isTerminal && actions.length === 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">
+                            <AlertCircle className="h-3 w-3" />
+                            Final
+                          </span>
+                        )}
+
+                        <a
+                          href={`/provider/appointments/${a.id}`}
+                          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:border-blue-200 hover:text-blue-700"
+                        >
+                          Open
+                          <ChevronRight className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-white">
+                  <EmptyState
+                    title="No appointments found"
+                    subtitle={
+                      hasActiveFilters
+                        ? "Try adjusting your filters or date range to see more results."
+                        : "When you book appointments, they'll appear here automatically."
+                    }
+                    icon={CalendarRange}
+                    ctaHref="/provider/appointments/new"
+                    ctaLabel="Create appointment"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-700">
                 <tr>
                   <Th>Patient</Th>
@@ -468,8 +620,9 @@ function ProviderAppointmentsPageInner() {
                   </tr>
                 )}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
 
         {/* Pager */}

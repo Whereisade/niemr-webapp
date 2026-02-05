@@ -719,9 +719,9 @@ export default function FacilityEncounterClinicalPage() {
   const patientId = encounter?.patient;
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <Link
@@ -760,11 +760,11 @@ export default function FacilityEncounterClinicalPage() {
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap lg:items-center">
           {patientId ? (
             <Link
               href={`/facility/patients/${patientId}?open_encounters=1`}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 lg:justify-start"
               title="View patient encounter history"
             >
               <ExternalLink className="h-4 w-4" />
@@ -775,7 +775,7 @@ export default function FacilityEncounterClinicalPage() {
           <button
             onClick={handleGoToLabs}
             disabled={finalizing}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60 lg:justify-start"
             title="Order lab tests"
           >
             <Beaker className="h-4 w-4" />
@@ -785,7 +785,7 @@ export default function FacilityEncounterClinicalPage() {
           <button
             onClick={() => router.push(`/facility/encounters/${encounterId}/workflow/prescription`)}
             disabled={finalizing}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60 lg:justify-start"
             title="Go to prescription page"
           >
             <Pill className="h-4 w-4" />
@@ -795,7 +795,7 @@ export default function FacilityEncounterClinicalPage() {
           <button
             onClick={handleSave}
             disabled={saving || readOnly}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60 lg:justify-start"
             title="Save SOAP note"
           >
             {saving ? (
@@ -809,7 +809,7 @@ export default function FacilityEncounterClinicalPage() {
           <button
             onClick={handleFinalize}
             disabled={finalizing || readOnly}
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 lg:justify-start"
             title="Finalize SOAP note and continue to prescriptions"
           >
             {finalizing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useState, Suspense } from "react";
@@ -85,7 +85,7 @@ function PatientEncountersPageInner() {
         </h1>
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 -mt-6 mb-4 rounded-t-xl" />
-          <p className="text-slate-500">Loading encounters…</p>
+          <p className="text-slate-500">Loading encountersâ€¦</p>
         </div>
       </main>
     );
@@ -151,7 +151,7 @@ function PatientEncountersPageInner() {
           <div className="relative">
             <input
               type="search"
-              placeholder="Search complaint / diagnosis…"
+              placeholder="Search complaint / diagnosisâ€¦"
               defaultValue={s}
               onBlur={(e) => updateQuery({ s: e.target.value })}
               className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-72"
@@ -203,8 +203,8 @@ function PatientEncountersPageInner() {
         />
       </section>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Table (desktop) */}
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
         <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
@@ -220,7 +220,6 @@ function PatientEncountersPageInner() {
               <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Files
               </th>
-              {/* NEW Details column */}
               <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Details
               </th>
@@ -276,7 +275,7 @@ function PatientEncountersPageInner() {
                       disabled={downloadingId === enc.id}
                       className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {downloadingId === enc.id ? "Generating…" : "PDF"}
+                      {downloadingId === enc.id ? "Generatingâ€¦" : "PDF"}
                     </button>
                   </td>
 
@@ -286,7 +285,7 @@ function PatientEncountersPageInner() {
                       onClick={() =>
                         setAttachmentsFor({
                           id: enc.id,
-                          label: `${providerName} @ ${facilityName} · #${enc.id}`,
+                          label: `${providerName} @ ${facilityName} Â· #${enc.id}`,
                         })
                       }
                       className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
@@ -295,7 +294,6 @@ function PatientEncountersPageInner() {
                     </button>
                   </td>
 
-                  {/* NEW Details cell */}
                   <td className="p-3 text-right text-sm">
                     <Link
                       href={`/patient/encounters/${enc.id}`}
@@ -310,7 +308,6 @@ function PatientEncountersPageInner() {
 
             {!rows.length && (
               <tr>
-                {/* bump colSpan from 7 → 8 to include Details */}
                 <td colSpan={8} className="px-4 py-10 text-center">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
                     <FileText className="h-6 w-6 text-slate-400" />
@@ -328,10 +325,98 @@ function PatientEncountersPageInner() {
         </table>
       </div>
 
+      {/* Cards (mobile/tablet) */}
+      <div className="md:hidden">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+          <div className="divide-y divide-slate-100">
+            {rows.map((enc) => {
+              const providerName = enc.provider_name || enc.provider || "—";
+              const facilityName = enc.facility_name || enc.facility || "—";
+              const whenLabel = formatDateTime(
+                enc.occurred_at || enc.created_at
+              );
+
+              return (
+                <div key={enc.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                        <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-50">
+                          <Stethoscope className="h-4 w-4 text-slate-700" />
+                        </span>
+                        <span className="truncate">{providerName}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+                        <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="truncate">{facilityName}</span>
+                      </div>
+                    </div>
+                    <StatusPill value={enc.status} />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                    <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                      {whenLabel}
+                    </span>
+                    <span className="text-slate-400">â€¢</span>
+                    <span className="line-clamp-2">
+                      {enc.chief_complaint || enc.summary || "—"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(enc)}
+                      disabled={downloadingId === enc.id}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {downloadingId === enc.id ? "Generatingâ€¦" : "PDF"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachmentsFor({
+                          id: enc.id,
+                          label: `${providerName} @ ${facilityName} Â· #${enc.id}`,
+                        })
+                      }
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Attachments
+                    </button>
+                    <Link
+                      href={`/patient/encounters/${enc.id}`}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      View
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!rows.length && (
+              <div className="px-4 py-10 text-center">
+                <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                  <FileText className="h-6 w-6 text-slate-400" />
+                </div>
+                <div className="text-sm font-medium text-slate-900">
+                  No encounters found
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Try adjusting your search or status filter.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       {/* Pager */}
       <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
         <div>
-          Page {page} · {total} total
+          Page {page} Â· {total} total
         </div>
         <div className="flex gap-2">
           <button
@@ -374,7 +459,7 @@ function PatientEncountersPageInner() {
                 className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 <span className="sr-only">Close</span>
-                ✕
+                âœ•
               </button>
             </div>
 
@@ -392,7 +477,7 @@ function PatientEncountersPageInner() {
   );
 }
 
-/* ─────────────── UI helpers (UI-only) ─────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ UI helpers (UI-only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function Tile({ icon: Icon, label, value, gradient }) {
   return (
@@ -441,3 +526,5 @@ function Th({ children }) {
 function Td({ children }) {
   return <td className="p-3 text-sm text-slate-800">{children}</td>;
 }
+
+

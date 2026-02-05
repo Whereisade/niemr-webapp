@@ -717,7 +717,133 @@ export default function ProviderLabCatalogPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-100">
+            <div className="md:hidden rounded-xl border border-slate-100">
+              {filteredTests.length === 0 && !loading ? (
+                <div className="px-3 py-6 text-center text-[11px] text-slate-500">
+                  No lab tests found. Import from file or add tests manually.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {filteredTests.map((t) => (
+                    <div key={t.id || t.code} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-mono text-[11px] text-slate-500">
+                            {t.code}
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-slate-900">
+                            {t.name}
+                          </div>
+                          <div className="mt-2 text-[11px] text-slate-600">
+                            Unit:{" "}
+                            <span className="text-slate-800">
+                              {t.unit || "â€”"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            t.is_active
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {t.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                        <div>
+                          Ref Low:{" "}
+                          <span className="text-slate-800">
+                            {t.ref_low ?? "â€”"}
+                          </span>
+                        </div>
+                        <div>
+                          Ref High:{" "}
+                          <span className="text-slate-800">
+                            {t.ref_high ?? "â€”"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="text-[11px] text-slate-600">
+                          Price:
+                          <span className="ml-1 text-sm font-semibold text-slate-900">
+                            {t.price ?? 0}
+                          </span>
+                        </div>
+
+                        {editingTestId === t.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  savePrice(t.id);
+                                } else if (e.key === "Escape") {
+                                  cancelEditPrice();
+                                }
+                              }}
+                              className="w-20 rounded border border-teal-300 bg-teal-50 px-2 py-1 text-[11px] text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                              autoFocus
+                              disabled={updating}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => savePrice(t.id)}
+                              disabled={updating}
+                              className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 p-1 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                              title="Save"
+                            >
+                              <Check className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditPrice}
+                              disabled={updating}
+                              className="inline-flex items-center rounded border border-slate-200 bg-white p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                              title="Cancel"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditPrice(t)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                            Edit price
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(t.id)}
+                          disabled={deleting === t.id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          {deleting === t.id ? "Deletingâ€¦" : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-100">
               <table className="min-w-full border-collapse text-xs">
                 <thead className="bg-slate-50">
                   <tr className="border-b border-slate-100 text-[11px] text-slate-600">

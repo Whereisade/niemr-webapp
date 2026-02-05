@@ -694,8 +694,74 @@ export default function FacilityBillingPage() {
                 </div>
               </div>
             ) : charges.length ? (
-              <div className="overflow-auto">
-                <table className="min-w-full">
+              <>
+                <div className="space-y-3 p-4 lg:hidden">
+                  {charges.map((c) => {
+                    const paid = Number(c.allocated_total || 0);
+                    const amt = Number(c.amount || 0);
+                    const outstanding = Math.max(amt - paid, 0);
+
+                    return (
+                      <div key={c.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">Charge #{c.id}</div>
+                            <div className="text-xs text-slate-500">{fmtDate(c.created_at)}</div>
+                          </div>
+                          <StatusBadge status={c.status} />
+                        </div>
+
+                        <div className="space-y-3">
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Patient</div>
+                            <div className="text-sm font-medium text-slate-900">
+                              {c.patient_name || `Patient #${c.patient}`}
+                            </div>
+                            <div className="text-xs text-slate-500">ID: {c.patient}</div>
+                          </div>
+
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service</div>
+                            <div className="text-sm font-medium text-slate-900">
+                              {c.service_name || c.service_code || "-"}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {c.service_code}
+                              {c.description && <span className="ml-1">- {c.description}</span>}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-slate-50 p-2.5">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount</div>
+                              <div className="text-sm font-semibold text-slate-900">{formatMoney(amt)}</div>
+                            </div>
+                            <div className="rounded-lg bg-slate-50 p-2.5">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Paid</div>
+                              <div className="text-sm font-semibold text-emerald-700">{formatMoney(paid)}</div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="mb-1.5 flex items-center justify-between text-xs">
+                              <span className="font-medium text-slate-700">{formatMoney(paid)}</span>
+                              <span className="text-slate-500">{formatMoney(amt)}</span>
+                            </div>
+                            <ProgressBar value={paid} max={amt} />
+                            {outstanding > 0 && (
+                              <div className="mt-1 text-xs text-amber-700">
+                                Due: {formatMoney(outstanding)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-auto lg:block">
+                  <table className="min-w-full">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                       <th className="px-4 py-3">Charge</th>
@@ -763,8 +829,9 @@ export default function FacilityBillingPage() {
                       );
                     })}
                   </tbody>
-                </table>
-              </div>
+                  </table>
+                </div>
+              </>
             ) : (
               <div className="p-12 text-center">
                 <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-slate-100">
@@ -836,8 +903,65 @@ export default function FacilityBillingPage() {
                 </div>
               </div>
             ) : payments.length ? (
-              <div className="overflow-auto">
-                <table className="min-w-full">
+              <>
+                <div className="space-y-3 p-4 lg:hidden">
+                  {payments.map((p) => {
+                    const isHMO = p.payment_source === "HMO";
+                    const displayName = isHMO
+                      ? p.hmo_name || "HMO"
+                      : p.patient_name || `Patient #${p.patient}`;
+
+                    return (
+                      <div key={p.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">Payment #{p.id}</div>
+                            <div className="text-xs text-slate-500">{fmtDate(p.received_at)}</div>
+                          </div>
+                          <PaymentSourceBadge source={p.payment_source} />
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            {isHMO ? (
+                              <Shield className="h-4 w-4 text-purple-600" />
+                            ) : (
+                              <User className="h-4 w-4 text-blue-600" />
+                            )}
+                            <div>
+                              <div className="text-sm font-medium text-slate-900">{displayName}</div>
+                              {isHMO && (
+                                <div className="text-xs font-medium text-purple-600">Bulk Payment</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-slate-50 p-2.5">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Method</div>
+                              <div className="text-sm font-medium text-slate-900">{p.method || "-"}</div>
+                            </div>
+                            <div className="rounded-lg bg-slate-50 p-2.5">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reference</div>
+                              <div className="truncate text-sm font-medium text-slate-900">{p.reference || "-"}</div>
+                            </div>
+                            <div className="rounded-lg bg-slate-50 p-2.5">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount</div>
+                              <div className="text-sm font-semibold text-slate-900">{formatMoney(p.amount)}</div>
+                            </div>
+                            <div className="rounded-lg bg-slate-50 p-2.5">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Allocated</div>
+                              <div className="text-sm font-semibold text-emerald-700">{formatMoney(p.allocated_total || 0)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-auto lg:block">
+                  <table className="min-w-full">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                       <th className="px-4 py-3">Payment ID</th>
@@ -899,8 +1023,9 @@ export default function FacilityBillingPage() {
                       );
                     })}
                   </tbody>
-                </table>
-              </div>
+                  </table>
+                </div>
+              </>
             ) : (
               <div className="p-12 text-center">
                 <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-slate-100">

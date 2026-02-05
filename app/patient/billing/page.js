@@ -503,7 +503,7 @@ function PatientBillingPageInner() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
@@ -635,6 +635,127 @@ function PatientBillingPageInner() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="md:hidden p-4 space-y-4">
+          {rows.map((ch) => {
+            const isHMOCharge = ch.payment_source === "HMO" || ch.hmo_id;
+            const patientAmount = ch.patient_portion ?? ch.amount;
+            const hmoAmount = ch.hmo_portion ?? 0;
+
+            return (
+              <div
+                key={ch.id}
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 text-sm break-words">
+                      {ch.service_name || ch.description || `Service #${ch.service}` || "â€”"}
+                    </div>
+                    {ch.description && ch.service_name && (
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {ch.description}
+                      </div>
+                    )}
+                  </div>
+                  <span
+                    className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
+                      ch.status
+                    )}`}
+                  >
+                    {getStatusLabel(ch.status)}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <PaymentSourceBadge source={ch.payment_source} />
+                  {isHMOCharge && ch.hmo_name && (
+                    <span className="text-xs text-slate-600">
+                      {ch.hmo_name}
+                    </span>
+                  )}
+                </div>
+
+                {isHMOCharge && ch.claim_status && (
+                  <div className="mt-2">
+                    <ClaimStatusBadge status={ch.claim_status} />
+                  </div>
+                )}
+
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-slate-600">
+                  <div>
+                    <div className="uppercase tracking-wide text-[11px] text-slate-500">
+                      Total Amount
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      â‚¦{formatMoney(ch.amount)}
+                    </div>
+                    {isHMOCharge && hmoAmount > 0 && (
+                      <div className="text-xs text-purple-600 mt-0.5">
+                        HMO: â‚¦{formatMoney(hmoAmount)}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="uppercase tracking-wide text-[11px] text-slate-500">
+                      Your Portion
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      â‚¦{formatMoney(patientAmount)}
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="uppercase tracking-wide text-[11px] text-slate-500">
+                      Date
+                    </div>
+                    <div className="mt-1 text-sm text-slate-700">
+                      {formatDateTime(ch.created_at)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleReceiptDownload(ch)}
+                    disabled={downloadingId === ch.id}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                  >
+                    {downloadingId === ch.id ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Generatingâ€¦</span>
+                      </>
+                    ) : (
+                      <>
+                        <Receipt className="h-3.5 w-3.5" />
+                        <span>Download</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {!rows.length && (
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+              <div className="flex flex-col items-center gap-2">
+                <Receipt className="h-8 w-8 text-slate-300" />
+                <div>
+                  <div className="font-medium text-slate-700">
+                    No charges found
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {status || paymentSource
+                      ? "Try adjusting your filters"
+                      : "You don't have any charges yet"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Pagination */}

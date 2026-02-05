@@ -269,8 +269,8 @@ function PatientPharmacyPageInner() {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Table (desktop) */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
@@ -425,13 +425,141 @@ function PatientPharmacyPageInner() {
           </table>
         </div>
 
+        {/* Cards (mobile/tablet) */}
+        <div className="space-y-3 px-3 py-3 md:hidden">
+          {rows.length ? (
+            rows.map((rx) => {
+              const created = formatDateTime(rx.created_at);
+              const items = Array.isArray(rx.items) ? rx.items : [];
+              const note = rx.note || "";
+
+              return (
+                <div
+                  key={rx.id}
+                  className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" />
+                      {created}
+                    </span>
+                    <StatusPill value={rx.status} />
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Medications
+                    </div>
+                    {items.length ? (
+                      <ul className="mt-1 space-y-1">
+                        {items.map((it) => {
+                          const drugName =
+                            it.drug?.name ||
+                            it.drug?.code ||
+                            it.dose ||
+                            "Medication";
+                          const dose = it.dose || "";
+                          const freq = it.frequency || "";
+                          const duration = it.duration_days
+                            ? `${it.duration_days} days`
+                            : "";
+                          const remaining =
+                            typeof it.remaining === "number"
+                              ? `Remaining: ${it.remaining}`
+                              : "";
+
+                          return (
+                            <li key={it.id} className="text-xs text-slate-800">
+                              <span className="font-medium">{drugName}</span>
+                              {dose && (
+                                <span className="text-slate-600">
+                                  {` Â· ${dose}`}
+                                </span>
+                              )}
+                              {freq && (
+                                <span className="text-slate-600">
+                                  {` Â· ${freq}`}
+                                </span>
+                              )}
+                              {duration && (
+                                <span className="text-slate-600">
+                                  {` Â· ${duration}`}
+                                </span>
+                              )}
+                              {remaining && (
+                                <span className="ml-1 text-[11px] text-slate-500">
+                                  ({remaining})
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <div className="mt-1 text-xs text-slate-500">â€”</div>
+                    )}
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Instructions
+                    </div>
+                    <div className="mt-1 space-y-1">
+                      {note && <p className="text-xs text-slate-700">{note}</p>}
+                      {items.some((it) => it.instruction) && (
+                        <ul className="space-y-0.5 text-[11px] text-slate-600">
+                          {items
+                            .filter((it) => it.instruction)
+                            .map((it) => (
+                              <li key={it.id}>â€¢ {it.instruction}</li>
+                            ))}
+                        </ul>
+                      )}
+                      {!note && !items.some((it) => it.instruction) && (
+                        <span className="text-xs text-slate-400">
+                          No additional instructions recorded.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailsId(rx.id);
+                        setDetailsOpen(true);
+                      }}
+                      className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
+                    >
+                      View details
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
+              <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                <Pill className="h-6 w-6 text-slate-400" />
+              </div>
+              <div className="text-sm font-medium text-slate-900">
+                No prescriptions found
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Adjust your filters or check back later.
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Pager */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 md:flex-row md:items-center md:justify-between">
           <span>
             Page {page} · Showing {rows.length} of {total} prescription
             {total === 1 ? "" : "s"}
           </span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               disabled={page <= 1}

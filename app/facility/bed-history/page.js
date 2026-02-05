@@ -365,7 +365,70 @@ export default function BedHistoryPage() {
                     No history records found.
                   </p>
                 ) : (
-                  <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-100">
+                  <>
+                    <div className="mt-2 space-y-3 lg:hidden">
+                      {records.map((a) => (
+                        <article key={`mobile-${a.id}`} className="rounded-2xl border border-slate-100 bg-white p-4">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              {mode === "WARD" && (
+                                <div className="text-sm font-medium text-slate-900">
+                                  {a.patient_display || `Patient #${a.patient}`}
+                                </div>
+                              )}
+                              <div className="text-sm font-semibold text-slate-900">
+                                {a.bed_display || `Bed #${a.bed}`}
+                              </div>
+                              <div className="text-xs text-slate-500">{a.ward?.name || "—"}</div>
+                            </div>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ${
+                                a.status === "ACTIVE" ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600"
+                              }`}
+                            >
+                              {a.status}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-2">
+                            <div className="rounded-xl bg-slate-50/70 px-3 py-2">
+                              <div className="font-medium text-slate-500">Assigned</div>
+                              <div className="mt-0.5 text-slate-700">
+                                {a.assigned_at ? new Date(a.assigned_at).toLocaleString() : "—"}
+                              </div>
+                            </div>
+                            <div className="rounded-xl bg-slate-50/70 px-3 py-2">
+                              <div className="font-medium text-slate-500">Admitted By</div>
+                              <div className="mt-0.5 text-slate-700">{a.assigned_by_name || "—"}</div>
+                            </div>
+                            <div className="rounded-xl bg-slate-50/70 px-3 py-2">
+                              <div className="font-medium text-slate-500">Discharged</div>
+                              <div className="mt-0.5 text-slate-700">
+                                {a.discharged_at
+                                  ? new Date(a.discharged_at).toLocaleString()
+                                  : a.status === "ACTIVE"
+                                  ? "Active"
+                                  : "—"}
+                              </div>
+                            </div>
+                            <div className="rounded-xl bg-slate-50/70 px-3 py-2">
+                              <div className="font-medium text-slate-500">Discharged By</div>
+                              <div className="mt-0.5 text-slate-700">
+                                {a.discharged_by_name || (a.status === "ACTIVE" ? "—" : "Unknown")}
+                              </div>
+                            </div>
+                            <div className="rounded-xl bg-slate-50/70 px-3 py-2 sm:col-span-2">
+                              <div className="font-medium text-slate-500">Encounter</div>
+                              <div className="mt-0.5 text-slate-700">
+                                {a.encounter ? `Encounter #${a.encounter}` : "—"}
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    <div className="mt-2 hidden overflow-x-auto rounded-2xl border border-slate-100 lg:block">
                     <table className="min-w-full text-[11px]">
                       <thead className="border-b border-slate-100 bg-slate-50 text-slate-600">
                         <tr>
@@ -428,7 +491,8 @@ export default function BedHistoryPage() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </>
             )}

@@ -231,55 +231,123 @@ export default function ProviderBillingPage() {
         ) : error ? (
           <div className="p-4 text-sm text-rose-700">{error.message}</div>
         ) : results.length ? (
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
-                <tr>
-                  <th className="px-3 py-2">ID</th>
-                  <th className="px-3 py-2">Patient</th>
-                  <th className="px-3 py-2">Service</th>
-                  <th className="px-3 py-2 text-right">Amount</th>
-                  <th className="px-3 py-2 text-right">Paid</th>
-                  <th className="px-3 py-2 text-right">Outstanding</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {results.map((c) => {
-                  const paid = Number(c.allocated_total || 0);
-                  const amt = Number(c.amount || 0);
-                  const outstanding = Math.max(amt - paid, 0);
+          <>
+            {/* Mobile + tablet cards */}
+            <div className="divide-y divide-slate-200 lg:hidden">
+              {results.map((c) => {
+                const paid = Number(c.allocated_total || 0);
+                const amt = Number(c.amount || 0);
+                const outstanding = Math.max(amt - paid, 0);
 
-                  return (
-                    <tr key={c.id} className="text-xs text-slate-700">
-                      <td className="px-3 py-2 font-medium text-slate-900">#{c.id}</td>
-                      <td className="px-3 py-2">
-                        <div className="font-medium text-slate-900">
-                          {c.patient_name || `Patient #${c.patient}`}
+                return (
+                  <div key={c.id} className="p-4 text-xs text-slate-700">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">#{c.id}</div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {fmtDate(c.created_at)}
                         </div>
-                        <div className="text-[11px] text-slate-500">ID: {c.patient}</div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="font-medium text-slate-900">
-                          {c.service_name || c.service_code || "—"}
+                      </div>
+                      <div className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                        {c.status}
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="font-medium text-slate-900">
+                        {c.patient_name || `Patient #${c.patient}`}
+                      </div>
+                      <div className="text-[11px] text-slate-500">ID: {c.patient}</div>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="font-medium text-slate-900">
+                        {c.service_name || c.service_code || "—"}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        {c.service_code}
+                        {c.description ? ` • ${c.description}` : ""}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                      <div>
+                        <div className="text-[11px] text-slate-500">Amount</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {formatMoney(amt)}
                         </div>
-                        <div className="text-[11px] text-slate-500">
-                          {c.service_code}
-                          {c.description ? ` • ${c.description}` : ""}
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-slate-500">Paid</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {formatMoney(paid)}
                         </div>
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium">{formatMoney(amt)}</td>
-                      <td className="px-3 py-2 text-right">{formatMoney(paid)}</td>
-                      <td className="px-3 py-2 text-right">{formatMoney(outstanding)}</td>
-                      <td className="px-3 py-2">{c.status}</td>
-                      <td className="px-3 py-2">{fmtDate(c.created_at)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-slate-500">Outstanding</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {formatMoney(outstanding)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-auto lg:block">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
+                  <tr>
+                    <th className="px-3 py-2">ID</th>
+                    <th className="px-3 py-2">Patient</th>
+                    <th className="px-3 py-2">Service</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                    <th className="px-3 py-2 text-right">Paid</th>
+                    <th className="px-3 py-2 text-right">Outstanding</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {results.map((c) => {
+                    const paid = Number(c.allocated_total || 0);
+                    const amt = Number(c.amount || 0);
+                    const outstanding = Math.max(amt - paid, 0);
+
+                    return (
+                      <tr key={c.id} className="text-xs text-slate-700">
+                        <td className="px-3 py-2 font-medium text-slate-900">#{c.id}</td>
+                        <td className="px-3 py-2">
+                          <div className="font-medium text-slate-900">
+                            {c.patient_name || `Patient #${c.patient}`}
+                          </div>
+                          <div className="text-[11px] text-slate-500">ID: {c.patient}</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-medium text-slate-900">
+                            {c.service_name || c.service_code || "—"}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {c.service_code}
+                            {c.description ? ` • ${c.description}` : ""}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium">
+                          {formatMoney(amt)}
+                        </td>
+                        <td className="px-3 py-2 text-right">{formatMoney(paid)}</td>
+                        <td className="px-3 py-2 text-right">{formatMoney(outstanding)}</td>
+                        <td className="px-3 py-2">{c.status}</td>
+                        <td className="px-3 py-2">{fmtDate(c.created_at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <div className="p-4 text-sm text-slate-500">No charges found.</div>
         )}

@@ -301,7 +301,172 @@ function ProviderEncountersPageInner() {
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-        <table className="min-w-full divide-y divide-slate-200">
+
+        {/* Mobile + tablet cards */}
+        <div className="lg:hidden space-y-3 p-4">
+          {rows.length ? (
+            rows.map((enc) => {
+              const patientName = enc.patient_name || enc.patient || "Patient";
+              const patientId = getPatientId(enc);
+              const typeLabel = enc.encounter_type || enc.type || "Encounter";
+              const hasFacility = enc.facility_id || enc.facility;
+
+              return (
+                <div
+                  key={enc.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-600/10">
+                        <UserRound className="h-4 w-4 text-blue-700" />
+                      </span>
+                      <div>
+                        {patientId ? (
+                          <Link
+                            href={`/provider/patients/${patientId}`}
+                            className="text-sm font-semibold text-blue-700 hover:underline"
+                          >
+                            {patientName}
+                          </Link>
+                        ) : (
+                          <div className="text-sm font-semibold text-slate-900">
+                            {patientName}
+                          </div>
+                        )}
+                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
+                            {hasFacility ? (
+                              <>
+                                <Building2 className="h-3 w-3" />
+                                Facility
+                              </>
+                            ) : (
+                              <>
+                                <UserRound className="h-3 w-3" />
+                                Independent
+                              </>
+                            )}
+                          </span>
+                          <span className="text-xs text-slate-400">#{enc.id}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <StatusPill value={enc.status} />
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Type
+                      </div>
+                      <div className="mt-1">{typeLabel}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Started
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        {formatDateTime(enc.started_at || enc.created_at || "-")}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(enc)}
+                      disabled={downloadingId === enc.id}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {downloadingId === enc.id ? "Generating..." : "PDF"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachmentsFor({
+                          id: enc.id,
+                          label: `${patientName} - ${typeLabel} #${enc.id}`,
+                        })
+                      }
+                      className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Attachments
+                    </button>
+
+                    <Link
+                      href={`/provider/encounters/${enc.id}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      View
+                    </Link>
+
+                    {enc.status !== "CLOSED" && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setUpdateError("");
+                          setUpdatingId(enc.id);
+                          try {
+                            await closeEncounter(enc.id);
+                            router.refresh();
+                          } catch (err) {
+                            console.error("Close encounter failed", err);
+                            setUpdateError(
+                              err?.message || "Failed to close encounter. Please try again."
+                            );
+                          } finally {
+                            setUpdatingId(null);
+                          }
+                        }}
+                        disabled={updatingId === enc.id}
+                        className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {updatingId === enc.id ? "Closing..." : "Close"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-white">
+              <div className="px-4 py-10 text-center">
+                <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                  <FileText className="h-6 w-6 text-slate-400" />
+                </div>
+                <div className="text-sm font-medium text-slate-900">No encounters found</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  {isIndependentProvider
+                    ? "Start your first encounter from a patient or appointment."
+                    : "Try adjusting search or status filters."}
+                </div>
+                {isIndependentProvider && (
+                  <div className="mt-4 flex justify-center gap-2">
+                    <Link
+                      href="/provider/patients"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                    >
+                      <UserRound className="h-3.5 w-3.5" />
+                      Go to Patients
+                    </Link>
+                    <Link
+                      href="/provider/appointments"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      Go to Appointments
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <table className="hidden min-w-full divide-y divide-slate-200 lg:table">
           <thead className="bg-slate-50">
             <tr>
               <Th>Patient</Th>

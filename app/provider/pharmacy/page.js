@@ -636,7 +636,150 @@ function PrescriptionsTab({
         <div className="p-4 text-sm text-rose-700">{error.message}</div>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          {/* Mobile + tablet cards */}
+          <div className="lg:hidden space-y-3 p-4">
+            {rows.length ? (
+              rows.map((rx) => {
+                const created = formatDateTime(rx.created_at);
+                const patientInfo = patientMap.get(rx.patient);
+                const patientLabel = patientsLoading
+                  ? "Loading..."
+                  : patientInfo
+                  ? patientInfo.name
+                  : rx.patient != null
+                  ? `Patient #${rx.patient}`
+                  : "-";
+
+                let hasLowStock = false;
+                let hasOutOfStock = false;
+
+                if (Array.isArray(rx.items)) {
+                  for (const item of rx.items) {
+                    if (item.drug?.id) {
+                      const stockQty = stockByDrugId.get(item.drug.id) ?? 0;
+                      const remaining = item.remaining || 0;
+                      if (stockQty === 0 && remaining > 0) {
+                        hasOutOfStock = true;
+                      } else if (stockQty < remaining && remaining > 0) {
+                        hasLowStock = true;
+                      }
+                    }
+                  }
+                }
+
+                let itemsSummary = "-";
+                if (Array.isArray(rx.items) && rx.items.length) {
+                  const names = rx.items
+                    .map(
+                      (it) =>
+                        it.drug?.name ||
+                        it.drug?.code ||
+                        it.drug_name ||
+                        it.dose ||
+                        "Medication"
+                    )
+                    .filter(Boolean);
+                  if (names.length <= 2) {
+                    itemsSummary = names.join(", ");
+                  } else {
+                    itemsSummary = `${names.slice(0, 2).join(", ")} + ${
+                      names.length - 2
+                    } more`;
+                  }
+                }
+
+                return (
+                  <div
+                    key={rx.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
+                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          {created}
+                        </div>
+                        <div className="mt-2 text-sm font-semibold text-slate-900">
+                          {patientLabel}
+                          {patientInfo?.phone && (
+                            <span className="ml-1 text-[11px] text-slate-500">
+                              - {patientInfo.phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <StatusPill value={rx.status} />
+                    </div>
+
+                    <div className="mt-3 space-y-2 text-sm text-slate-700">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Medications
+                        </div>
+                        <div className="mt-1 text-sm text-slate-700">
+                          {itemsSummary}
+                          {rx.items?.length > 0 && (
+                            <span className="ml-1 text-[11px] text-slate-500">
+                              ({rx.items.length} item{rx.items.length > 1 ? "s" : ""})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Stock status
+                        </div>
+                        <div className="mt-1">
+                          {hasOutOfStock ? (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200">
+                              <AlertTriangle className="h-3 w-3" />
+                              Out of stock
+                            </span>
+                          ) : hasLowStock ? (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                              <TrendingDown className="h-3 w-3" />
+                              Low stock
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-500">
+                              Stock OK
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsId(rx.id);
+                          setDetailsOpen(true);
+                        }}
+                        className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
+                      >
+                        {canDispense ? "View & dispense" : "View"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                  <Pill className="h-6 w-6 text-slate-400" />
+                </div>
+                <div className="text-sm font-medium text-slate-900">
+                  No prescriptions found
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Adjust your filters or create a new prescription.
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto lg:block">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-slate-700">
                 <tr>
@@ -860,8 +1003,80 @@ function StockTab({ stockRows, stockLoading, stockError, stockStats }) {
         ) : stockError ? (
           <div className="p-4 text-sm text-rose-700">{stockError}</div>
         ) : (
-          <div className="max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-xs">
+          <>
+            {/* Mobile + tablet cards */}
+            <div className="lg:hidden space-y-3 p-4">
+              {stockRows.length ? (
+                stockRows.map((row) => {
+                  const isOut = row.current_qty === 0;
+                  const isLow = row.current_qty > 0 && row.current_qty <= 10;
+                  return (
+                    <div
+                      key={row.id || row.drugId}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {row.name || "-"}
+                          </div>
+                          {row.code && (
+                            <div className="mt-1 text-[11px] font-mono text-slate-500">
+                              {row.code}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          {isOut ? (
+                            <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                              Out of stock
+                            </span>
+                          ) : isLow ? (
+                            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                              Low stock
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                              In stock
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Strength
+                          </div>
+                          <div className="mt-1">{row.strength || "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Form
+                          </div>
+                          <div className="mt-1">{row.form || "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Current qty
+                          </div>
+                          <div className="mt-1 font-medium text-slate-900">
+                            {row.current_qty ?? 0}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                  No stock records found. Add stock in the stock management page.
+                </div>
+              )}
+            </div>
+
+            <div className="hidden max-h-[500px] overflow-y-auto lg:block">
+              <table className="min-w-full divide-y divide-slate-100 text-xs">
               <thead className="sticky top-0 bg-slate-50 text-slate-700">
                 <tr>
                   <Th>Drug</Th>
@@ -928,6 +1143,7 @@ function StockTab({ stockRows, stockLoading, stockError, stockStats }) {
               </tbody>
             </table>
           </div>
+        </>
         )}
       </div>
     </section>
@@ -996,8 +1212,79 @@ function CatalogTab({
             Loading catalog…
           </div>
         ) : (
-          <div className="max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-xs">
+          <>
+            {/* Mobile + tablet cards */}
+            <div className="lg:hidden space-y-3 p-4">
+              {filteredCatalog.length ? (
+                filteredCatalog.map((d) => {
+                  const stockQty = stockByDrugId.get(d.id) ?? 0;
+                  return (
+                    <div
+                      key={d.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {d.name}
+                          </div>
+                          {d.code && (
+                            <div className="mt-1 text-[11px] font-mono text-slate-500">
+                              {d.code}
+                            </div>
+                          )}
+                        </div>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            stockQty === 0
+                              ? "bg-rose-50 text-rose-700"
+                              : stockQty <= 10
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-emerald-50 text-emerald-700"
+                          }`}
+                        >
+                          {stockQty}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Strength
+                          </div>
+                          <div className="mt-1">{d.strength || "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Form
+                          </div>
+                          <div className="mt-1">{d.form || "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Unit price
+                          </div>
+                          <div className="mt-1 font-medium text-slate-900">
+                            ₦{Number(d.unit_price || 0).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : catalogSearch ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                  No drugs match "{catalogSearch}"
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                  Catalog is empty. Add drugs in the catalog management page.
+                </div>
+              )}
+            </div>
+
+            <div className="hidden max-h-[500px] overflow-y-auto lg:block">
+              <table className="min-w-full divide-y divide-slate-100 text-xs">
               <thead className="sticky top-0 bg-slate-50 text-slate-700">
                 <tr>
                   <Th>Code</Th>
@@ -1072,6 +1359,7 @@ function CatalogTab({
               </tbody>
             </table>
           </div>
+        </>
         )}
       </div>
     </section>

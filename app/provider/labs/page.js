@@ -378,7 +378,158 @@ function IndependentLabOrdersPageInner() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="md:hidden">
+          {loading && !orders.length ? (
+            <div className="px-4 py-10 text-center text-sm text-slate-500">
+              <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
+              <p className="mt-2">Loading ordersâ€¦</p>
+            </div>
+          ) : orders.length ? (
+            <div className="divide-y divide-slate-100">
+              {orders.map((order) => {
+                const statusNorm = String(order.status || "").toUpperCase();
+                const { label: statusLabel, badgeClass } = getLabStatusMeta(
+                  order.status
+                );
+
+                return (
+                  <div key={order.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600/10">
+                            <UserRound className="h-4 w-4 text-blue-700" />
+                          </span>
+                          <div className="font-medium text-slate-900">
+                            {order.patient_name ||
+                              `Patient #${order.patient}` ||
+                              "â€”"}
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center gap-1 text-xs text-slate-600">
+                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          {order.facility_name ||
+                            order.facility?.name ||
+                            `Facility #${order.facility}` ||
+                            "â€”"}
+                        </div>
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}
+                      >
+                        {statusLabel}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 text-sm text-slate-800">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Tests
+                      </span>
+                      <div className="mt-1">
+                        {Array.isArray(order.items)
+                          ? order.items
+                              .map(
+                                (i) =>
+                                  i.display_name ||
+                                  i.test?.name ||
+                                  i.requested_name ||
+                                  "Test"
+                              )
+                              .join(", ")
+                          : order.tests_display || "â€”"}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" />
+                      {formatDateTime(order.ordered_at || order.created_at)}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(order)}
+                        disabled={downloadingId === order.id}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <DownloadCloud className="h-3.5 w-3.5" />
+                        {downloadingId === order.id ? "Generatingâ€¦" : "PDF"}
+                      </button>
+
+                      <Link
+                        href={`/provider/labs/${order.id}`}
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        View
+                      </Link>
+
+                      {statusNorm === "PENDING" && (
+                        <button
+                          type="button"
+                          onClick={() => handleCollect(order.id)}
+                          disabled={collectingId === order.id}
+                          className="text-xs text-sky-700 hover:underline"
+                        >
+                          {collectingId === order.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            "Mark collected"
+                          )}
+                        </button>
+                      )}
+
+                      {statusNorm === "IN_PROGRESS" && (
+                        <Link
+                          href={`/lab/orders/${order.id}`}
+                          className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                        >
+                          Enter result
+                        </Link>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsOrderId(order.id);
+                          setDetailsOpen(true);
+                        }}
+                        className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Details
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachmentsOrderId(order.id);
+                          setAttachmentsOpen(true);
+                        }}
+                        className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Attachments
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="px-4 py-10 text-center">
+              <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                <FlaskConical className="h-6 w-6 text-slate-400" />
+              </div>
+              <div className="text-sm font-medium text-slate-900">
+                No lab orders found
+              </div>
+              <div className="mt-1 text-sm text-slate-500">
+                Orders outsourced to you will appear here.
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">
               <tr>

@@ -383,7 +383,7 @@ export default function PatientDocumentsPage() {
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500" />
 
           <div className="relative p-5 md:p-6">
-            <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
                   <FileText className="h-4 w-4 text-emerald-600" />
@@ -416,8 +416,68 @@ export default function PatientDocumentsPage() {
                 files, they&apos;ll appear here.
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                <table className="min-w-full divide-y divide-slate-100 text-sm">
+              <>
+                {/* Mobile / tablet cards */}
+                <div className="space-y-3 md:hidden">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                          {doc.document_type
+                            ? doc.document_type.replace(/_/g, " ")
+                            : "Unknown"}
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {formatDate(
+                            doc.created_at ||
+                              doc.uploaded_at ||
+                              doc.timestamp
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="mt-2">
+                        <a
+                          href={doc.file || doc.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          {doc.title || "View document"}
+                        </a>
+                        {doc.notes && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {doc.notes}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                        <span>
+                          {doc.uploaded_by_role ||
+                            doc.uploaded_by ||
+                            "PATIENT"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(doc.id)}
+                          className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 md:block">
+                  <table className="min-w-full divide-y divide-slate-100 text-sm">
                   <thead className="bg-slate-50">
                     <tr>
                       <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -497,8 +557,9 @@ export default function PatientDocumentsPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </section>

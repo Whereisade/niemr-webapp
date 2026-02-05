@@ -170,8 +170,106 @@ function PatientLabOrdersPageInner() {
       )}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-sm">
+        <div className="md:hidden">
+          <div className="divide-y divide-slate-100">
+            {loading && (
+              <div className="p-4 text-center text-sm text-slate-500">
+                Loading lab orders...
+              </div>
+            )}
+
+            {!loading &&
+              rows.map((order) => {
+                const testsText = Array.isArray(order.items)
+                  ? order.items
+                      .map(
+                        (i) =>
+                          i.test?.name ||
+                          i.test?.code ||
+                          i.test_name ||
+                          i.code
+                      )
+                      .join(", ")
+                  : order.tests_display || "\u2014";
+
+                const facilityName =
+                  order.facility_name || order.facility?.name || "\u2014";
+
+                const orderedByName =
+                  order.ordered_by_name ||
+                  (order.ordered_by_first_name ||
+                  order.ordered_by_last_name
+                    ? `${order.ordered_by_first_name || ""} ${
+                        order.ordered_by_last_name || ""
+                      }`.trim()
+                    : "") ||
+                  order.ordered_by ||
+                  "\u2014";
+
+                const { label, badgeClass } = getLabStatusMeta(order.status);
+
+                return (
+                  <article key={order.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-slate-500">Ordered at</p>
+                        <p className="text-sm font-medium text-slate-800">
+                          {formatDateTime(order.ordered_at || order.created_at)}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}
+                      >
+                        {label}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-slate-500">Tests</p>
+                        <p className="text-slate-800 line-clamp-2">
+                          {testsText}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Facility</p>
+                        <p className="text-slate-800">{facilityName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Ordered by</p>
+                        <p className="text-slate-800">{orderedByName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Note</p>
+                        <p className="text-slate-800 line-clamp-2">
+                          {order.note || "\u2014"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex justify-end">
+                      <Link
+                        href={`/patient/labs/${order.id}`}
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        View
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+
+            {!loading && !rows.length && !error && (
+              <div className="p-4 text-center text-sm text-slate-500">
+                No lab tests found for your account yet.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="hidden md:block">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -292,6 +390,7 @@ function PatientLabOrdersPageInner() {
             </tbody>
           </table>
         </div>
+        </div>
 
         <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-600">
           <span>
@@ -321,3 +420,4 @@ function PatientLabOrdersPageInner() {
     </main>
   );
 }
+

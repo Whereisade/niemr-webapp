@@ -277,7 +277,7 @@ function FacilityAdminsPageInner() {
 
       {/* Staff table */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto lg:block">
           <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50">
               <tr>
@@ -416,6 +416,107 @@ function FacilityAdminsPageInner() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="lg:hidden">
+          {loading && (
+            <div className="p-6 text-center text-sm text-slate-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-purple-600" />
+                Loading staff…
+              </div>
+            </div>
+          )}
+
+          {!loading &&
+            rows.map((u) => (
+              <article key={u.id} className="space-y-3 border-b border-slate-100 p-4 last:border-b-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {[u.first_name, u.last_name].filter(Boolean).join(" ") ||
+                        "—"}
+                    </p>
+                    <p className="truncate text-sm text-slate-600">{u.email}</p>
+                  </div>
+
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActionMenuOpen(actionMenuOpen === u.id ? null : u.id)
+                      }
+                      className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+
+                    {actionMenuOpen === u.id && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setActionMenuOpen(null)}
+                        />
+                        <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                          {u.is_active ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActive(u.id, true)}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+                            >
+                              <PowerOff className="h-4 w-4" />
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActive(u.id, false)}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-emerald-600 hover:bg-emerald-50"
+                            >
+                              <Power className="h-4 w-4" />
+                              Reactivate
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <RoleBadge role={u.role} />
+                  <StatusBadge isActive={u.is_active} />
+                </div>
+
+                <p className="text-xs text-slate-500">
+                  Joined:{" "}
+                  {u.date_joined
+                    ? new Date(u.date_joined).toLocaleDateString()
+                    : "—"}
+                </p>
+              </article>
+            ))}
+
+          {!loading && !rows.length && !error && (
+            <div className="p-8 text-center">
+              <div className="mx-auto max-w-sm">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+                  <Users2 className="h-7 w-7 text-slate-400" />
+                </div>
+                <p className="text-sm font-medium text-slate-900">No staff found</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Get started by adding your first admin or front desk staff.
+                </p>
+                <Link
+                  href="/facility/admins/new"
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add Staff
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
 
         {rows.length > 0 && (

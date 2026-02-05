@@ -469,7 +469,7 @@ export default function PermissionsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-6">
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* Header */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -520,8 +520,8 @@ export default function PermissionsPage() {
         )}
 
         {/* Info Card */}
-        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-sm">
-          <div className="flex items-start gap-4">
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm sm:p-6">
+          <div className="flex flex-col items-start gap-4 sm:flex-row">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-blue-100">
               <Info className="h-6 w-6 text-blue-700" />
             </div>
@@ -567,9 +567,9 @@ export default function PermissionsPage() {
                 {/* Role Header */}
                 <div
                   onClick={() => toggleRole(role.value)}
-                  className="flex cursor-pointer items-center justify-between p-6 transition hover:bg-slate-50"
+                  className="flex cursor-pointer flex-col gap-4 p-4 transition hover:bg-slate-50 sm:p-6 lg:flex-row lg:items-center lg:justify-between"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-start gap-3 sm:items-center sm:gap-4">
                     <div className={`grid h-12 w-12 place-items-center rounded-xl ${bg}`}>
                       <role.icon className={`h-6 w-6 ${text}`} />
                     </div>
@@ -591,12 +591,12 @@ export default function PermissionsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
+                  <div className="flex w-full items-center justify-between gap-4 lg:w-auto lg:justify-end lg:gap-6">
+                    <div className="text-left lg:text-right">
                       <div className="text-sm font-semibold text-slate-900">
                         {stats.enabled} / {stats.total}
                       </div>
-                      <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-slate-100">
+                      <div className="mt-1 h-2 w-28 overflow-hidden rounded-full bg-slate-100 sm:w-32">
                         <div
                           className={`h-full bg-gradient-to-r ${gradient} transition-all`}
                           style={{ width: `${stats.percentage}%` }}
@@ -617,13 +617,13 @@ export default function PermissionsPage() {
 
                 {/* Expanded Content */}
                 {isExpanded && (
-                  <div className="border-t border-slate-100 bg-slate-50/50 p-6">
+                  <div className="border-t border-slate-100 bg-slate-50/50 p-4 sm:p-6">
                     {/* Action Buttons */}
-                    <div className="mb-6 flex items-center gap-3">
+                    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
                       <button
                         onClick={() => saveRole(role.value)}
                         disabled={saving === role.value}
-                        className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-xl disabled:opacity-50"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-xl disabled:opacity-50 sm:w-auto"
                       >
                         {saving === role.value ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -636,7 +636,7 @@ export default function PermissionsPage() {
                       <button
                         onClick={() => resetRole(role.value)}
                         disabled={saving === role.value}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                       >
                         <RotateCcw className="h-4 w-4" />
                         Reset to Defaults
@@ -696,7 +696,7 @@ export default function PermissionsPage() {
                                       <div
                                         key={perm.key}
                                         onClick={() => togglePermission(role.value, perm.key)}
-                                        className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm"
+                                        className="flex cursor-pointer flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                                       >
                                         <div className="flex items-center gap-3">
                                           <div

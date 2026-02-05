@@ -737,7 +737,7 @@ export default function FacilityEncounterDetailPage() {
       : "";
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6 md:p-10">
+    <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 md:p-10">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-3">
@@ -775,12 +775,12 @@ export default function FacilityEncounterDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
           {canOpenWorkflow && (
             <button
               type="button"
               onClick={openWorkflow}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 sm:w-auto"
               title="Open encounter workflow"
             >
               <Edit className="h-4 w-4" />
@@ -794,7 +794,7 @@ export default function FacilityEncounterDetailPage() {
                 type="button"
                 onClick={handleResume}
                 disabled={statusUpdating}
-                className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
                 title="Resume encounter"
               >
                 {statusUpdating ? (
@@ -810,7 +810,7 @@ export default function FacilityEncounterDetailPage() {
                 type="button"
                 onClick={handlePause}
                 disabled={statusUpdating}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
                 title="Pause encounter"
               >
                 {statusUpdating ? (
@@ -946,7 +946,7 @@ export default function FacilityEncounterDetailPage() {
           </div>
 
           {/* Visit Information */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
               <Calendar className="h-5 w-5 text-slate-400" />
               Visit Information
@@ -1011,7 +1011,7 @@ export default function FacilityEncounterDetailPage() {
 
           {/* Clinical Documentation (SOAP Notes) */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <FileText className="h-5 w-5 text-slate-400" />
                 Clinical Documentation
@@ -1060,7 +1060,7 @@ export default function FacilityEncounterDetailPage() {
           </div>
 
           {/* Lab Orders Details */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Beaker className="h-5 w-5 text-cyan-600" />
               <h2 className="text-lg font-semibold text-slate-900">Lab Orders</h2>
@@ -1081,7 +1081,7 @@ export default function FacilityEncounterDetailPage() {
               <div className="space-y-4">
                 {labOrders.map((order) => (
                   <div key={order.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                    <div className="mb-3 flex items-start justify-between">
+                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-slate-900">
@@ -1099,7 +1099,7 @@ export default function FacilityEncounterDetailPage() {
                             {order.status || "Unknown"}
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center gap-3 text-xs text-slate-600">
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                           {order.priority && (
                             <>
                               <span>Priority: {order.priority}</span>
@@ -1117,7 +1117,7 @@ export default function FacilityEncounterDetailPage() {
                       </div>
                       <Link
                         href={`/facility/labs/${order.id}`}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
                         <Eye className="h-3.5 w-3.5" />
                         View Details
@@ -1125,7 +1125,8 @@ export default function FacilityEncounterDetailPage() {
                     </div>
 
                     {order.items && order.items.length > 0 && (
-                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                      <>
+                      <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white lg:block">
                         <table className="w-full text-left text-sm">
                           <thead className="bg-slate-50 text-xs uppercase text-slate-600">
                             <tr>
@@ -1174,6 +1175,39 @@ export default function FacilityEncounterDetailPage() {
                           </tbody>
                         </table>
                       </div>
+                      <div className="space-y-2 lg:hidden">
+                        {order.items.map((item, idx) => (
+                          <div key={item.id || idx} className="rounded-lg border border-slate-200 bg-white p-3">
+                            <p className="text-sm font-semibold text-slate-900">
+                              {item.display_name || item.requested_name || item.test?.name || "—"}
+                            </p>
+                            <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                              <p><span className="font-medium text-slate-700">Result:</span> {item.result_value != null ? item.result_value : item.result_text || "—"}</p>
+                              <p><span className="font-medium text-slate-700">Unit:</span> {item.result_unit || item.test?.unit || "—"}</p>
+                              <p>
+                                <span className="font-medium text-slate-700">Flag:</span>{" "}
+                                {item.flag ? (
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                      item.flag === "HIGH" || item.flag === "H"
+                                        ? "bg-red-100 text-red-700"
+                                        : item.flag === "LOW" || item.flag === "L"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : "bg-slate-100 text-slate-700"
+                                    }`}
+                                  >
+                                    {item.flag}
+                                  </span>
+                                ) : (
+                                  "—"
+                                )}
+                              </p>
+                              <p><span className="font-medium text-slate-700">Status:</span> {item.status || "—"}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      </>
                     )}
                   </div>
                 ))}
@@ -1182,7 +1216,7 @@ export default function FacilityEncounterDetailPage() {
           </div>
 
           {/* Prescriptions Details */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Pill className="h-5 w-5 text-emerald-600" />
               <h2 className="text-lg font-semibold text-slate-900">Prescriptions</h2>
@@ -1206,7 +1240,7 @@ export default function FacilityEncounterDetailPage() {
                     key={prescription.id}
                     className="rounded-xl border border-slate-100 bg-slate-50 p-4"
                   >
-                    <div className="mb-3 flex items-start justify-between">
+                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-slate-900">
@@ -1224,7 +1258,7 @@ export default function FacilityEncounterDetailPage() {
                             {prescription.status || "Unknown"}
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center gap-3 text-xs text-slate-600">
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                           {prescription.prescriber_name && (
                             <>
                               <span>Prescribed by: {prescription.prescriber_name}</span>
@@ -1237,7 +1271,8 @@ export default function FacilityEncounterDetailPage() {
                     </div>
 
                     {prescription.items && prescription.items.length > 0 && (
-                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                      <>
+                      <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white lg:block">
                         <table className="w-full text-left text-sm">
                           <thead className="bg-slate-50 text-xs uppercase text-slate-600">
                             <tr>
@@ -1269,6 +1304,22 @@ export default function FacilityEncounterDetailPage() {
                           </tbody>
                         </table>
                       </div>
+                      <div className="space-y-2 lg:hidden">
+                        {prescription.items.map((item, idx) => (
+                          <div key={item.id || idx} className="rounded-lg border border-slate-200 bg-white p-3">
+                            <p className="text-sm font-semibold text-slate-900">
+                              {item.drug_name || item.drug?.name || "—"}
+                            </p>
+                            <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                              <p><span className="font-medium text-slate-700">Dose:</span> {item.dose || "—"}</p>
+                              <p><span className="font-medium text-slate-700">Frequency:</span> {item.frequency || "—"}</p>
+                              <p><span className="font-medium text-slate-700">Duration:</span> {item.duration_days ? `${item.duration_days} days` : "—"}</p>
+                              <p><span className="font-medium text-slate-700">Instructions:</span> {item.instruction || item.instructions || "—"}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      </>
                     )}
 
                     {prescription.note && (
@@ -1284,7 +1335,7 @@ export default function FacilityEncounterDetailPage() {
           </div>
 
           {/* Attachments */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Paperclip className="h-5 w-5 text-slate-400" />
               <h2 className="text-lg font-semibold text-slate-900">Attachments</h2>
@@ -1314,7 +1365,7 @@ export default function FacilityEncounterDetailPage() {
                   return (
                     <div
                       key={att.id || `${label}-${fileUrl}`}
-                      className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 hover:bg-slate-100"
+                      className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 hover:bg-slate-100 sm:flex-row sm:items-start sm:justify-between"
                     >
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
@@ -1352,7 +1403,7 @@ export default function FacilityEncounterDetailPage() {
             encounter?.resumed_at ||
             encounter?.labs_skipped_at ||
             encounter?.clinical_finalized_at) && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
               <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <Clock className="h-5 w-5 text-slate-400" />
                 Encounter Timeline

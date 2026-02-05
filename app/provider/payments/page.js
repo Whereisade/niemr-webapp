@@ -157,41 +157,102 @@ export default function ProviderPaymentsPage() {
         ) : error ? (
           <div className="p-4 text-sm text-rose-700">{error.message}</div>
         ) : results.length ? (
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
-                <tr>
-                  <th className="px-3 py-2">ID</th>
-                  <th className="px-3 py-2">Patient</th>
-                  <th className="px-3 py-2">Method</th>
-                  <th className="px-3 py-2 text-right">Amount</th>
-                  <th className="px-3 py-2 text-right">Allocated</th>
-                  <th className="px-3 py-2 text-right">Unallocated</th>
-                  <th className="px-3 py-2">Reference</th>
-                  <th className="px-3 py-2">Received</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {results.map((p) => (
-                  <tr key={p.id} className="text-xs text-slate-700">
-                    <td className="px-3 py-2 font-medium text-slate-900">#{p.id}</td>
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-900">
-                        {p.patient_name || `Patient #${p.patient}`}
+          <>
+            {/* Mobile + tablet cards */}
+            <div className="divide-y divide-slate-200 lg:hidden">
+              {results.map((p) => (
+                <div key={p.id} className="p-4 text-xs text-slate-700">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">#{p.id}</div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        {fmtDate(p.received_at)}
                       </div>
-                      <div className="text-[11px] text-slate-500">ID: {p.patient}</div>
-                    </td>
-                    <td className="px-3 py-2">{p.method}</td>
-                    <td className="px-3 py-2 text-right font-medium">{formatMoney(p.amount)}</td>
-                    <td className="px-3 py-2 text-right">{formatMoney(p.allocated_total)}</td>
-                    <td className="px-3 py-2 text-right">{formatMoney(p.unallocated_total)}</td>
-                    <td className="px-3 py-2">{p.reference || "—"}</td>
-                    <td className="px-3 py-2">{fmtDate(p.received_at)}</td>
+                    </div>
+                    <div className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                      {p.method || "—"}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="font-medium text-slate-900">
+                      {p.patient_name || `Patient #${p.patient}`}
+                    </div>
+                    <div className="text-[11px] text-slate-500">ID: {p.patient}</div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-[11px] text-slate-500">Reference</div>
+                    <div className="font-medium text-slate-900">{p.reference || "—"}</div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div>
+                      <div className="text-[11px] text-slate-500">Amount</div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {formatMoney(p.amount)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-500">Allocated</div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {formatMoney(p.allocated_total)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-500">Unallocated</div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {formatMoney(p.unallocated_total)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-auto lg:block">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-700">
+                  <tr>
+                    <th className="px-3 py-2">ID</th>
+                    <th className="px-3 py-2">Patient</th>
+                    <th className="px-3 py-2">Method</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                    <th className="px-3 py-2 text-right">Allocated</th>
+                    <th className="px-3 py-2 text-right">Unallocated</th>
+                    <th className="px-3 py-2">Reference</th>
+                    <th className="px-3 py-2">Received</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {results.map((p) => (
+                    <tr key={p.id} className="text-xs text-slate-700">
+                      <td className="px-3 py-2 font-medium text-slate-900">#{p.id}</td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-900">
+                          {p.patient_name || `Patient #${p.patient}`}
+                        </div>
+                        <div className="text-[11px] text-slate-500">ID: {p.patient}</div>
+                      </td>
+                      <td className="px-3 py-2">{p.method}</td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {formatMoney(p.amount)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {formatMoney(p.allocated_total)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {formatMoney(p.unallocated_total)}
+                      </td>
+                      <td className="px-3 py-2">{p.reference || "—"}</td>
+                      <td className="px-3 py-2">{fmtDate(p.received_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <div className="p-4 text-sm text-slate-500">No payments found.</div>
         )}

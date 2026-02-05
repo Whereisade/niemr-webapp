@@ -1,7 +1,7 @@
 // app/facility/billing/patients/page.js
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useCharges } from "@/lib/useCharges";
@@ -200,7 +200,78 @@ function PatientFinancialRow({ patient, onSelect, isExpanded }) {
   );
 }
 
-function PatientFinancialDetail({ patient, onClose }) {
+function PatientFinancialCard({ patient, onSelect, isExpanded }) {
+  const ledger = useBillingLedger(
+    { patient: patient.id },
+    { enabled: !!patient.id }
+  );
+
+  const outstanding = Number(ledger.data?.outstanding || 0);
+  const chargesTotal = Number(ledger.data?.charges_total || 0);
+  const paymentsTotal = Number(ledger.data?.payments_total || 0);
+  const hasBalance = outstanding > 0.01;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(patient)}
+      className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-2">
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-slate-400" />
+            )}
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {patient.first_name} {patient.last_name}
+            </p>
+          </div>
+          <p className="text-xs text-slate-500">ID: {patient.id}</p>
+          <p className="mt-1 truncate text-xs text-slate-500">{patient.email || "—"}</p>
+        </div>
+
+        {!ledger.isLoading &&
+          (hasBalance ? (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+              <AlertCircle className="h-3 w-3" />
+              Has Balance
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+              <CheckCircle2 className="h-3 w-3" />
+              Cleared
+            </div>
+          ))}
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-slate-500">Charges</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {ledger.isLoading ? "..." : formatMoney(chargesTotal)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-slate-500">Payments</p>
+          <p className="text-sm font-semibold text-emerald-700">
+            {ledger.isLoading ? "..." : formatMoney(paymentsTotal)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-slate-500">Outstanding</p>
+          <p className={`text-sm font-bold ${hasBalance ? "text-rose-700" : "text-emerald-700"}`}>
+            {ledger.isLoading ? "..." : formatMoney(outstanding)}
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function PatientFinancialDetailContent({ patient, onClose, compact = false }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
@@ -231,16 +302,14 @@ function PatientFinancialDetail({ patient, onClose }) {
   };
 
   return (
-    <tr>
-      <td colSpan={6} className="bg-slate-50/50 p-0">
-        <div className="space-y-4 p-6">
+    <div className={`space-y-4 ${compact ? "p-4 sm:p-5" : "p-6"}`}>
           {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-lg font-bold">
                 {patient.first_name?.[0]}{patient.last_name?.[0]}
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-lg font-bold text-slate-900">
                   {patient.first_name} {patient.last_name}
                 </h3>
@@ -249,17 +318,17 @@ function PatientFinancialDetail({ patient, onClose }) {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <button
                 onClick={() => setShowPaymentModal(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto"
               >
                 <DollarSign className="h-4 w-4" />
                 Record Payment
               </button>
               <button
                 onClick={onClose}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
               >
                 Close
               </button>
@@ -267,7 +336,7 @@ function PatientFinancialDetail({ patient, onClose }) {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -319,7 +388,7 @@ function PatientFinancialDetail({ patient, onClose }) {
 
           {/* Tabs */}
           <div className="border-b border-slate-200">
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               <button
                 onClick={() => setActiveTab("overview")}
                 className={`px-4 py-2 text-sm font-semibold transition ${
@@ -358,7 +427,7 @@ function PatientFinancialDetail({ patient, onClose }) {
             {activeTab === "overview" && (
               <div className="space-y-6">
                 {/* Activity Summary */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Activity className="h-5 w-5 text-blue-600" />
@@ -463,7 +532,7 @@ function PatientFinancialDetail({ patient, onClose }) {
                     <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
                   </div>
                 ) : chargesList.length > 0 ? (
-                  <div className="overflow-auto">
+                  <div className="hidden overflow-auto md:block">
                     <table className="min-w-full">
                       <thead>
                         <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -505,6 +574,38 @@ function PatientFinancialDetail({ patient, onClose }) {
                       </tbody>
                     </table>
                   </div>
+                ) : null}
+
+                {!charges.isLoading && chargesList.length > 0 ? (
+                  <div className="space-y-3 p-3 md:hidden">
+                    {chargesList.map((c) => (
+                      <div key={c.id} className="rounded-lg border border-slate-200 p-3">
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">#{c.id}</div>
+                            <div className="text-xs text-slate-500">{fmtDate(c.created_at)}</div>
+                          </div>
+                          <StatusBadge status={c.status} />
+                        </div>
+                        <div className="text-sm font-medium text-slate-900">
+                          {c.service_name || c.service_code}
+                        </div>
+                        {c.description && (
+                          <div className="mt-1 text-xs text-slate-500">{c.description}</div>
+                        )}
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="text-slate-500">Amount</span>
+                          <span className="font-semibold text-slate-900">{formatMoney(c.amount)}</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Paid</span>
+                          <span className="font-medium text-slate-700">
+                            {formatMoney(c.allocated_total || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div className="p-12 text-center text-sm text-slate-500">
                     No charges found for this patient
@@ -520,7 +621,7 @@ function PatientFinancialDetail({ patient, onClose }) {
                     <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
                   </div>
                 ) : paymentsList.length > 0 ? (
-                  <div className="overflow-auto">
+                  <div className="hidden overflow-auto md:block">
                     <table className="min-w-full">
                       <thead>
                         <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -559,6 +660,37 @@ function PatientFinancialDetail({ patient, onClose }) {
                       </tbody>
                     </table>
                   </div>
+                ) : null}
+
+                {!payments.isLoading && paymentsList.length > 0 ? (
+                  <div className="space-y-3 p-3 md:hidden">
+                    {paymentsList.map((p) => (
+                      <div key={p.id} className="rounded-lg border border-slate-200 p-3">
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">#{p.id}</div>
+                            <div className="text-xs text-slate-500">{fmtDate(p.received_at)}</div>
+                          </div>
+                          <div className="text-xs text-slate-500">{p.method}</div>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-500">Amount</span>
+                          <span className="font-semibold text-emerald-700">
+                            {formatMoney(p.amount)}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Allocated</span>
+                          <span className="font-medium text-slate-700">
+                            {formatMoney(p.allocated_total || 0)}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Ref: {p.reference || "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div className="p-12 text-center text-sm text-slate-500">
                     No payments found for this patient
@@ -567,17 +699,33 @@ function PatientFinancialDetail({ patient, onClose }) {
               </div>
             )}
           </div>
-        </div>
 
-        <RecordPaymentModal
-          open={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          onSaved={onPaymentSaved}
-          defaultPatientId={patient.id}
-          title="Record Payment"
-        />
+      <RecordPaymentModal
+        open={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSaved={onPaymentSaved}
+        defaultPatientId={patient.id}
+        title="Record Payment"
+      />
+    </div>
+  );
+}
+
+function PatientFinancialDetail({ patient, onClose }) {
+  return (
+    <tr>
+      <td colSpan={6} className="bg-slate-50/50 p-0">
+        <PatientFinancialDetailContent patient={patient} onClose={onClose} />
       </td>
     </tr>
+  );
+}
+
+function PatientFinancialDetailCard({ patient, onClose }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/60">
+      <PatientFinancialDetailContent patient={patient} onClose={onClose} compact />
+    </div>
   );
 }
 
@@ -630,7 +778,7 @@ export default function PatientFinancialHistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50/30 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* Header */}
         <div className="space-y-4">
@@ -685,7 +833,7 @@ export default function PatientFinancialHistoryPage() {
         {/* Patients Table */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">
                   Patients ({filteredPatients.length})
@@ -694,7 +842,7 @@ export default function PatientFinancialHistoryPage() {
                   Click on a patient to view their complete financial history
                 </p>
               </div>
-              <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              <button className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:inline-flex">
                 <Download className="h-4 w-4" />
                 Export
               </button>
@@ -707,7 +855,8 @@ export default function PatientFinancialHistoryPage() {
               <p className="text-sm text-slate-500">Loading patients...</p>
             </div>
           ) : filteredPatients.length > 0 ? (
-            <div className="overflow-auto">
+            <>
+            <div className="overflow-auto hidden lg:block">
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -721,9 +870,8 @@ export default function PatientFinancialHistoryPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredPatients.map((patient) => (
-                    <>
+                    <Fragment key={patient.id}>
                       <PatientFinancialRow
-                        key={patient.id}
                         patient={patient}
                         onSelect={handlePatientSelect}
                         isExpanded={expandedPatientId === patient.id}
@@ -734,11 +882,29 @@ export default function PatientFinancialHistoryPage() {
                           onClose={() => setExpandedPatientId(null)}
                         />
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
+            <div className="space-y-3 p-4 lg:hidden">
+              {filteredPatients.map((patient) => (
+                <Fragment key={patient.id}>
+                  <PatientFinancialCard
+                    patient={patient}
+                    onSelect={handlePatientSelect}
+                    isExpanded={expandedPatientId === patient.id}
+                  />
+                  {expandedPatientId === patient.id && (
+                    <PatientFinancialDetailCard
+                      patient={patient}
+                      onClose={() => setExpandedPatientId(null)}
+                    />
+                  )}
+                </Fragment>
+              ))}
+            </div>
+            </>
           ) : (
             <div className="p-12 text-center">
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-slate-100">

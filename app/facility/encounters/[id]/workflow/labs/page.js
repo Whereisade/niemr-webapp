@@ -430,8 +430,8 @@ export default function FacilityEncounterLabsPage() {
   const patientLabel = `Patient #${encounter?.patient || "—"}`;
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-start justify-between gap-4">
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 flex flex-col items-start justify-between gap-4 lg:flex-row">
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <Link
@@ -515,7 +515,7 @@ export default function FacilityEncounterLabsPage() {
               ) : null}
             </div>
 
-            <div className="relative w-full max-w-md">
+            <div className="relative w-full lg:max-w-md">
               <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 value={q}
@@ -558,7 +558,7 @@ export default function FacilityEncounterLabsPage() {
 
           <div className="mt-3 rounded-xl border border-slate-100">
             <div className="max-h-[420px] overflow-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-[640px] text-left text-sm">
                 <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-3 py-2 w-10"></th>
@@ -747,7 +747,7 @@ export default function FacilityEncounterLabsPage() {
                 ) : null}
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                     Catalog
@@ -779,7 +779,7 @@ export default function FacilityEncounterLabsPage() {
                   Processing
                 </div>
 
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => {

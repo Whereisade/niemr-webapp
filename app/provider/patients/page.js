@@ -189,8 +189,95 @@ export default function FacilityPatientsPage() {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Mobile + tablet cards */}
+        <div className="lg:hidden space-y-3 p-4">
+          {loading && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                Loading patients...
+              </span>
+            </div>
+          )}
+
+          {!loading &&
+            filteredPatients.map((p) => {
+              const fullName = [p.first_name, p.last_name]
+                .filter(Boolean)
+                .join(" ");
+              const displayName = fullName || p.email || `Patient #${p.id}`;
+
+              return (
+                <div
+                  key={p.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Link
+                        href={`/provider/patients/${p.id}`}
+                        className="text-sm font-semibold text-blue-700 hover:underline"
+                      >
+                        {displayName}
+                      </Link>
+                      {p.mrn && (
+                        <div className="mt-1 text-[11px] font-mono text-slate-500">
+                          MRN: {p.mrn}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {p.gender || "-"}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        DOB
+                      </div>
+                      <div className="mt-1 inline-flex items-center gap-1 text-sm text-slate-700">
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        {formatDate(p.date_of_birth)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Email
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        {p.email || "-"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Phone
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        {p.phone || "-"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+          {!loading && !filteredPatients.length && !error && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+              {patients.length === 0 && !filter ? (
+                <>
+                  No patients registered yet. Use{" "}
+                  <span className="font-medium">New patient</span> to create one.
+                </>
+              ) : (
+                "No patients match your search."
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden overflow-x-auto lg:block">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>

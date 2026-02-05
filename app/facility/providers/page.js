@@ -434,7 +434,7 @@ function FacilityProvidersPageInner() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6 md:p-10">
+    <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 md:p-10">
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-200">
@@ -452,10 +452,10 @@ function FacilityProvidersPageInner() {
         </div>
 
         {canManageProviders && (
-          <div className="flex gap-3">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
           <Link
             href="/facility/admins"
-           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-400 to-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
+           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-400 to-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700 sm:w-auto"
           >
             <UserPlus className="h-4 w-4" />
             Manage Admins
@@ -463,7 +463,7 @@ function FacilityProvidersPageInner() {
         
           <Link
             href="/facility/providers/new"
-           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700"
+           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:from-blue-700 hover:to-indigo-700 sm:w-auto"
           >
             <UserPlus className="h-4 w-4" />
             Add Provider
@@ -478,7 +478,7 @@ function FacilityProvidersPageInner() {
           onSubmit={handleSearchSubmit}
           className="flex flex-1 flex-wrap items-center gap-2"
         >
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          <div className="relative min-w-[200px] flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -489,12 +489,12 @@ function FacilityProvidersPageInner() {
             />
           </div>
 
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <select
               value={statusFilterInput}
               onChange={handleStatusFilterChange}
-              className="appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-8 text-sm text-slate-800 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-8 text-sm text-slate-800 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 sm:w-auto"
             >
               <option value="">All statuses</option>
               <option value="PENDING">Pending</option>
@@ -505,7 +505,7 @@ function FacilityProvidersPageInner() {
 
           <button
             type="submit"
-            className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+            className="w-full rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
           >
             Search
           </button>
@@ -520,7 +520,140 @@ function FacilityProvidersPageInner() {
 
       {/* Existing providers table */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-slate-100 lg:hidden">
+          {loading && (
+            <div className="p-8 text-center text-sm text-slate-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+                Loading providersâ€¦
+              </div>
+            </div>
+          )}
+
+          {!loading &&
+            rows.map((p) => {
+              const status = deriveStatus(p);
+              const isSacked = p.is_sacked === true;
+
+              return (
+                <article key={p.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {formatName(p)}
+                      </p>
+                      <p className="text-xs text-slate-500">{p.email || "â€”"}</p>
+                    </div>
+                    <StatusBadge status={status} />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                    <p>
+                      <span className="font-semibold text-slate-700">Role:</span>{" "}
+                      {formatRoles(p)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-700">
+                        Facility:
+                      </span>{" "}
+                      {formatFacility(p)}
+                    </p>
+                  </div>
+
+                  {/* âœ… Hide all actions for sacked providers */}
+                  {isSacked ? (
+                    <span className="text-xs italic text-slate-400">
+                      No actions available
+                    </span>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {status === "PENDING" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange(p.id, "APPROVED")}
+                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange(p.id, "REJECTED")}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {canManageProviders && (
+                        <>
+                          {p.is_active ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSuspend(p.id)}
+                              className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+                              title="Suspend provider account"
+                            >
+                              <Ban className="h-3.5 w-3.5" />
+                              Suspend
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleUnsuspend(p.id)}
+                              className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
+                              title="Re-activate provider account"
+                            >
+                              <Undo2 className="h-3.5 w-3.5" />
+                              Unsuspend
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemove(p)}
+                            className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100"
+                            title="Sack provider"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Sack
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+
+          {!loading && !rows.length && !error && (
+            <div className="p-10 text-center">
+              <div className="mx-auto max-w-sm">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+                  <Users2 className="h-7 w-7 text-slate-400" />
+                </div>
+                <p className="text-sm font-medium text-slate-900">
+                  No providers found
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Get started by adding your first provider to this facility.
+                </p>
+                <Link
+                  href="/facility/providers/new"
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add Provider
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto lg:block">
           <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50">
               <tr>
@@ -686,17 +819,17 @@ function FacilityProvidersPageInner() {
         </div>
 
         {rows.length > 0 && (
-          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm text-slate-600">
               Page {page} · Showing {rows.length} provider
               {rows.length === 1 ? "" : "s"}
             </span>
-            <div className="flex gap-2">
+            <div className="flex w-full gap-2 sm:w-auto">
               <button
                 type="button"
                 onClick={() => goToPage(page - 1)}
                 disabled={!hasPrevPage}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Previous
@@ -705,7 +838,7 @@ function FacilityProvidersPageInner() {
                 type="button"
                 onClick={() => goToPage(page + 1)}
                 disabled={!hasNextPage}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
               >
                 Next
                 <ChevronRight className="h-4 w-4" />
@@ -749,69 +882,109 @@ function FacilityProvidersPageInner() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Provider
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Facility
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Message
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {applications.map((app) => (
-                  <tr key={app.id} className="transition hover:bg-slate-50/60">
-                    <td className="px-4 py-3.5 font-medium text-slate-900">
+            <div className="divide-y divide-slate-100 lg:hidden">
+              {applications.map((app) => (
+                <article key={app.id} className="space-y-3 p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-900">
                       {app.provider_name}
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-600">
-                      {app.facility_name}
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-600 max-w-xs truncate">
-                      {app.message ? (
-                        app.message
-                      ) : (
-                        <span className="italic text-slate-400">
-                          No message
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="inline-flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleApplicationDecision(app.id, "approve")
-                          }
-                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleApplicationDecision(app.id, "reject")
-                          }
-                          className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
-                        >
-                          <XCircle className="h-3.5 w-3.5" />
-                          Reject
-                        </button>
-                      </div>
-                    </td>
+                    </p>
+                    <p className="text-xs text-slate-500">{app.facility_name}</p>
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    {app.message ? (
+                      app.message
+                    ) : (
+                      <span className="italic text-slate-400">No message</span>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleApplicationDecision(app.id, "approve")}
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplicationDecision(app.id, "reject")}
+                      className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Reject
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Provider
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Facility
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Message
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {applications.map((app) => (
+                    <tr key={app.id} className="transition hover:bg-slate-50/60">
+                      <td className="px-4 py-3.5 font-medium text-slate-900">
+                        {app.provider_name}
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-600">
+                        {app.facility_name}
+                      </td>
+                      <td className="max-w-xs truncate px-4 py-3.5 text-slate-600">
+                        {app.message ? (
+                          app.message
+                        ) : (
+                          <span className="italic text-slate-400">
+                            No message
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="inline-flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleApplicationDecision(app.id, "approve")
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleApplicationDecision(app.id, "reject")
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>

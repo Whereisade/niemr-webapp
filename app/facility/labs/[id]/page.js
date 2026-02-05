@@ -328,13 +328,34 @@ export default function FacilityLabOrderDetailPage() {
     order?.patient ||
     "—";
 
-  const facilityName = order?.facility_name || order?.facility?.name || "—";
+  const facilityName =
+    [
+      order?.facility_name,
+      order?.facility?.name,
+      order?.facility?.display_name,
+      order?.facility_display_name,
+    ].find((v) => typeof v === "string" && v.trim()) ||
+    (typeof order?.facility === "string" &&
+    order.facility.trim() &&
+    !/^\d+$/.test(order.facility.trim())
+      ? order.facility.trim()
+      : null) ||
+    "—";
   const orderedBy =
-    order?.ordered_by_name ||
+    [
+      order?.ordered_by_name,
+      order?.ordered_by?.name,
+      order?.ordered_by?.full_name,
+      order?.ordered_by_display_name,
+    ].find((v) => typeof v === "string" && v.trim()) ||
     (order?.ordered_by_first_name || order?.ordered_by_last_name
       ? `${order?.ordered_by_first_name || ""} ${order?.ordered_by_last_name || ""}`.trim()
       : "") ||
-    order?.ordered_by ||
+    (typeof order?.ordered_by === "string" &&
+    order.ordered_by.trim() &&
+    !/^\d+$/.test(order.ordered_by.trim())
+      ? order.ordered_by.trim()
+      : "") ||
     "—";
 
   const priority = order?.priority || "—";
@@ -353,7 +374,7 @@ export default function FacilityLabOrderDetailPage() {
   const allSamplesCollected = items.length > 0 && items.every((i) => i.sample_collected_at || i.completed_at);
 
   return (
-    <main className="relative mx-auto max-w-5xl space-y-6 p-6 md:p-10">
+    <main className="relative mx-auto max-w-5xl space-y-6 p-4 sm:p-6 md:p-10">
       {/* Soft background accents */}
       <div className="pointer-events-none absolute -top-28 -left-32 h-52 w-52 rounded-full bg-blue-100/60 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-28 -right-32 h-56 w-56 rounded-full bg-emerald-100/50 blur-3xl" />
@@ -384,7 +405,7 @@ export default function FacilityLabOrderDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
           <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass}`}>
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-70" />
             {statusLabel}
@@ -394,7 +415,7 @@ export default function FacilityLabOrderDetailPage() {
             type="button"
             onClick={loadOrder}
             disabled={loading}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -494,7 +515,7 @@ export default function FacilityLabOrderDetailPage() {
 
           {/* Workflow progress indicator */}
           <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
                   allSamplesCollected ? "bg-emerald-100" : "bg-blue-100"
@@ -513,7 +534,7 @@ export default function FacilityLabOrderDetailPage() {
                 </div>
               </div>
 
-              <div className="h-px flex-1 bg-slate-200" />
+              <div className="h-px bg-slate-200 md:flex-1" />
 
               <div className="flex items-center gap-3">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
@@ -559,7 +580,7 @@ export default function FacilityLabOrderDetailPage() {
             <section className="relative rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
               <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500" />
 
-              <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                   <Droplet className="h-5 w-5 text-amber-700" />
                   <h2 className="text-sm font-semibold text-slate-900">
@@ -571,7 +592,7 @@ export default function FacilityLabOrderDetailPage() {
                   type="button"
                   onClick={handleCollectAllSamples}
                   disabled={collectingAll}
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
                 >
                   {collectingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                   Collect All Samples
@@ -582,7 +603,7 @@ export default function FacilityLabOrderDetailPage() {
                 {awaitingCollection.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3"
+                    className="flex flex-col gap-3 rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white border border-amber-200">
@@ -602,7 +623,7 @@ export default function FacilityLabOrderDetailPage() {
                       type="button"
                       onClick={() => handleCollectSample(item.id)}
                       disabled={collectingItems.has(item.id)}
-                      className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
                     >
                       {collectingItems.has(item.id) ? (
                         <>
@@ -644,7 +665,7 @@ export default function FacilityLabOrderDetailPage() {
                     key={item.id}
                     className="rounded-xl border border-sky-200 bg-sky-50/50 p-4"
                   >
-                    <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-white border border-sky-200">
                           <FlaskConical className="h-4 w-4 text-sky-600" />
@@ -676,7 +697,7 @@ export default function FacilityLabOrderDetailPage() {
                           Option A: Enter Result Values
                         </p>
                         
-                        <div className="grid gap-3 md:grid-cols-4">
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                           <div>
                             <label className="block text-[11px] font-medium text-slate-600 mb-1">
                               Result Value
@@ -753,9 +774,9 @@ export default function FacilityLabOrderDetailPage() {
                         </p>
                         
                         {resultFiles[item.id] ? (
-                          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
                             <FileText className="h-4 w-4 text-emerald-700 shrink-0" />
-                            <span className="flex-1 truncate text-sm text-emerald-900 font-medium">
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-emerald-900">
                               {resultFiles[item.id].name}
                             </span>
                             <span className="text-xs text-emerald-700">
@@ -837,8 +858,9 @@ export default function FacilityLabOrderDetailPage() {
                 </h2>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full text-left text-sm">
+              <div className="rounded-xl border border-slate-200">
+                <div className="overflow-x-auto">
+                  <table className="hidden w-full text-left text-sm lg:table">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-3 py-2">Test</th>
@@ -886,7 +908,59 @@ export default function FacilityLabOrderDetailPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
+
+                <div className="divide-y divide-slate-100 lg:hidden">
+                  {completedItems.map((item) => (
+                    <div key={item.id} className="space-y-2 p-3 text-sm">
+                      <div>
+                        <p className="font-medium text-slate-900">
+                          {item.display_name || item.test?.name || item.requested_name || "-"}
+                        </p>
+                        {item.test?.code && (
+                          <p className="text-xs text-slate-500 font-mono">{item.test.code}</p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="text-slate-500">Result</p>
+                          <p className="font-medium text-slate-900">
+                            {item.result_value != null
+                              ? `${item.result_value} ${item.result_unit || ""}`
+                              : item.result_text || "See attached document"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-slate-500">Reference</p>
+                          <p className="text-slate-700">
+                            {item.ref_low != null && item.ref_high != null
+                              ? `${item.ref_low} - ${item.ref_high}`
+                              : "-"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-slate-500">Flag</p>
+                          {item.flag ? (
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${flagBadgeClass(item.flag)}`}>
+                              {item.flag}
+                            </span>
+                          ) : (
+                            <p className="text-slate-700">-</p>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-slate-500">Completed</p>
+                          <p className="text-slate-700">{formatDateTime(item.completed_at)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
           )}
@@ -923,7 +997,7 @@ export default function FacilityLabOrderDetailPage() {
                   return (
                     <li
                       key={att.id || `${label}-${fileUrl}`}
-                      className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
+                      className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex flex-col">
                         <span className="font-medium text-slate-900">{label}</span>
@@ -935,7 +1009,7 @@ export default function FacilityLabOrderDetailPage() {
                           href={fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="ml-3 inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[11px] font-medium text-blue-600 shadow-sm hover:bg-blue-50"
+                          className="inline-flex items-center gap-1 self-start rounded-full bg-white px-3 py-1 text-[11px] font-medium text-blue-600 shadow-sm hover:bg-blue-50 sm:self-auto"
                         >
                           <FileText className="h-3.5 w-3.5" />
                           Open
@@ -949,7 +1023,7 @@ export default function FacilityLabOrderDetailPage() {
           </section>
 
           {/* Footer nav */}
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={() => router.back()}

@@ -773,12 +773,12 @@ function FacilityPatientDetailPageInner() {
               </div>
 
               {/* Quick actions */}
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                 {/* Add Vitals button - always visible, opens modal */}
                 <button
                   type="button"
                   onClick={() => setVitalsModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto"
                 >
                   <Activity className="h-3.5 w-3.5" />
                   Add Vitals
@@ -790,7 +790,7 @@ function FacilityPatientDetailPageInner() {
                     type="button"
                     onClick={handleStartEncounter}
                     disabled={startingEncounter}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-green-700 disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-green-700 disabled:opacity-50 sm:w-auto"
                   >
                     {startingEncounter ? (
                       <>
@@ -817,7 +817,7 @@ function FacilityPatientDetailPageInner() {
 
             {/* Error or skeleton or details */}
             {loadingPatient ? (
-              <div className="mt-4 grid animate-pulse gap-2 grid-cols-2 md:grid-cols-5">
+              <div className="mt-4 grid animate-pulse grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
                 <div className="h-14 rounded-xl bg-slate-100" />
                 <div className="h-14 rounded-xl bg-slate-100" />
                 <div className="h-14 rounded-xl bg-slate-100" />
@@ -829,7 +829,7 @@ function FacilityPatientDetailPageInner() {
                 {patientError}
               </div>
             ) : patient ? (
-              <div className="mt-4 grid gap-2 grid-cols-2 md:grid-cols-5">
+              <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
                 <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2">
                   <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                     Date of birth
@@ -975,7 +975,80 @@ function FacilityPatientDetailPageInner() {
 
             {/* Table with encounters */}
             {encounters.length > 0 && (
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
+              <>
+                <div className="space-y-3 lg:hidden">
+                  {encounters.map((enc) => {
+                    const nurse = enc.nurse_name || (enc.nurse ? `User #${enc.nurse}` : "N/A");
+                    const provider = enc.provider_name || (enc.provider ? `User #${enc.provider}` : "N/A");
+                    const summary = enc.chief_complaint || enc.diagnoses || enc.plan || "N/A";
+
+                    return (
+                      <article
+                        key={`enc-mobile-${enc.id}`}
+                        className="rounded-xl border border-slate-200 bg-white p-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+                              <CalendarClock className="h-3.5 w-3.5" />
+                              {formatDateTime(enc.occurred_at)}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-slate-900">
+                              Encounter #{enc.id}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => goToEncounter(enc.id)}
+                            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                          >
+                            Open
+                          </button>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusBadge(
+                              enc.status
+                            )}`}
+                          >
+                            {enc.status || "N/A"}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${stageBadge(
+                              enc.stage
+                            )}`}
+                          >
+                            {enc.stage || "N/A"}
+                          </span>
+                          {enc.locked && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
+                              <Lock className="h-3 w-3" />
+                              Locked
+                            </span>
+                          )}
+                        </div>
+
+                        <dl className="mt-3 space-y-2 text-xs">
+                          <div className="flex items-start gap-2">
+                            <dt className="text-slate-500">Nurse:</dt>
+                            <dd className="font-medium text-slate-800">{nurse}</dd>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <dt className="text-slate-500">Provider:</dt>
+                            <dd className="font-medium text-slate-800">{provider}</dd>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <dt className="text-slate-500">Summary:</dt>
+                            <dd className="line-clamp-3 text-slate-700">{summary}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50">
                     <tr>
@@ -1085,6 +1158,7 @@ function FacilityPatientDetailPageInner() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </section>

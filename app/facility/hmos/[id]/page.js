@@ -358,6 +358,68 @@ function ChargeRow({ charge, onViewPatient }) {
   );
 }
 
+function ChargeCard({ charge, onViewPatient }) {
+  const outstanding = Number(charge.amount || 0) - Number(charge.allocated_total || 0);
+  const isFullyPaid = outstanding <= 0.01;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="font-medium text-slate-900">{charge.service_name || charge.service_code}</div>
+          <div className="text-xs text-slate-500">
+            {charge.description && `${charge.description} - `}
+            #{charge.id}
+          </div>
+        </div>
+        <span
+          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+            charge.status === "PAID"
+              ? "bg-emerald-50 text-emerald-700"
+              : charge.status === "PARTIALLY_PAID"
+              ? "bg-amber-50 text-amber-700"
+              : charge.status === "VOID"
+              ? "bg-slate-100 text-slate-600"
+              : "bg-rose-50 text-rose-700"
+          }`}
+        >
+          {charge.status}
+        </span>
+      </div>
+
+      <div className="mb-3">
+        <button
+          onClick={() => onViewPatient?.(charge.patient)}
+          className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+        >
+          {charge.patient_name || `Patient #${charge.patient}`}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="rounded-lg bg-slate-50 p-2">
+          <div className="text-slate-500">Amount</div>
+          <div className="text-sm font-semibold text-slate-900">{formatMoney(charge.amount)}</div>
+        </div>
+        <div className="rounded-lg bg-emerald-50 p-2">
+          <div className="text-emerald-700">Paid</div>
+          <div className="text-sm font-semibold text-emerald-800">{formatMoney(charge.allocated_total)}</div>
+        </div>
+        <div className="rounded-lg bg-amber-50 p-2">
+          <div className="text-amber-700">Outstanding</div>
+          <div className={`text-sm font-semibold ${isFullyPaid ? "text-slate-500" : "text-amber-800"}`}>
+            {formatMoney(outstanding)}
+          </div>
+        </div>
+        <div className="rounded-lg bg-slate-50 p-2">
+          <div className="text-slate-500">Date</div>
+          <div className="text-sm font-medium text-slate-700">{formatDate(charge.created_at)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HMODetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -595,10 +657,10 @@ export default function HMODetailPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowPaymentModal(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 hover:from-emerald-700 hover:to-emerald-800"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 hover:from-emerald-700 hover:to-emerald-800 sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               Make Payment
@@ -610,7 +672,7 @@ export default function HMODetailPage() {
                 mutatePayments();
               }}
               disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
             >
               <RefreshCcw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
@@ -650,37 +712,39 @@ export default function HMODetailPage() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="mb-6 flex items-center gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab("overview")}
-          className={`px-4 py-3 text-sm font-semibold transition ${
-            activeTab === "overview"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Overview
-        </button>
-        <button
-          onClick={() => setActiveTab("charges")}
-          className={`px-4 py-3 text-sm font-semibold transition ${
-            activeTab === "charges"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Charges & Patients
-        </button>
-        <button
-          onClick={() => setActiveTab("payments")}
-          className={`px-4 py-3 text-sm font-semibold transition ${
-            activeTab === "payments"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Payment History
-        </button>
+      <div className="mb-6 overflow-x-auto border-b border-slate-200">
+        <div className="flex min-w-max items-center gap-2">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`px-4 py-3 text-sm font-semibold transition ${
+              activeTab === "overview"
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab("charges")}
+            className={`px-4 py-3 text-sm font-semibold transition ${
+              activeTab === "charges"
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Charges & Patients
+          </button>
+          <button
+            onClick={() => setActiveTab("payments")}
+            className={`px-4 py-3 text-sm font-semibold transition ${
+              activeTab === "payments"
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Payment History
+          </button>
+        </div>
       </div>
 
       {/* Overview Tab */}
@@ -799,7 +863,7 @@ export default function HMODetailPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-400"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-400 sm:w-auto"
                 >
                   <option value="">All Statuses</option>
                   <option value="UNPAID">Unpaid</option>
@@ -813,7 +877,7 @@ export default function HMODetailPage() {
                       setDateRange({ start: "", end: "" });
                       setStatusFilter("");
                     }}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
                   >
                     Clear Filters
                   </button>
@@ -821,7 +885,29 @@ export default function HMODetailPage() {
               </div>
             </div>
 
-            <div className="overflow-auto">
+            <div className="space-y-3 p-3 lg:hidden">
+              {charges && charges.length > 0 ? (
+                charges.map((charge) => (
+                  <ChargeCard
+                    key={charge.id}
+                    charge={charge}
+                    onViewPatient={(patientId) => setSelectedPatientId(patientId)}
+                  />
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center">
+                  <FileText className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+                  <p className="text-sm font-medium text-slate-600">No charges found</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {selectedPatientId
+                      ? "This patient has no charges in the selected period"
+                      : "No charges have been recorded for this HMO yet"}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="hidden overflow-auto lg:block">
               {charges && charges.length > 0 ? (
                 <table className="min-w-full">
                   <thead className="sticky top-0 bg-slate-50/95 backdrop-blur">

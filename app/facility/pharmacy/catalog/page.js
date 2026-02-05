@@ -510,7 +510,8 @@ export default function FacilityPharmacyCatalogPage() {
               {errorDrugs}
             </div>
           ) : (
-            <div className="max-h-[480px] overflow-y-auto rounded-lg border border-slate-100">
+            <>
+              <div className="max-h-[480px] overflow-y-auto rounded-lg border border-slate-100 hidden lg:block">
               <table className="min-w-full divide-y divide-slate-100 text-xs">
                 <thead className="sticky top-0 bg-slate-50 text-slate-700">
                   <tr>
@@ -593,6 +594,67 @@ export default function FacilityPharmacyCatalogPage() {
                 </tbody>
               </table>
             </div>
+
+            <div className="space-y-2 lg:hidden">
+              {filteredDrugs.length ? (
+                filteredDrugs.map((d) => (
+                  <div
+                    key={d.id}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900">
+                          {d.name}
+                        </div>
+                        <div className="mt-0.5 font-mono text-[10px] text-slate-500">
+                          {d.code || "-"}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-600">
+                          {d.strength || "-"}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-slate-600">
+                          {d.form || "-"}
+                          {d.route ? ` - ${d.route}` : ""}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                          Unit price
+                        </div>
+                        <div className="text-xs font-semibold text-slate-800">
+                          NGN {Number(d.unit_price ?? 0).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(d)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(d.id)}
+                        disabled={deleting === d.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        {deleting === d.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">
+                  No drugs found. Import from file or add drugs manually.
+                </div>
+              )}
+            </div>
+            </>
           )}
         </div>
 

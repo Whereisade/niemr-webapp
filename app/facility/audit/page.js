@@ -1,7 +1,7 @@
 // app/facility/audit/page.js
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { Fragment, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fetchAuditLogs } from "@/lib/audit";
 import {
@@ -140,7 +140,7 @@ function FacilityAuditPageInner() {
   ).size;
 
   return (
-    <main className="relative mx-auto max-w-7xl space-y-6 p-6 md:p-10">
+    <main className="relative mx-auto max-w-7xl space-y-6 p-4 sm:p-6 md:p-10">
       {/* Soft glow background accents */}
       <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-blue-100/60 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-indigo-100/60 blur-3xl" />
@@ -234,7 +234,127 @@ function FacilityAuditPageInner() {
       {/* Table */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-        <div className="overflow-x-auto">
+        <div className="lg:hidden">
+          {loading && (
+            <div className="flex flex-col items-center gap-3 p-6 text-sm text-slate-500">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+              Loading audit logs...
+            </div>
+          )}
+          {!loading && rows.length > 0 && (
+            <div className="space-y-3 p-3 sm:p-4">
+              {rows.map((log) => {
+                const ts = log.created_at || log.timestamp;
+                const actorDisplay = log.actor_display || log.actor_email || "System";
+                const verb = log.verb || "—";
+                const targetModel = log.target_model || "—";
+                const targetDisplay = log.target_display || log.target_id || "—";
+                const targetId = log.target_id || "";
+                const message = log.message || "—";
+                const ip = log.ip_address || "—";
+                const hasChanges = log.changes && Object.keys(log.changes).length > 0;
+                const isExpanded = expandedRow === log.id;
+
+                return (
+                  <article key={log.id} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
+                        {formatDateTime(ts)}
+                      </span>
+                      <VerbPill value={verb} />
+                    </div>
+
+                    <div className="mt-3 space-y-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
+                          <UserRound className="h-4 w-4 text-blue-700" />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-slate-900" title={actorDisplay}>
+                            {actorDisplay}
+                          </div>
+                          {log.actor_email && actorDisplay !== log.actor_email && (
+                            <div className="truncate text-[11px] text-slate-500" title={log.actor_email}>
+                              {log.actor_email}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">Target</div>
+                        <div className="truncate font-medium text-slate-900" title={targetDisplay}>
+                          {targetDisplay}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-600 capitalize">
+                            {targetModel}
+                          </span>
+                          {targetId && (
+                            <span className="truncate font-mono text-[10px] text-slate-400" title={targetId}>
+                              #{targetId.length > 8 ? targetId.slice(0, 8) + "…" : targetId}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">Message</div>
+                        <div className="text-slate-700">{message}</div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">IP Address</div>
+                        <span className="mt-1 inline-flex rounded-lg border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700">
+                          {ip}
+                        </span>
+                      </div>
+
+                      {hasChanges && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRow(isExpanded ? null : log.id)}
+                          className="mt-1 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-100"
+                        >
+                          {isExpanded ? (
+                            <>
+                              <ChevronUp className="h-3.5 w-3.5" />
+                              Hide changes
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-3.5 w-3.5" />
+                              View changes
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {isExpanded && hasChanges && (
+                      <div className="mt-3 rounded-lg bg-white p-2">
+                        <ChangesDisplay changes={log.changes} />
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+          {!loading && !rows.length && !error && (
+            <div className="px-4 py-10 text-center text-sm text-slate-500">
+              <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+                <Shield className="h-6 w-6 text-slate-400" />
+              </div>
+              <div className="text-sm font-medium text-slate-900">No audit entries found</div>
+              <div className="mt-1 text-xs text-slate-500">
+                {q ? "Try adjusting your search query." : "No activity recorded yet."}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto lg:block">
           <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50">
               <tr>
@@ -259,103 +379,97 @@ function FacilityAuditPageInner() {
                 </tr>
               )}
 
-              {!loading && rows.map((log) => {
-                const ts = log.created_at || log.timestamp;
-                const actorDisplay = log.actor_display || log.actor_email || "System";
-                const verb = log.verb || "—";
-                const targetModel = log.target_model || "—";
-                const targetDisplay = log.target_display || log.target_id || "—";
-                const targetId = log.target_id || "";
-                const message = log.message || "—";
-                const ip = log.ip_address || "—";
-                const hasChanges = log.changes && Object.keys(log.changes).length > 0;
-                const isExpanded = expandedRow === log.id;
+              {!loading &&
+                rows.map((log) => {
+                  const ts = log.created_at || log.timestamp;
+                  const actorDisplay = log.actor_display || log.actor_email || "System";
+                  const verb = log.verb || "—";
+                  const targetModel = log.target_model || "—";
+                  const targetDisplay = log.target_display || log.target_id || "—";
+                  const targetId = log.target_id || "";
+                  const message = log.message || "—";
+                  const ip = log.ip_address || "—";
+                  const hasChanges = log.changes && Object.keys(log.changes).length > 0;
+                  const isExpanded = expandedRow === log.id;
 
-                return (
-                  <>
-                    <tr
-                      key={log.id}
-                      className={`transition hover:bg-slate-50/60 ${isExpanded ? "bg-slate-50/40" : ""}`}
-                    >
-                      <Td>
-                        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
-                          {formatDateTime(ts)}
-                        </span>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center gap-2">
-                          <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
-                            <UserRound className="h-4 w-4 text-blue-700" />
+                  return (
+                    <Fragment key={log.id}>
+                      <tr className={`transition hover:bg-slate-50/60 ${isExpanded ? "bg-slate-50/40" : ""}`}>
+                        <Td>
+                          <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
+                            {formatDateTime(ts)}
                           </span>
-                          <div className="flex flex-col">
-                            <span className="text-xs font-medium text-slate-900 max-w-[140px] truncate" title={actorDisplay}>
-                              {actorDisplay}
+                        </Td>
+                        <Td>
+                          <div className="flex items-center gap-2">
+                            <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600/10">
+                              <UserRound className="h-4 w-4 text-blue-700" />
                             </span>
-                            {log.actor_email && actorDisplay !== log.actor_email && (
-                              <span className="text-[10px] text-slate-500 max-w-[140px] truncate" title={log.actor_email}>
-                                {log.actor_email}
+                            <div className="flex flex-col">
+                              <span className="text-xs font-medium text-slate-900 max-w-[140px] truncate" title={actorDisplay}>
+                                {actorDisplay}
                               </span>
-                            )}
+                              {log.actor_email && actorDisplay !== log.actor_email && (
+                                <span className="text-[10px] text-slate-500 max-w-[140px] truncate" title={log.actor_email}>
+                                  {log.actor_email}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </Td>
-                      <Td>
-                        <VerbPill value={verb} />
-                      </Td>
-                      <Td>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs font-medium text-slate-900 max-w-[180px] truncate" title={targetDisplay}>
-                            {targetDisplay}
+                        </Td>
+                        <Td>
+                          <VerbPill value={verb} />
+                        </Td>
+                        <Td>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-medium text-slate-900 max-w-[180px] truncate" title={targetDisplay}>
+                              {targetDisplay}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 capitalize">
+                                {targetModel}
+                              </span>
+                              {targetId && (
+                                <span className="text-[10px] text-slate-400 font-mono truncate max-w-[80px]" title={targetId}>
+                                  #{targetId.length > 8 ? targetId.slice(0, 8) + "…" : targetId}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </Td>
+                        <Td>
+                          <span className="text-xs text-slate-700 max-w-[120px] truncate block" title={message}>
+                            {message}
                           </span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 capitalize">
-                              {targetModel}
-                            </span>
-                            {targetId && (
-                              <span className="text-[10px] text-slate-400 font-mono truncate max-w-[80px]" title={targetId}>
-                                #{targetId.length > 8 ? targetId.slice(0, 8) + "…" : targetId}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </Td>
-                      <Td>
-                        <span className="text-xs text-slate-700 max-w-[120px] truncate block" title={message}>
-                          {message}
-                        </span>
-                      </Td>
-                      <Td>
-                        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-mono text-slate-700">
-                          {ip}
-                        </span>
-                      </Td>
-                      <Td>
-                        {hasChanges && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedRow(isExpanded ? null : log.id)}
-                            className="grid h-6 w-6 place-items-center rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors"
-                            title={isExpanded ? "Hide changes" : "View changes"}
-                          >
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </button>
-                        )}
-                      </Td>
-                    </tr>
-                    {isExpanded && hasChanges && (
-                      <tr key={`${log.id}-changes`}>
-                        <td colSpan={7} className="bg-slate-50/70 px-4 py-3">
-                          <ChangesDisplay changes={log.changes} />
-                        </td>
+                        </Td>
+                        <Td>
+                          <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-mono text-slate-700">
+                            {ip}
+                          </span>
+                        </Td>
+                        <Td>
+                          {hasChanges && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedRow(isExpanded ? null : log.id)}
+                              className="grid h-6 w-6 place-items-center rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors"
+                              title={isExpanded ? "Hide changes" : "View changes"}
+                            >
+                              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </button>
+                          )}
+                        </Td>
                       </tr>
-                    )}
-                  </>
-                );
-              })}
+                      {isExpanded && hasChanges && (
+                        <tr>
+                          <td colSpan={7} className="bg-slate-50/70 px-4 py-3">
+                            <ChangesDisplay changes={log.changes} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
 
               {!loading && !rows.length && !error && (
                 <tr>
@@ -377,7 +491,7 @@ function FacilityAuditPageInner() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
           <span>
             Page {page} · {rows.length} log{rows.length === 1 ? "" : "s"} on page · {total.toLocaleString()} total
           </span>

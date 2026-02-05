@@ -125,8 +125,8 @@ function PatientVitalsPageInner() {
         <StatTile icon={HeartPulse} label="Avg. Heart Rate" value={avg(rows.map(r => r.heart_rate)) ?? "—"} accent="from-blue-600 via-indigo-600 to-violet-600" isText />
       </section>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Table (desktop) */}
+      <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
         <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
@@ -182,6 +182,55 @@ function PatientVitalsPageInner() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Cards (mobile/tablet) */}
+      <div className="space-y-3 lg:hidden">
+        {rows.map((v) => (
+          <div key={v.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Measured At</div>
+                <div className="mt-1 text-sm text-slate-800">
+                  {formatDateTime(v.measured_at)}
+                </div>
+              </div>
+              <OverallPill value={v.overall} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-3">
+              <div className="space-y-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">BP</div>
+                <Metric icon={Activity} value={v.systolic && v.diastolic ? `${v.systolic}/${v.diastolic}` : "â€”"} />
+              </div>
+              <div className="space-y-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">HR</div>
+                <Metric icon={HeartPulse} value={v.heart_rate ?? "â€”"} />
+              </div>
+              <div className="space-y-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Temp</div>
+                <Metric icon={Thermometer} value={v.temp_c ?? "â€”"} />
+              </div>
+              <div className="space-y-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">SpOâ‚‚</div>
+                <Metric icon={Droplets} value={v.spo2 ?? "â€”"} />
+              </div>
+              <div className="space-y-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">BMI</div>
+                <Metric icon={Gauge} value={v.bmi ?? "â€”"} />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {!rows.length && (
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-10 text-center shadow-sm">
+            <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
+              <Activity className="h-6 w-6 text-slate-400" />
+            </div>
+            <div className="text-sm font-medium text-slate-900">No vitals recorded yet</div>
+            <div className="mt-1 text-sm text-slate-500">New readings will appear here automatically.</div>
+          </div>
+        )}
       </div>
 
       {/* Pager */}

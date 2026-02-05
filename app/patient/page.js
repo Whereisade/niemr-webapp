@@ -387,7 +387,7 @@ export default async function PatientDashboard() {
             <p className="mt-1 text-xs text-slate-600">Common actions for patients</p>
           </div>
           <div className="p-4 grid gap-2 sm:grid-cols-2">
-            <QuickAction href="/patient/encounters" icon={Activity} label="My Health Records" primary />
+            <QuickAction href="/patient/encounters" icon={Activity} label="My Visits" primary />
             <QuickAction href="/patient/appointments/new" icon={CalendarRange} label="Book Appointment" />
             <QuickAction href="/patient/vitals" icon={Heart} label="My Vitals" />
             <QuickAction href="/patient/documents" icon={FileText} label="My Medical Documents" />
