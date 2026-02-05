@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { submitLabResult, markLabOrderCollected } from "@/lib/labsStatusActions";
-import { uploadLabOrderAttachment } from "@/lib/labAttachments";
+import { listLabOrderAttachments, uploadLabOrderAttachment } from "@/lib/labAttachments";
 import DownloadReportButton from "@/components/DownloadReportButton";
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
 
@@ -160,10 +160,7 @@ export default function FacilityLabOrderDetailPage() {
     try {
       setAttachmentsLoading(true);
       setAttachmentsError("");
-      const qs = new URLSearchParams();
-      qs.set("owner_type", "lab_order");
-      qs.set("owner_id", String(id));
-      const body = await apiFetch(`/attachments/?${qs.toString()}`, { method: "GET" });
+      const body = await listLabOrderAttachments(id);
       setAttachments(normalizeAttachmentsPayload(body));
     } catch (err) {
       setAttachmentsError(err?.message || "Attachments could not be loaded.");
