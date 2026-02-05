@@ -44,6 +44,7 @@ export default function PrescriptionDetailsModal({
   onClose,
   id,
   allowDispense = false,
+  currentUserRole,
   onUpdated,
 }) {
   const [rx, setRx] = useState(null);
@@ -124,7 +125,9 @@ export default function PrescriptionDetailsModal({
 
   // Load stock when modal opens and user can dispense
   useEffect(() => {
-    if (!open || !allowDispense) return;
+    const role = (currentUserRole || "").toUpperCase();
+    const effectiveAllowDispense = allowDispense && role !== "SUPER_ADMIN";
+    if (!open || !effectiveAllowDispense) return;
 
     let cancelled = false;
 
@@ -156,7 +159,7 @@ export default function PrescriptionDetailsModal({
     return () => {
       cancelled = true;
     };
-  }, [open, allowDispense]);
+  }, [open, allowDispense, currentUserRole]);
 
   // Stock lookup map
   const stockByDrugId = useMemo(() => {
@@ -383,8 +386,10 @@ export default function PrescriptionDetailsModal({
 
   const status = String(rx?.status || "").toUpperCase();
   const createdAt = rx ? formatDateTime(rx.created_at) : "—";
+  const role = (currentUserRole || "").toUpperCase();
   const canDispense =
     allowDispense &&
+    role !== "SUPER_ADMIN" &&
     (status === "PRESCRIBED" || status === "PARTIALLY_DISPENSED");
 
   return (

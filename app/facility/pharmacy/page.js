@@ -261,8 +261,7 @@ function FacilityPharmacyPageInner() {
   }, []);
 
   const meRole = (me?.role || "").toUpperCase();
-  const canDispense =
-    meRole === "PHARMACY" || meRole === "ADMIN" || meRole === "SUPER_ADMIN";
+  const canDispense = meRole === "PHARMACY" || meRole === "ADMIN";
   const canPrescribe =
     meRole === "PHARMACY" ||
     meRole === "ADMIN" ||
@@ -585,6 +584,7 @@ function FacilityPharmacyPageInner() {
         onClose={() => setDetailsOpen(false)}
         id={detailsId}
         allowDispense={canDispense}
+        currentUserRole={meRole}
         onUpdated={() => setRefreshKey((k) => k + 1)}
       />
     </main>

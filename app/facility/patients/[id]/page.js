@@ -402,6 +402,13 @@ function FacilityPatientDetailPageInner() {
   const [vitalsModalOpen, setVitalsModalOpen] = useState(false);
   const [vitalsRefreshKey, setVitalsRefreshKey] = useState(0);
 
+  const meRole = String(me?.role || "").toUpperCase();
+  const roleReady = Boolean(me?.role);
+  const isAdminRole = meRole === "ADMIN" || meRole === "SUPER_ADMIN";
+  const canManageVitals = roleReady && !isAdminRole;
+  const canManageAllergies = roleReady && !isAdminRole;
+  const canStartEncounter = roleReady && !isAdminRole;
+
   // Normalize encounters from API response
   const encounters = useMemo(() => normalizeList(encounterPayload), [encounterPayload]);
 
@@ -774,18 +781,20 @@ function FacilityPatientDetailPageInner() {
 
               {/* Quick actions */}
               <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-                {/* Add Vitals button - always visible, opens modal */}
-                <button
-                  type="button"
-                  onClick={() => setVitalsModalOpen(true)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto"
-                >
-                  <Activity className="h-3.5 w-3.5" />
-                  Add Vitals
-                </button>
+                {/* Add Vitals button - hidden for ADMIN/SUPER_ADMIN */}
+                {canManageVitals && (
+                  <button
+                    type="button"
+                    onClick={() => setVitalsModalOpen(true)}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto"
+                  >
+                    <Activity className="h-3.5 w-3.5" />
+                    Add Vitals
+                  </button>
+                )}
 
                 {/* Start Encounter button - only visible when NOT viewing from active encounter */}
-                {!hideActions && (
+                {!hideActions && canStartEncounter && (
                   <button
                     type="button"
                     onClick={handleStartEncounter}
@@ -909,7 +918,7 @@ function FacilityPatientDetailPageInner() {
                   </h2>
                 </div>
               </div>
-              <PatientAllergies patientId={patientId} />
+              <PatientAllergies patientId={patientId} canEdit={canManageAllergies} />
             </div>
           </section>
 
@@ -1207,12 +1216,14 @@ function FacilityPatientDetailPageInner() {
       </div>
 
       {/* Add Vitals Modal */}
-      <AddVitalsModal
-        open={vitalsModalOpen}
-        onClose={() => setVitalsModalOpen(false)}
-        patientId={patientId}
-        onSuccess={handleVitalsSuccess}
-      />
+      {canManageVitals && (
+        <AddVitalsModal
+          open={vitalsModalOpen}
+          onClose={() => setVitalsModalOpen(false)}
+          patientId={patientId}
+          onSuccess={handleVitalsSuccess}
+        />
+      )}
     </main>
   );
 }

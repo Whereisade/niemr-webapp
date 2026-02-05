@@ -704,17 +704,16 @@ export default function FacilityEncounterDetailPage() {
   const lockedAt = encounter?.locked_at || null;
   const lockDueAt = encounter?.lock_due_at || null;
 
-  const statusUpper = String(encounter?.status || "").toUpperCase();
-
-  const canPauseResume = ["OPEN", "IN_PROGRESS", "WAITING_LABS"].includes(statusUpper);
-
-  const canOpenWorkflow = useMemo(() => {
-    const role = String(me?.role || "").toUpperCase();
-    return ["DOCTOR", "NURSE"].includes(role);
-  }, [me]);
-
   const role = String(me?.role || "").toUpperCase();
   const isNurse = role === "NURSE";
+  const isClinicalRole = ["DOCTOR", "NURSE"].includes(role);
+
+  const statusUpper = String(encounter?.status || "").toUpperCase();
+
+  const canPauseResume =
+    isClinicalRole && ["OPEN", "IN_PROGRESS", "WAITING_LABS"].includes(statusUpper);
+
+  const canOpenWorkflow = useMemo(() => isClinicalRole, [isClinicalRole]);
 
   const workflowBtnLabel =
     statusUpper === "WAITING_LABS"

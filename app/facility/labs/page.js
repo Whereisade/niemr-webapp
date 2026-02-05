@@ -218,6 +218,7 @@ function FacilityLabOrdersPageInner() {
   const isOwner = workspace?.type === FACILITY_WORKSPACE_TYPES.OWNER;
 
   const meRole = (me?.role || "").toUpperCase();
+  const isSuperAdmin = meRole === "SUPER_ADMIN";
   const canCollect =
     meRole === "LAB" || meRole === "ADMIN" || meRole === "SUPER_ADMIN";
   const canCancel =
@@ -328,6 +329,14 @@ function FacilityLabOrdersPageInner() {
             Lab test orders from providers in your facility
           </p>
         </div>
+        {isSuperAdmin && (
+          <Link
+            href="/facility/labs/catalog"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            Catalog
+          </Link>
+        )}
       </div>
 
       {/* Filters panel */}

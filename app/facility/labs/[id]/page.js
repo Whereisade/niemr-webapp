@@ -118,8 +118,9 @@ export default function FacilityLabOrderDetailPage() {
   }, []);
 
   const meRole = (me?.role || "").toUpperCase();
-  const canCollect = ["LAB", "ADMIN", "SUPER_ADMIN"].includes(meRole);
-  const canEnterResults = ["LAB", "ADMIN", "SUPER_ADMIN"].includes(meRole);
+  const isSuperAdmin = meRole === "SUPER_ADMIN";
+  const canCollect = ["LAB", "ADMIN"].includes(meRole);
+  const canEnterResults = ["LAB", "ADMIN"].includes(meRole);
 
   // Load lab order
   async function loadOrder() {
@@ -513,158 +514,160 @@ export default function FacilityLabOrderDetailPage() {
             )}
           </section>
 
-          {/* Workflow progress indicator */}
-          <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  allSamplesCollected ? "bg-emerald-100" : "bg-blue-100"
-                }`}>
-                  <Droplet className={`h-5 w-5 ${
-                    allSamplesCollected ? "text-emerald-700" : "text-blue-700"
-                  }`} />
+          {!isSuperAdmin && (
+            <>
+              {/* Workflow progress indicator */}
+              <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                      allSamplesCollected ? "bg-emerald-100" : "bg-blue-100"
+                    }`}>
+                      <Droplet className={`h-5 w-5 ${
+                        allSamplesCollected ? "text-emerald-700" : "text-blue-700"
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Step 1: Sample Collection
+                      </p>
+                      <p className="text-sm text-slate-900">
+                        {allSamplesCollected ? "✅ All samples collected" : `${awaitingCollection.length} awaiting collection`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-slate-200 md:flex-1" />
+
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                      allItemsCompleted ? "bg-emerald-100" : allSamplesCollected ? "bg-amber-100" : "bg-slate-100"
+                    }`}>
+                      <TestTube className={`h-5 w-5 ${
+                        allItemsCompleted ? "text-emerald-700" : allSamplesCollected ? "text-amber-700" : "text-slate-400"
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Step 2: Enter Results
+                      </p>
+                      <p className="text-sm text-slate-900">
+                        {allItemsCompleted 
+                          ? "✅ All results recorded" 
+                          : awaitingResults.length > 0 
+                            ? `${awaitingResults.length} ready for results`
+                            : "Awaiting sample collection"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Step 1: Sample Collection
-                  </p>
-                  <p className="text-sm text-slate-900">
-                    {allSamplesCollected ? "✅ All samples collected" : `${awaitingCollection.length} awaiting collection`}
-                  </p>
+              </section>
+
+              {/* Status messages */}
+              {resultError && (
+                <div className="flex gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{resultError}</span>
                 </div>
-              </div>
+              )}
 
-              <div className="h-px bg-slate-200 md:flex-1" />
-
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  allItemsCompleted ? "bg-emerald-100" : allSamplesCollected ? "bg-amber-100" : "bg-slate-100"
-                }`}>
-                  <TestTube className={`h-5 w-5 ${
-                    allItemsCompleted ? "text-emerald-700" : allSamplesCollected ? "text-amber-700" : "text-slate-400"
-                  }`} />
+              {resultSuccess && (
+                <div className="flex gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{resultSuccess}</span>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Step 2: Enter Results
-                  </p>
-                  <p className="text-sm text-slate-900">
-                    {allItemsCompleted 
-                      ? "✅ All results recorded" 
-                      : awaitingResults.length > 0 
-                        ? `${awaitingResults.length} ready for results`
-                        : "Awaiting sample collection"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
+              )}
 
-          {/* Status messages */}
-          {resultError && (
-            <div className="flex gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{resultError}</span>
-            </div>
-          )}
+              {/* STEP 1: Sample Collection */}
+              {awaitingCollection.length > 0 && canCollect && (
+                <section className="relative rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+                  <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500" />
 
-          {resultSuccess && (
-            <div className="flex gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{resultSuccess}</span>
-            </div>
-          )}
-
-          {/* STEP 1: Sample Collection */}
-          {awaitingCollection.length > 0 && canCollect && (
-            <section className="relative rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
-              <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500" />
-
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
-                  <Droplet className="h-5 w-5 text-amber-700" />
-                  <h2 className="text-sm font-semibold text-slate-900">
-                    Step 1: Collect Samples ({awaitingCollection.length})
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCollectAllSamples}
-                  disabled={collectingAll}
-                  className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
-                >
-                  {collectingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  Collect All Samples
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {awaitingCollection.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-col gap-3 rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white border border-amber-200">
-                        <TestTube className="h-4 w-4 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">
-                          {item.display_name || item.test?.name || item.requested_name || "Unknown Test"}
-                        </p>
-                        {item.test?.code && (
-                          <p className="text-xs text-slate-500 font-mono">{item.test.code}</p>
-                        )}
-                      </div>
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                      <Droplet className="h-5 w-5 text-amber-700" />
+                      <h2 className="text-sm font-semibold text-slate-900">
+                        Step 1: Collect Samples ({awaitingCollection.length})
+                      </h2>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => handleCollectSample(item.id)}
-                      disabled={collectingItems.has(item.id)}
+                      onClick={handleCollectAllSamples}
+                      disabled={collectingAll}
                       className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
                     >
-                      {collectingItems.has(item.id) ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Collecting...
-                        </>
-                      ) : (
-                        <>
-                          <Droplet className="h-3.5 w-3.5" />
-                          Mark Sample Collected
-                        </>
-                      )}
+                      {collectingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Collect All Samples
                     </button>
                   </div>
-                ))}
-              </div>
 
-              <p className="mt-3 text-xs text-slate-600 italic">
-                💡 Collect samples before entering results. You can collect all at once or individually.
-              </p>
-            </section>
-          )}
+                  <div className="space-y-2">
+                    {awaitingCollection.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex flex-col gap-3 rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white border border-amber-200">
+                            <TestTube className="h-4 w-4 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">
+                              {item.display_name || item.test?.name || item.requested_name || "Unknown Test"}
+                            </p>
+                            {item.test?.code && (
+                              <p className="text-xs text-slate-500 font-mono">{item.test.code}</p>
+                            )}
+                          </div>
+                        </div>
 
-          {/* STEP 2: Enter Results */}
-          {awaitingResults.length > 0 && canEnterResults && (
-            <section className="relative rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
-              <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500" />
+                        <button
+                          type="button"
+                          onClick={() => handleCollectSample(item.id)}
+                          disabled={collectingItems.has(item.id)}
+                          className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
+                        >
+                          {collectingItems.has(item.id) ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Collecting...
+                            </>
+                          ) : (
+                            <>
+                              <Droplet className="h-3.5 w-3.5" />
+                              Mark Sample Collected
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
 
-              <div className="flex items-center gap-2 mb-4">
-                <TestTube className="h-5 w-5 text-sky-700" />
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Step 2: Enter Results ({awaitingResults.length})
-                </h2>
-              </div>
+                  <p className="mt-3 text-xs text-slate-600 italic">
+                    💡 Collect samples before entering results. You can collect all at once or individually.
+                  </p>
+                </section>
+              )}
 
-              <div className="space-y-4">
-                {awaitingResults.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-xl border border-sky-200 bg-sky-50/50 p-4"
-                  >
+              {/* STEP 2: Enter Results */}
+              {awaitingResults.length > 0 && canEnterResults && (
+                <section className="relative rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
+                  <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500" />
+
+                  <div className="flex items-center gap-2 mb-4">
+                    <TestTube className="h-5 w-5 text-sky-700" />
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      Step 2: Enter Results ({awaitingResults.length})
+                    </h2>
+                  </div>
+
+                  <div className="space-y-4">
+                    {awaitingResults.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-sky-200 bg-sky-50/50 p-4"
+                      >
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-white border border-sky-200">
@@ -843,7 +846,9 @@ export default function FacilityLabOrderDetailPage() {
                   </div>
                 ))}
               </div>
-            </section>
+                </section>
+              )}
+            </>
           )}
 
           {/* Completed items */}
