@@ -633,12 +633,21 @@ export default function FacilityBillingPage() {
 
                 <div className="group rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-4 transition hover:shadow-md">
                   <div className="mb-2 flex items-center justify-between">
-                    <div className="text-xs font-semibold text-rose-700">Outstanding</div>
+                    <div className="text-xs font-semibold text-rose-700">Patient Outstanding</div>
                     <AlertCircle className="h-4 w-4 text-rose-500" />
                   </div>
                   <div className="text-xl font-bold text-rose-900">
-                    {formatMoney(ledger.data.outstanding ?? ledger.data.balance)}
+                    {formatMoney(
+                      ledger.data.patient_outstanding ??
+                        ledger.data.outstanding ??
+                        ledger.data.balance
+                    )}
                   </div>
+                  {Number(ledger.data.hmo_unpaid || 0) > 0 && (
+                    <div className="mt-1 text-xs text-rose-700">
+                      HMO pending {formatMoney(ledger.data.hmo_unpaid)}
+                    </div>
+                  )}
                 </div>
 
                 <div className="group rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 transition hover:shadow-md">

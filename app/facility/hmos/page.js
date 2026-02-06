@@ -155,7 +155,11 @@ export default function EnhancedHMOPage() {
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState("");
 
-  const isSuperAdmin = useMemo(() => (me?.role || "").toUpperCase() === "SUPER_ADMIN", [me]);
+  // Backend allows both SUPER_ADMIN and ADMIN to manage facility HMOs.
+  const isSuperAdmin = useMemo(() => {
+    const role = String(me?.role || "").toUpperCase();
+    return role === "SUPER_ADMIN" || role === "ADMIN";
+  }, [me]);
   
   // Active HMOs for pricing tabs - use system_hmo.id for API calls
   const activeHMOs = useMemo(() => {
@@ -262,9 +266,9 @@ export default function EnhancedHMOPage() {
     setBusy(true);
     setError("");
     try {
-      await apiFetch(`/patients/hmo/facility/${hmo.id}/`, {
-        method: "PATCH",
-        body: JSON.stringify({ is_active: !hmo.is_active }),
+      // Use the backend toggle endpoint to avoid PATCH issues in some deployments.
+      await apiFetch(`/patients/hmo/facility/${hmo.id}/toggle-active/`, {
+        method: "POST",
       });
       const res = await apiFetch("/patients/hmo/facility/");
       setHmos(normalizeList(res));

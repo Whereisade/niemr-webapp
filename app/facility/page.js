@@ -278,7 +278,14 @@ export default async function FacilityDashboard() {
   let labCounts = { pending: 0, inProgress: 0, completedToday: 0, cancelled: 0 };
   let rxCounts = { prescribed: 0, partial: 0, dispensed: 0, cancelled: 0 };
   let stockCounts = { lowStock: 0, outOfStock: 0, totalItems: 0 };
-  let revenueCounts = { todayTotal: 0, paymentsCollected: 0 };
+  let revenueCounts = {
+    todayTotal: 0,
+    paymentsCollected: 0,
+    patientDirectTotal: 0,
+    patientDirectPayments: 0,
+    hmoTotal: 0,
+    hmoPayments: 0,
+  };
   
   // ✅ Declare at function scope for doctor role (used in both stats & quickMetrics)
   let myApptsCount = 0;
@@ -329,8 +336,32 @@ export default async function FacilityDashboard() {
     
     const todayTotal = chargesList.reduce((sum, c) => sum + Number(c.amount || 0), 0);
     const paymentsCollected = paymentsList.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    
-    revenueCounts = { todayTotal, paymentsCollected };
+
+    // Split by payer so HMO bills don't inflate "patient outstanding".
+    const patientDirectTotal = chargesList
+      .filter((c) => String(c?.payment_source || "").toUpperCase() === "PATIENT_DIRECT")
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+    const hmoTotal = chargesList
+      .filter((c) => String(c?.payment_source || "").toUpperCase() === "HMO")
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+    const patientDirectPayments = paymentsList
+      .filter((p) => String(p?.payment_source || "").toUpperCase() === "PATIENT_DIRECT")
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    const hmoPayments = paymentsList
+      .filter((p) => String(p?.payment_source || "").toUpperCase() === "HMO")
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    revenueCounts = {
+      todayTotal,
+      paymentsCollected,
+      patientDirectTotal,
+      patientDirectPayments,
+      hmoTotal,
+      hmoPayments,
+    };
   }
 
   const { list: notifList, count: unreadCount } = normalizeListAndCount(notifications);
@@ -722,7 +753,20 @@ export default async function FacilityDashboard() {
       ((checkedInCount + completedCount) / totalCount) * 100
     );
 
-    const outstanding = Number(revenueCounts.todayTotal || 0) - Number(revenueCounts.paymentsCollected || 0);
+    // Keep facility revenue totals, but show outstanding as PATIENT-DIRECT so HMO bills
+    // don't look like "patient" debt.
+    const patientOutstanding =
+      Number(revenueCounts.patientDirectTotal || 0) -
+      Number(revenueCounts.patientDirectPayments || 0);
+
+    const hmoPending =
+      Number(revenueCounts.hmoTotal || 0) - Number(revenueCounts.hmoPayments || 0);
+
+    const outstandingSublabel = (() => {
+      const p = `Patient outstanding ₦${Math.max(0, patientOutstanding).toLocaleString()}`;
+      const h = hmoPending > 0 ? ` · HMO pending ₦${Math.max(0, hmoPending).toLocaleString()}` : "";
+      return p + h;
+    })();
 
     quickMetrics = [
       {
@@ -750,7 +794,7 @@ export default async function FacilityDashboard() {
         icon: DollarSign,
         label: "Payments Collected",
         value: `₦${Number(revenueCounts.paymentsCollected || 0).toLocaleString()}`,
-        sublabel: `Outstanding ₦${Math.max(0, outstanding).toLocaleString()}`,
+        sublabel: outstandingSublabel,
         color: "violet",
       },
     ];

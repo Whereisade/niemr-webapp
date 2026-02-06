@@ -74,6 +74,15 @@ function PatientAppointmentsPageInner() {
     ? data
     : [];
   const total = Number(data?.count ?? rows.length);
+  const sortedRows = [...rows].sort((a, b) => {
+    const aVal = a?.start_at || a?.scheduled_for || a?.date;
+    const bVal = b?.start_at || b?.scheduled_for || b?.date;
+    const aTime = new Date(aVal || 0).getTime();
+    const bTime = new Date(bVal || 0).getTime();
+    const safeATime = Number.isNaN(aTime) ? -Infinity : aTime;
+    const safeBTime = Number.isNaN(bTime) ? -Infinity : bTime;
+    return safeBTime - safeATime;
+  });
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -281,7 +290,7 @@ function PatientAppointmentsPageInner() {
             </div>
           ) : rows.length ? (
             <div className="divide-y divide-slate-100">
-              {rows.map((a) => {
+              {sortedRows.map((a) => {
                 const statusValue = (a.status || "SCHEDULED").toUpperCase();
                 const actions = getPatientActions(a);
                 const isFinal = isTerminalStatus(statusValue);
@@ -427,7 +436,7 @@ function PatientAppointmentsPageInner() {
                   </td>
                 </tr>
               ) : rows.length ? (
-                rows.map((a) => {
+                sortedRows.map((a) => {
                   const statusValue = (a.status || "SCHEDULED").toUpperCase();
                   const actions = getPatientActions(a);
                   const isFinal = isTerminalStatus(statusValue);
