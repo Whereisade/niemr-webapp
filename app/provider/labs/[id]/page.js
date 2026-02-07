@@ -23,7 +23,7 @@ import {
   TestTube,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { submitLabResult, markLabOrderCollected } from "@/lib/labsStatusActions";
+import { submitLabResult, markLabOrderCollected, cancelLabOrder } from "@/lib/labsStatusActions";
 import { uploadLabOrderAttachment } from "@/lib/labAttachments";
 import DownloadReportButton from "@/components/DownloadReportButton";
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
@@ -93,6 +93,7 @@ export default function IndependentLabOrderDetailPage() {
   // Sample collection state
   const [collectingItems, setCollectingItems] = useState(new Set());
   const [collectingAll, setCollectingAll] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Load current user
   useEffect(() => {
@@ -152,6 +153,24 @@ export default function IndependentLabOrderDetailPage() {
   }, [id]);
 
   // Load attachments
+async function handleCancelOrder() {
+  if (!id) return;
+  const ok = window.confirm("Cancel this lab order? This cannot be undone.");
+  if (!ok) return;
+  setCancelling(true);
+  try {
+    await cancelLabOrder(id);
+    await loadOrder();
+    // If cancelled, return to list for clarity
+    router.push("/provider/labs");
+  } catch (err) {
+    setError(err?.message || "Failed to cancel order.");
+  } finally {
+    setCancelling(false);
+  }
+}
+
+
   async function loadAttachments() {
     if (!id) return;
     try {
@@ -425,7 +444,20 @@ export default function IndependentLabOrderDetailPage() {
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
-          </button>
+          
+{(statusNorm === "PENDING" || statusNorm === "IN_PROGRESS") && (
+  <button
+    type="button"
+    onClick={handleCancelOrder}
+    disabled={cancelling}
+    className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+  >
+    {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+    Cancel order
+  </button>
+)}
+
+</button>
 
           <DownloadReportButton
             type="lab"

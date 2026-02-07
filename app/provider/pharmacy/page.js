@@ -21,6 +21,7 @@ import {
   FileText,
   Loader2,
   CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
 import { apiFetch } from "@/lib/api";
@@ -106,6 +107,7 @@ function ProviderPharmacyPageInner() {
   const s = searchParams.get("s") || "";
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const [cancellingId, setCancellingId] = useState(null);
 
   const { data, error, isLoading } = usePrescriptions({
     page,
@@ -172,6 +174,55 @@ function ProviderPharmacyPageInner() {
   const canPrescribe = ["PHARMACY", "DOCTOR", "NURSE"].includes(meRole) || 
                        ["PHARMACIST", "DOCTOR", "NURSE"].includes(providerType);
   const canManageCatalog = isPharmacyProvider;
+
+  async function handleCancelPrescription(rx) {
+    const id = rx?.id;
+    if (!id) return;
+
+    const statusNorm = String(rx?.status || "").toUpperCase();
+    if (statusNorm === "DISPENSED" || statusNorm === "PARTIALLY_DISPENSED") {
+      alert("Dispensed prescriptions cannot be cancelled.");
+      return;
+    }
+
+    if (Array.isArray(rx?.items) && rx.items.some((it) => Number(it?.qty_dispensed || 0) > 0)) {
+      alert("This prescription already has dispensed items and cannot be cancelled.");
+      return;
+    }
+
+    const ok = window.confirm(
+      "Cancel this prescription? This will stop processing and it cannot be undone."
+    );
+    if (!ok) return;
+
+    setCancellingId(id);
+    try {
+      const res = await fetch(`/api/proxy/pharmacy/prescriptions/${id}/cancel/`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        let msg = "Failed to cancel prescription.";
+        try {
+          const body = await res.json();
+          msg = body?.detail || body?.message || msg;
+        } catch {
+          // ignore
+        }
+        throw new Error(msg);
+      }
+
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      alert(err?.message || "Failed to cancel prescription.");
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   // Load patients
   useEffect(() => {
@@ -504,6 +555,8 @@ function ProviderPharmacyPageInner() {
           setDetailsId={setDetailsId}
           setDetailsOpen={setDetailsOpen}
           canDispense={canDispense}
+          cancellingId={cancellingId}
+          onCancelPrescription={handleCancelPrescription}
           stockByDrugId={stockByDrugId}
         />
       )}
@@ -558,6 +611,8 @@ function PrescriptionsTab({
   setDetailsId,
   setDetailsOpen,
   canDispense,
+  cancellingId,
+  onCancelPrescription,
   stockByDrugId,
 }) {
   return (
@@ -750,16 +805,44 @@ function PrescriptionsTab({
                     </div>
 
                     <div className="mt-4">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailsId(rx.id);
-                          setDetailsOpen(true);
-                        }}
-                        className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
-                      >
-                        {canDispense ? "View & dispense" : "View"}
-                      </button>
+                      {(() => {
+                        const statusNorm = String(rx?.status || "").toUpperCase();
+                        const canCancel =
+                          Boolean(canDispense) &&
+                          (statusNorm === "PRESCRIBED" || statusNorm === "DRAFT") &&
+                          !(Array.isArray(rx?.items) && rx.items.some((it) => Number(it?.qty_dispensed || 0) > 0));
+
+                        return (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetailsId(rx.id);
+                                setDetailsOpen(true);
+                              }}
+                              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
+                            >
+                              {canDispense ? "View & dispense" : "View"}
+                            </button>
+
+                            {canCancel && typeof onCancelPrescription === "function" && (
+                              <button
+                                type="button"
+                                onClick={() => onCancelPrescription(rx)}
+                                disabled={cancellingId === rx.id}
+                                className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                              >
+                                {cancellingId === rx.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <XCircle className="h-3.5 w-3.5" />
+                                )}
+                                Cancel
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -892,16 +975,44 @@ function PrescriptionsTab({
                           <StatusPill value={rx.status} />
                         </Td>
                         <Td>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDetailsId(rx.id);
-                              setDetailsOpen(true);
-                            }}
-                            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
-                          >
-                            {canDispense ? "View & dispense" : "View"}
-                          </button>
+                          {(() => {
+                            const statusNorm = String(rx?.status || "").toUpperCase();
+                            const canCancel =
+                              Boolean(canDispense) &&
+                              (statusNorm === "PRESCRIBED" || statusNorm === "DRAFT") &&
+                              !(Array.isArray(rx?.items) && rx.items.some((it) => Number(it?.qty_dispensed || 0) > 0));
+
+                            return (
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDetailsId(rx.id);
+                                    setDetailsOpen(true);
+                                  }}
+                                  className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50"
+                                >
+                                  {canDispense ? "View & dispense" : "View"}
+                                </button>
+
+                                {canCancel && typeof onCancelPrescription === "function" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onCancelPrescription(rx)}
+                                    disabled={cancellingId === rx.id}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                                  >
+                                    {cancellingId === rx.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <XCircle className="h-3.5 w-3.5" />
+                                    )}
+                                    Cancel
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </Td>
                       </tr>
                     );

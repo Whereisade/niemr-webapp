@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { downloadLabPdf } from "@/lib/reports";
-import { markLabOrderCollected } from "@/lib/labsStatusActions";
+import { markLabOrderCollected, cancelLabOrder } from "@/lib/labsStatusActions";
 import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
 import LabOrderAttachmentsModal from "@/components/labs/LabOrderAttachmentsModal";
 import { getLabStatusMeta } from "@/lib/LabsUiConfig";
@@ -82,6 +82,7 @@ function IndependentLabOrdersPageInner() {
   const [meLoading, setMeLoading] = useState(true);
 
   const [collectingId, setCollectingId] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
 
   // Modal state
@@ -177,6 +178,21 @@ function IndependentLabOrdersPageInner() {
       setCollectingId(null);
     }
   }
+
+async function handleCancel(orderId) {
+  if (!orderId) return;
+  const ok = window.confirm("Cancel this lab order? This cannot be undone.");
+  if (!ok) return;
+  setCancellingId(orderId);
+  try {
+    await cancelLabOrder(orderId);
+    await loadOrders();
+  } catch (err) {
+    alert(err?.message || "Failed to cancel order.");
+  } finally {
+    setCancellingId(null);
+  }
+}
 
   async function handleDownload(order) {
     if (!order?.id) return;
@@ -382,7 +398,7 @@ function IndependentLabOrdersPageInner() {
           {loading && !orders.length ? (
             <div className="px-4 py-10 text-center text-sm text-slate-500">
               <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
-              <p className="mt-2">Loading ordersâ€¦</p>
+              <p className="mt-2">Loading orders…</p>
             </div>
           ) : orders.length ? (
             <div className="divide-y divide-slate-100">
@@ -454,7 +470,7 @@ function IndependentLabOrdersPageInner() {
                         className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <DownloadCloud className="h-3.5 w-3.5" />
-                        {downloadingId === order.id ? "Generatingâ€¦" : "PDF"}
+                        {downloadingId === order.id ? "Generating…" : "PDF"}
                       </button>
 
                       <Link
@@ -463,6 +479,24 @@ function IndependentLabOrdersPageInner() {
                       >
                         View
                       </Link>
+
+                      {(statusNorm === "PENDING" || statusNorm === "IN_PROGRESS") && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(order.id)}
+                          disabled={cancellingId === order.id}
+                          className="text-xs font-medium text-rose-700 hover:underline disabled:opacity-60"
+                        >
+                          {cancellingId === order.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Cancelling…
+                            </span>
+                          ) : (
+                            "Cancel"
+                          )}
+                        </button>
+                      )}
 
                       {statusNorm === "PENDING" && (
                         <button
@@ -481,13 +515,31 @@ function IndependentLabOrdersPageInner() {
 
                       {statusNorm === "IN_PROGRESS" && (
                         <Link
-                          href={`/lab/orders/${order.id}`}
+                          href={`/provider/labs/${order.id}`}
                           className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
                         >
                           Enter result
                         </Link>
                       )}
 
+
+{(statusNorm === "PENDING" || statusNorm === "IN_PROGRESS") && (
+  <button
+    type="button"
+    onClick={() => handleCancel(order.id)}
+    disabled={cancellingId === order.id}
+    className="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+  >
+    {cancellingId === order.id ? (
+      <span className="inline-flex items-center gap-1">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Cancelling…
+      </span>
+    ) : (
+      "Cancel"
+    )}
+  </button>
+)}
                       <button
                         type="button"
                         onClick={() => {
@@ -657,7 +709,7 @@ function IndependentLabOrdersPageInner() {
 
                           {statusNorm === "IN_PROGRESS" && (
                             <Link
-                              href={`/lab/orders/${order.id}`}
+                              href={`/provider/labs/${order.id}`}
                               className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
                             >
                               Enter result

@@ -589,7 +589,7 @@ export default async function ProviderPage() {
         title: "Open encounters",
         value: pendingEncounters.length,
         icon: ClipboardList,
-        href: "/provider/encounters?status=OPEN",
+        href: "/provider/encounters?status=IN_PROGRESS",
         accent: "amber",
         hint: pendingEncounters.length > 0 ? "Needs attention" : "All closed",
       },
