@@ -322,8 +322,20 @@ function PatientLabOrdersPageInner() {
                       .join(", ")
                   : order.tests_display || "\u2014";
 
-                const facilityName =
-                  order.facility_name || order.facility?.name || "\u2014";
+                const isIndependentLab =
+                  Boolean(order.outsourced_to_name) ||
+                  Boolean(order.outsourced_to) ||
+                  Boolean(order.external_lab_name);
+
+                const providerName =
+                  order.outsourced_to_name ||
+                  order.outsourced_to?.display_name ||
+                  order.outsourced_to?.name ||
+                  order.external_lab_name ||
+                  order.facility_name ||
+                  order.facility?.display_name ||
+                  order.facility?.name ||
+                  "\u2014";
 
                 const orderedByName =
                   order.ordered_by_name ||
@@ -349,9 +361,16 @@ function PatientLabOrdersPageInner() {
                             {orderedByName}
                           </div>
                         </div>
-                        <div className="mt-2 flex items-center gap-1 text-xs text-slate-600">
-                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                          {facilityName}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                          {isIndependentLab ? (
+                            <FlaskConical className="h-3.5 w-3.5 text-slate-400" />
+                          ) : (
+                            <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          )}
+                          <span className="font-medium text-slate-700">{providerName}</span>
+                          <span className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            {isIndependentLab ? "Independent lab" : "Facility"}
+                          </span>
                         </div>
                       </div>
                       <span
@@ -416,7 +435,7 @@ function PatientLabOrdersPageInner() {
                   <Th>Ordered</Th>
                   <Th>Tests</Th>
                   <Th>Status</Th>
-                  <Th>Facility</Th>
+                  <Th>Provider</Th>
                   <Th>Ordered by</Th>
                   <Th>Note</Th>
                   <Th className="text-right">Actions</Th>
@@ -445,8 +464,20 @@ function PatientLabOrdersPageInner() {
                           .join(", ")
                       : order.tests_display || "\u2014";
 
-                    const facilityName =
-                      order.facility_name || order.facility?.name || "\u2014";
+                    const isIndependentLab =
+                      Boolean(order.outsourced_to_name) ||
+                      Boolean(order.outsourced_to) ||
+                      Boolean(order.external_lab_name);
+
+                    const providerName =
+                      order.outsourced_to_name ||
+                      order.outsourced_to?.display_name ||
+                      order.outsourced_to?.name ||
+                      order.external_lab_name ||
+                      order.facility_name ||
+                      order.facility?.display_name ||
+                      order.facility?.name ||
+                      "\u2014";
 
                     const orderedByName =
                       order.ordered_by_name ||
@@ -481,9 +512,18 @@ function PatientLabOrdersPageInner() {
                           </span>
                         </Td>
                         <Td>
-                          <div className="flex items-center gap-1 text-slate-700">
-                            <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                            {facilityName}
+                          <div className="flex flex-wrap items-center gap-2 text-slate-700">
+                            <div className="flex items-center gap-1">
+                              {isIndependentLab ? (
+                                <FlaskConical className="h-3.5 w-3.5 text-slate-400" />
+                              ) : (
+                                <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                              )}
+                              <span className="max-w-[220px] truncate">{providerName}</span>
+                            </div>
+                            <span className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                              {isIndependentLab ? "Independent lab" : "Facility"}
+                            </span>
                           </div>
                         </Td>
                         <Td>

@@ -302,7 +302,12 @@ function PatientAppointmentsPageInner() {
 
                 const hasEncounter = a.has_encounter || !!a.encounter_id;
                 const encounterStatus = a.encounter_status || null;
-                const facilityName = a.facility_name || a.facility?.name || "—";
+                const orgName =
+                  a.provider_org_name ||
+                  a.facility_name ||
+                  a.facility?.name ||
+                  "—";
+                const isIndependent = !a.facility && !a.facility_name;
 
                 return (
                   <div key={a.id} className="p-4 space-y-3">
@@ -337,9 +342,14 @@ function PatientAppointmentsPageInner() {
                           {a.provider_name || a.provider || "—"}
                         </span>
                       </div>
-                      <div className="inline-flex items-center gap-2">
+                      <div className="inline-flex items-center gap-2 flex-wrap">
                         <Building2 className="h-4 w-4 text-slate-400" />
-                        <span>{facilityName}</span>
+                        <span>{orgName}</span>
+                        {isIndependent ? (
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                            Independent
+                          </span>
+                        ) : null}
                       </div>
                       <div className="inline-flex items-center gap-2">
                         <CalendarRange className="h-4 w-4 text-slate-400" />
@@ -415,7 +425,7 @@ function PatientAppointmentsPageInner() {
               <tr>
                 <Th>Patient</Th>
                 <Th>Doctor / Provider</Th>
-                <Th>Facility</Th>
+                <Th>Facility / Provider</Th>
                 <Th>When</Th>
                 <Th>Status</Th>
                 <Th>Encounter</Th>
@@ -449,7 +459,12 @@ function PatientAppointmentsPageInner() {
                   // Encounter info from backend
                   const hasEncounter = a.has_encounter || !!a.encounter_id;
                   const encounterStatus = a.encounter_status || null;
-                  const facilityName = a.facility_name || a.facility?.name || "—";
+                  const orgName =
+                    a.provider_org_name ||
+                    a.facility_name ||
+                    a.facility?.name ||
+                    "—";
+                  const isIndependent = !a.facility && !a.facility_name;
 
                   return (
                     <tr
@@ -480,11 +495,16 @@ function PatientAppointmentsPageInner() {
                         </span>
                       </Td>
 
-                      {/* Facility */}
+                      {/* Facility / Provider */}
                       <Td>
-                        <span className="inline-flex items-center gap-2 text-slate-700">
+                        <span className="inline-flex items-center gap-2 text-slate-700 flex-wrap">
                           <Building2 className="h-4 w-4 text-slate-400" />
-                          {facilityName}
+                          {orgName}
+                          {isIndependent ? (
+                            <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                              Independent
+                            </span>
+                          ) : null}
                         </span>
                       </Td>
 

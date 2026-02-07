@@ -112,6 +112,11 @@ export default function PatientNewAppointmentPage() {
   const [dependentsError, setDependentsError] = useState("");
   const [whoFor, setWhoFor] = useState("self");
 
+  // Prevent duplicates if the follow-up order creation fails and user re-submits
+  const [createdAppointment, setCreatedAppointment] = useState(null);
+  const [createdLabOrderId, setCreatedLabOrderId] = useState(null);
+  const [createdRxId, setCreatedRxId] = useState(null);
+
   // Load facilities on mount
   useEffect(() => {
     let cancelled = false;
@@ -540,15 +545,99 @@ export default function PatientNewAppointmentPage() {
 
     payload.notify_email = !!sendEmail;
     setIsSubmitting(true);
+
+    let appt = createdAppointment;
+
     try {
-      await createAppointment(payload);
+      if (!appt) {
+        appt = await createAppointment(payload);
+        setCreatedAppointment(appt);
+      }
+
+      // Create a lab order directly for independent lab bookings
+      if (
+        bookingMode === "independent" &&
+        providerType === "LAB_SCIENTIST" &&
+        selectedLabTests.length > 0 &&
+        !createdLabOrderId
+      ) {
+        const items = selectedLabTests
+          .map((id) => {
+            const test = labTests.find((t) => t.id === id);
+            const code = String(test?.code || test?.test_code || "").trim();
+            const name = String(test?.name || test?.test_name || "").trim();
+            if (code) return { test_code: code };
+            if (name) return { requested_name: name };
+            return null;
+          })
+          .filter(Boolean);
+
+        if (items.length > 0 && providerId) {
+          const orderPayload = {
+            outsourced_to: Number(providerId),
+            items,
+            appointment_id: appt?.id,
+            note: reason?.trim() || "",
+          };
+          if (payload.patient) orderPayload.patient = payload.patient;
+
+          const orderRes = await apiFetch("/labs/orders/patient-request/", {
+            method: "POST",
+            body: JSON.stringify(orderPayload),
+          });
+          if (orderRes?.id) setCreatedLabOrderId(orderRes.id);
+        }
+      }
+
+      // Create a medication request directly for independent pharmacy bookings
+      if (
+        bookingMode === "independent" &&
+        providerType === "PHARMACIST" &&
+        selectedPharmacyDrugs.length > 0 &&
+        !createdRxId
+      ) {
+        const items = selectedPharmacyDrugs
+          .map((id) => {
+            const drug = pharmacyDrugs.find((d) => d.id === id);
+            const code = String(drug?.code || drug?.drug_code || "").trim();
+            const name = String(drug?.name || "").trim();
+            if (code) return { drug_code: code, qty_prescribed: 1 };
+            if (name) return { drug_name: name, qty_prescribed: 1 };
+            return null;
+          })
+          .filter(Boolean);
+
+        if (items.length > 0 && providerId) {
+          const rxPayload = {
+            outsourced_to: Number(providerId),
+            items,
+            appointment_id: appt?.id,
+            note: reason?.trim() || "",
+          };
+          if (payload.patient) rxPayload.patient = payload.patient;
+
+          const rxRes = await apiFetch("/pharmacy/prescriptions/patient-request/", {
+            method: "POST",
+            body: JSON.stringify(rxPayload),
+          });
+          if (rxRes?.id) setCreatedRxId(rxRes.id);
+        }
+      }
+
       router.push("/patient/appointments");
     } catch (err) {
       console.error("Create appointment failed", err);
-      setError(
-        err?.message ||
-          "Failed to create appointment. Please check your entries and try again."
-      );
+      if (appt) {
+        setError(
+          err?.message ||
+            "Your appointment was booked, but we couldn't finish creating your lab order/medication request. Please tap Book again to retry."
+        );
+      } else {
+        setError(
+          err?.message ||
+            "Failed to create appointment. Please check your entries and try again."
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }

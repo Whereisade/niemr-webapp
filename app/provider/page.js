@@ -468,7 +468,7 @@ export default async function ProviderPage() {
       renderItem: (rx) => (
         <Link
           key={rx.id}
-          href={`/provider/pharmacy/${rx.id}`}
+          href={`/provider/pharmacy/`}
           className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-800 transition hover:border-emerald-200 hover:bg-emerald-50/40"
         >
           <div className="flex items-center justify-between gap-3">
