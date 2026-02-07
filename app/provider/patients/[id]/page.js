@@ -119,8 +119,6 @@ export default function ProviderPatientDetailPage() {
   // Role-based feature flags
   const canRecordVitals = ["DOCTOR", "NURSE", "PHARMACY"].includes(userRole);
   const canStartEncounter = ["DOCTOR", "NURSE"].includes(userRole);
-  const showPrescriptionHistory = userRole === "PHARMACY";
-  const showLabHistory = userRole === "LAB";
 
   return (
     <main className="min-h-screen bg-slate-50/80">
@@ -203,37 +201,31 @@ export default function ProviderPatientDetailPage() {
                   </button>
                 )}
 
-                {showPrescriptionHistory && (
-                  <Link
-                    href={`/provider/prescriptions?patient=${patientId}`}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
-                  >
-                    <Pill className="h-4 w-4" />
-                    Prescription History
-                  </Link>
-                )}
+                <Link
+                  href={"/provider/labs?patient=" + patientId}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                >
+                  <FlaskConical className="h-4 w-4" />
+                  Labs
+                </Link>
 
-                {showLabHistory && (
-                  <Link
-                    href={`/provider/labs?patient=${patientId}`}
-                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
-                  >
-                    <FlaskConical className="h-4 w-4" />
-                    Lab History
-                  </Link>
-                )}
+                <Link
+                  href={"/provider/pharmacy?patient=" + patientId}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  <Pill className="h-4 w-4" />
+                  Pharmacy history
+                </Link>
 
-                {canStartEncounter && (
-                  <button
-                    type="button"
-                    onClick={() => setEncountersOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-                    title="View this patient's encounters"
-                  >
-                    <Stethoscope className="h-4 w-4" />
-                    Encounters
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setEncountersOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  title="View this patient's encounters"
+                >
+                  <Stethoscope className="h-4 w-4" />
+                  Encounters
+                </button>
               </div>
             </div>
 

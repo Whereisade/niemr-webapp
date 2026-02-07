@@ -72,6 +72,7 @@ function IndependentLabOrdersPageInner() {
   const limit = Number(sp.get("limit") || 20);
   const status = sp.get("status") || "";
   const s = sp.get("s") || "";
+  const patient = sp.get("patient") || "";
 
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
@@ -128,6 +129,7 @@ function IndependentLabOrdersPageInner() {
       qs.set("limit", String(limit));
       if (status) qs.set("status", status);
       if (s) qs.set("s", s);
+      if (patient) qs.set("patient", patient);
       
       // Filter orders by created_by (current user's ID) for doctors
       if (isDoctorRole && me?.id) {
@@ -149,7 +151,7 @@ function IndependentLabOrdersPageInner() {
   useEffect(() => {
     loadOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, status, s]);
+  }, [page, limit, status, s, patient]);
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -264,6 +266,29 @@ async function handleCancel(orderId) {
               ? "View and manage lab orders you have created."
               : "View and process lab orders outsourced to your independent lab practice."}
           </p>
+          {patient && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <Link
+                href={`/provider/patients/${patient}`}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to patient
+              </Link>
+              <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 font-medium text-teal-800 ring-1 ring-teal-200">
+                <FlaskConical className="h-3.5 w-3.5" />
+                Showing lab orders for patient #{patient}
+              </div>
+              <button
+                type="button"
+                onClick={() => updateQuery({ patient: "" })}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
         </div>
 
         <div className="flex items-center gap-2">
