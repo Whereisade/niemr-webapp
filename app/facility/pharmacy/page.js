@@ -200,7 +200,10 @@ function FacilityPharmacyPageInner() {
   const start = searchParams.get("start") || "";
   const end = searchParams.get("end") || "";
   const s = searchParams.get("s") || "";
+
+
   const patient = searchParams.get("patient") || "";
+  const scope = searchParams.get("scope") || "";
 
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -208,10 +211,11 @@ function FacilityPharmacyPageInner() {
     page,
     limit,
     status,
-    patient,
     start,
     end,
     s,
+    patient,
+    scope,
     refreshKey,
   });
 
@@ -469,31 +473,6 @@ function FacilityPharmacyPageInner() {
           <p className="text-sm text-slate-600">
             Manage prescriptions, stock, and drug catalog
           </p>
-
-          {patient && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <Link
-                href={`/facility/patients/${patient}`}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to patient
-              </Link>
-
-              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-800 ring-1 ring-emerald-200">
-                <Pill className="h-3.5 w-3.5" />
-                Showing prescriptions for patient #{patient}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => updateQuery({ patient: "" })}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Clear
-              </button>
-            </div>
-          )}
         </div>
         <div className="flex items-center gap-3">
           {canPrescribe && (

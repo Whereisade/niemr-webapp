@@ -72,7 +72,9 @@ function IndependentLabOrdersPageInner() {
   const limit = Number(sp.get("limit") || 20);
   const status = sp.get("status") || "";
   const s = sp.get("s") || "";
+
   const patient = sp.get("patient") || "";
+  const scope = sp.get("scope") || "";
 
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
@@ -117,7 +119,9 @@ function IndependentLabOrdersPageInner() {
   const meRole = (me?.role || "").toUpperCase();
   const isLabRole = meRole === "LAB";
   const isDoctorRole = meRole === "DOCTOR";
-  const canAccessPage = isLabRole || isDoctorRole;
+  const isNurseRole = meRole === "NURSE";
+  const viewingPatientHistory = Boolean(patient);
+  const canAccessPage = isLabRole || isDoctorRole || (isNurseRole && viewingPatientHistory);
 
   // Load orders
   async function loadOrders() {
@@ -129,10 +133,13 @@ function IndependentLabOrdersPageInner() {
       qs.set("limit", String(limit));
       if (status) qs.set("status", status);
       if (s) qs.set("s", s);
+
       if (patient) qs.set("patient", patient);
-      
-      // Filter orders by created_by (current user's ID) for doctors
-      if (isDoctorRole && me?.id) {
+      if (scope) qs.set("scope", scope);
+
+      // If viewing a specific patient's system history, do NOT force provider-only filters
+      if (!patient && isDoctorRole && me?.id) {
+        // (backend currently uses ordered_by, but keep this for backward-compat)
         qs.set("created_by", me.id);
       }
 
@@ -151,7 +158,7 @@ function IndependentLabOrdersPageInner() {
   useEffect(() => {
     loadOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, status, s, patient]);
+  }, [page, limit, status, s, patient, scope, meRole]);
 
   const updateQuery = (patch) => {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -256,39 +263,16 @@ async function handleCancel(orderId) {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-600/10 px-3 py-1 text-xs font-semibold tracking-wide text-teal-700">
             <FlaskConical className="h-3.5 w-3.5" />
-            {isDoctorRole ? "Doctor Lab Orders" : "Independent Lab Worklist"}
+            {viewingPatientHistory ? "Patient Lab History" : isDoctorRole ? "Doctor Lab Orders" : "Independent Lab Worklist"}
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            {isDoctorRole ? "Your Lab Orders" : "Lab Orders Assigned to You"}
+            {viewingPatientHistory ? "Lab History" : isDoctorRole ? "Your Lab Orders" : "Lab Orders Assigned to You"}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
             {isDoctorRole
               ? "View and manage lab orders you have created."
               : "View and process lab orders outsourced to your independent lab practice."}
           </p>
-          {patient && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <Link
-                href={`/provider/patients/${patient}`}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to patient
-              </Link>
-              <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 font-medium text-teal-800 ring-1 ring-teal-200">
-                <FlaskConical className="h-3.5 w-3.5" />
-                Showing lab orders for patient #{patient}
-              </div>
-              <button
-                type="button"
-                onClick={() => updateQuery({ patient: "" })}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Clear
-              </button>
-            </div>
-          )}
-
         </div>
 
         <div className="flex items-center gap-2">

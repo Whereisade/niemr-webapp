@@ -61,6 +61,8 @@ export default function FacilityPharmacyStockPage() {
     qty: "",
     note: "",
   });
+  const [drugSearch, setDrugSearch] = useState("");
+  const [drugDropdownOpen, setDrugDropdownOpen] = useState(false);
   const [adjustSubmitting, setAdjustSubmitting] = useState(false);
   const [adjustError, setAdjustError] = useState(null);
   const [adjustSuccess, setAdjustSuccess] = useState("");
@@ -244,6 +246,25 @@ export default function FacilityPharmacyStockPage() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [catalog, stockByDrugId]);
 
+  const filteredCatalogOptions = useMemo(() => {
+    const term = drugSearch.trim().toLowerCase();
+    if (!term) return catalogOptions;
+    return catalogOptions.filter((opt) => {
+      const code = (opt.code || "").toLowerCase();
+      return (
+        opt.label.toLowerCase().includes(term) ||
+        code.includes(term) ||
+        String(opt.current ?? "").includes(term)
+      );
+    });
+  }, [catalogOptions, drugSearch]);
+
+  const selectedDrug = useMemo(() => {
+    const id = Number(adjustForm.drug_id);
+    if (!id) return null;
+    return catalogOptions.find((opt) => Number(opt.id) === id) || null;
+  }, [adjustForm.drug_id, catalogOptions]);
+
   async function handleAdjustSubmit(e) {
     e.preventDefault();
     setAdjustError(null);
@@ -374,7 +395,7 @@ export default function FacilityPharmacyStockPage() {
           icon={TrendingDown}
           label="Low stock"
           value={stockStats.low}
-          hint="Items at or below 10 units."
+          hint="Items at or below 10%."
         />
       </section>
 
@@ -568,30 +589,73 @@ export default function FacilityPharmacyStockPage() {
                 <label className="block text-[11px] font-medium text-slate-700">
                   Drug
                 </label>
-                <select
-                  required
-                  value={adjustForm.drug_id}
-                  onChange={(e) =>
-                    setAdjustForm((f) => ({
-                      ...f,
-                      drug_id: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                >
-                  <option value="">Select a drug…</option>
-                  {loadingCatalog ? (
-                    <option value="">Loading catalog…</option>
-                  ) : (
-                    catalogOptions.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                        {opt.code ? ` (${opt.code})` : ""} · Current{" "}
-                        {opt.current}
-                      </option>
-                    ))
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setDrugDropdownOpen((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  >
+                    <span className="truncate text-slate-700">
+                      {selectedDrug
+                        ? `${selectedDrug.label}${
+                            selectedDrug.code ? ` (${selectedDrug.code})` : ""
+                          } · Current ${selectedDrug.current}`
+                        : "Select a drug…"}
+                    </span>
+                    <span className="ml-2 text-slate-400">▾</span>
+                  </button>
+
+                  {drugDropdownOpen && (
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg">
+                      <div className="relative border-b border-slate-100 p-2">
+                        <div className="pointer-events-none absolute inset-y-0 left-2 flex items-center">
+                          <Search className="h-3.5 w-3.5 text-slate-400" />
+                        </div>
+                        <input
+                          autoFocus
+                          type="search"
+                          placeholder="Search drug, code, current…"
+                          value={drugSearch}
+                          onChange={(e) => setDrugSearch(e.target.value)}
+                          className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-7 pr-2 text-[11px] focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        />
+                      </div>
+
+                      <div className="max-h-56 overflow-y-auto py-1 text-[11px]">
+                        {loadingCatalog ? (
+                          <div className="px-2 py-2 text-slate-500">
+                            Loading catalog…
+                          </div>
+                        ) : filteredCatalogOptions.length ? (
+                          filteredCatalogOptions.map((opt) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                setAdjustForm((f) => ({
+                                  ...f,
+                                  drug_id: String(opt.id),
+                                }));
+                                setDrugDropdownOpen(false);
+                              }}
+                              className="flex w-full items-center justify-between px-2 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+                            >
+                              <span className="truncate">
+                                {opt.label}
+                                {opt.code ? ` (${opt.code})` : ""} · Current{" "}
+                                {opt.current}
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-2 py-2 text-slate-500">
+                            No matches found.
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
-                </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
