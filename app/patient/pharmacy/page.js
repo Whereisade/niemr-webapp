@@ -9,6 +9,7 @@ import {
   Filter,
   ClipboardList,
   Activity,
+  Building2,
   Clock,
   ArrowLeft,
   ArrowRight,
@@ -275,6 +276,7 @@ function PatientPharmacyPageInner() {
             <thead className="bg-slate-50 text-slate-700">
               <tr>
                 <Th>Created</Th>
+                <Th>Facility / Provider</Th>
                 <Th>Medications</Th>
                 <Th>Status</Th>
                 <Th>Instructions</Th>
@@ -285,6 +287,13 @@ function PatientPharmacyPageInner() {
               {rows.length ? (
                 rows.map((rx) => {
                   const created = formatDateTime(rx.created_at);
+                  const sourceName = String(
+                    rx.facility_or_provider_name ||
+                    rx.outsourced_to_name ||
+                    rx.facility_name ||
+                    ""
+                  ).trim();
+
 
                   const items = Array.isArray(rx.items) ? rx.items : [];
                   const itemLines = items.map((it) => {
@@ -324,6 +333,14 @@ function PatientPharmacyPageInner() {
                           <Clock className="h-3.5 w-3.5 text-slate-400" />
                           {created}
                         </span>
+                      </Td>
+                      <Td>
+                        {sourceName ? (
+                          <span className="inline-flex items-center gap-2 text-slate-700">
+                            <Building2 className="h-4 w-4 text-slate-400" />
+                            <span className="text-xs">{sourceName}</span>
+                          </span>
+                        ) : null}
                       </Td>
                       <Td>
                         {itemLines.length ? (
@@ -406,7 +423,7 @@ function PatientPharmacyPageInner() {
               ) : (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
                     <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-slate-50">
@@ -431,6 +448,12 @@ function PatientPharmacyPageInner() {
             rows.map((rx) => {
               const created = formatDateTime(rx.created_at);
               const items = Array.isArray(rx.items) ? rx.items : [];
+              const sourceName = String(
+                rx.facility_or_provider_name ||
+                rx.outsourced_to_name ||
+                rx.facility_name ||
+                ""
+              ).trim();
               const note = rx.note || "";
 
               return (
@@ -445,6 +468,13 @@ function PatientPharmacyPageInner() {
                     </span>
                     <StatusPill value={rx.status} />
                   </div>
+
+                  {sourceName ? (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+                      <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="truncate">{sourceName}</span>
+                    </div>
+                  ) : null}
 
                   <div className="mt-3">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -473,17 +503,17 @@ function PatientPharmacyPageInner() {
                               <span className="font-medium">{drugName}</span>
                               {dose && (
                                 <span className="text-slate-600">
-                                  {` Â· ${dose}`}
+                                  {` · ${dose}`}
                                 </span>
                               )}
                               {freq && (
                                 <span className="text-slate-600">
-                                  {` Â· ${freq}`}
+                                  {` · ${freq}`}
                                 </span>
                               )}
                               {duration && (
                                 <span className="text-slate-600">
-                                  {` Â· ${duration}`}
+                                  {` · ${duration}`}
                                 </span>
                               )}
                               {remaining && (
@@ -496,7 +526,7 @@ function PatientPharmacyPageInner() {
                         })}
                       </ul>
                     ) : (
-                      <div className="mt-1 text-xs text-slate-500">â€”</div>
+                      <div className="mt-1 text-xs text-slate-500">—</div>
                     )}
                   </div>
 
@@ -511,7 +541,7 @@ function PatientPharmacyPageInner() {
                           {items
                             .filter((it) => it.instruction)
                             .map((it) => (
-                              <li key={it.id}>â€¢ {it.instruction}</li>
+                              <li key={it.id}>• {it.instruction}</li>
                             ))}
                         </ul>
                       )}

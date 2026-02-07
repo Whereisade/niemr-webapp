@@ -228,7 +228,8 @@ function PatientEncountersPageInner() {
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((enc) => {
               const providerName = enc.provider_name || enc.provider || "—";
-              const facilityName = enc.facility_name || enc.facility || "—";
+              const isIndependent = enc.provider_is_independent === true;
+              const facilityName = isIndependent ? "" : (enc.facility_name || enc.facility || "—");
               const whenLabel = formatDateTime(
                 enc.occurred_at || enc.created_at
               );
@@ -249,10 +250,12 @@ function PatientEncountersPageInner() {
                     </span>
                   </Td>
                   <Td>
-                    <span className="inline-flex items-center gap-2 text-slate-700">
-                      <Building2 className="h-4 w-4 text-slate-500" />
-                      {facilityName}
-                    </span>
+                    {facilityName ? (
+                      <span className="inline-flex items-center gap-2 text-slate-700">
+                        <Building2 className="h-4 w-4 text-slate-500" />
+                        {facilityName}
+                      </span>
+                    ) : null}
                   </Td>
                   <Td>
                     <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
@@ -275,7 +278,7 @@ function PatientEncountersPageInner() {
                       disabled={downloadingId === enc.id}
                       className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {downloadingId === enc.id ? "Generatingâ€¦" : "PDF"}
+                      {downloadingId === enc.id ? "Generating…" : "PDF"}
                     </button>
                   </td>
 
@@ -285,7 +288,7 @@ function PatientEncountersPageInner() {
                       onClick={() =>
                         setAttachmentsFor({
                           id: enc.id,
-                          label: `${providerName} @ ${facilityName} Â· #${enc.id}`,
+                          label: facilityName ? `${providerName} @ ${facilityName} · #${enc.id}` : `${providerName} · #${enc.id}`,
                         })
                       }
                       className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
@@ -332,7 +335,8 @@ function PatientEncountersPageInner() {
           <div className="divide-y divide-slate-100">
             {rows.map((enc) => {
               const providerName = enc.provider_name || enc.provider || "—";
-              const facilityName = enc.facility_name || enc.facility || "—";
+              const isIndependent = enc.provider_is_independent === true;
+              const facilityName = isIndependent ? "" : (enc.facility_name || enc.facility || "—");
               const whenLabel = formatDateTime(
                 enc.occurred_at || enc.created_at
               );
@@ -347,10 +351,12 @@ function PatientEncountersPageInner() {
                         </span>
                         <span className="truncate">{providerName}</span>
                       </div>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
-                        <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="truncate">{facilityName}</span>
-                      </div>
+                      {facilityName ? (
+                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="truncate">{facilityName}</span>
+                        </div>
+                      ) : null}
                     </div>
                     <StatusPill value={enc.status} />
                   </div>
@@ -359,7 +365,7 @@ function PatientEncountersPageInner() {
                     <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
                       {whenLabel}
                     </span>
-                    <span className="text-slate-400">â€¢</span>
+                    <span className="text-slate-400">•</span>
                     <span className="line-clamp-2">
                       {enc.chief_complaint || enc.summary || "—"}
                     </span>
@@ -372,14 +378,14 @@ function PatientEncountersPageInner() {
                       disabled={downloadingId === enc.id}
                       className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {downloadingId === enc.id ? "Generatingâ€¦" : "PDF"}
+                      {downloadingId === enc.id ? "Generating…" : "PDF"}
                     </button>
                     <button
                       type="button"
                       onClick={() =>
                         setAttachmentsFor({
                           id: enc.id,
-                          label: `${providerName} @ ${facilityName} Â· #${enc.id}`,
+                          label: facilityName ? `${providerName} @ ${facilityName} · #${enc.id}` : `${providerName} · #${enc.id}`,
                         })
                       }
                       className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
@@ -416,7 +422,7 @@ function PatientEncountersPageInner() {
       {/* Pager */}
       <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
         <div>
-          Page {page} Â· {total} total
+          Page {page} · {total} total
         </div>
         <div className="flex gap-2">
           <button

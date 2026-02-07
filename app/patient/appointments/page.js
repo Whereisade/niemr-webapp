@@ -302,12 +302,10 @@ function PatientAppointmentsPageInner() {
 
                 const hasEncounter = a.has_encounter || !!a.encounter_id;
                 const encounterStatus = a.encounter_status || null;
-                const orgName =
-                  a.provider_org_name ||
-                  a.facility_name ||
-                  a.facility?.name ||
-                  "—";
-                const isIndependent = !a.facility && !a.facility_name;
+                const isIndependent = a.provider_is_independent === true;
+                const facilityLabel = isIndependent
+                  ? ""
+                  : (a.facility_name || a.facility?.name || "");
 
                 return (
                   <div key={a.id} className="p-4 space-y-3">
@@ -342,15 +340,12 @@ function PatientAppointmentsPageInner() {
                           {a.provider_name || a.provider || "—"}
                         </span>
                       </div>
-                      <div className="inline-flex items-center gap-2 flex-wrap">
-                        <Building2 className="h-4 w-4 text-slate-400" />
-                        <span>{orgName}</span>
-                        {isIndependent ? (
-                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
-                            Independent
-                          </span>
-                        ) : null}
-                      </div>
+                      {facilityLabel ? (
+                        <div className="inline-flex items-center gap-2 flex-wrap">
+                          <Building2 className="h-4 w-4 text-slate-400" />
+                          <span>{facilityLabel}</span>
+                        </div>
+                      ) : null}
                       <div className="inline-flex items-center gap-2">
                         <CalendarRange className="h-4 w-4 text-slate-400" />
                         <span className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700">
@@ -459,12 +454,10 @@ function PatientAppointmentsPageInner() {
                   // Encounter info from backend
                   const hasEncounter = a.has_encounter || !!a.encounter_id;
                   const encounterStatus = a.encounter_status || null;
-                  const orgName =
-                    a.provider_org_name ||
-                    a.facility_name ||
-                    a.facility?.name ||
-                    "—";
-                  const isIndependent = !a.facility && !a.facility_name;
+                const isIndependent = a.provider_is_independent === true;
+                const facilityLabel = isIndependent
+                  ? ""
+                  : (a.facility_name || a.facility?.name || "");
 
                   return (
                     <tr
@@ -497,15 +490,12 @@ function PatientAppointmentsPageInner() {
 
                       {/* Facility / Provider */}
                       <Td>
-                        <span className="inline-flex items-center gap-2 text-slate-700 flex-wrap">
-                          <Building2 className="h-4 w-4 text-slate-400" />
-                          {orgName}
-                          {isIndependent ? (
-                            <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
-                              Independent
-                            </span>
-                          ) : null}
-                        </span>
+                        {facilityLabel ? (
+                          <span className="inline-flex items-center gap-2 text-slate-700 flex-wrap">
+                            <Building2 className="h-4 w-4 text-slate-400" />
+                            {facilityLabel}
+                          </span>
+                        ) : null}
                       </Td>
 
                       {/* When */}

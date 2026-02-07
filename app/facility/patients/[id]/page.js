@@ -15,7 +15,9 @@ import {
   Activity, 
   FileText, 
   Stethoscope, 
-  AlertTriangle, 
+  AlertTriangle,
+  Pill,
+  FlaskConical,
   PlayCircle, 
   Loader2, 
   X,
@@ -781,6 +783,22 @@ function FacilityPatientDetailPageInner() {
 
               {/* Quick actions */}
               <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                <Link
+                  href={"/facility/labs?patient=" + patientId}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-1.5 text-xs font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-50 sm:w-auto"
+                >
+                  <FlaskConical className="h-3.5 w-3.5" />
+                  Labs
+                </Link>
+
+                <Link
+                  href={"/facility/pharmacy?patient=" + patientId}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-1.5 text-xs font-medium text-emerald-700 shadow-sm transition hover:bg-emerald-50 sm:w-auto"
+                >
+                  <Pill className="h-3.5 w-3.5" />
+                  Pharmacy history
+                </Link>
+
                 {/* Add Vitals button - hidden for ADMIN/SUPER_ADMIN */}
                 {canManageVitals && (
                   <button

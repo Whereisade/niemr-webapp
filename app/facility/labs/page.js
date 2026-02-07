@@ -13,6 +13,7 @@ import LabOrderDetailsModal from "@/components/labs/LabOrderDetailsModal";
 import LabOrderAttachmentsModal from "@/components/labs/LabOrderAttachmentsModal";
 import {
   Activity,
+  FlaskConical,
   CalendarRange,
   Search,
   Filter,
@@ -328,6 +329,32 @@ function FacilityLabOrdersPageInner() {
           <p className="mt-1 text-sm text-slate-600">
             Lab test orders from providers in your facility
           </p>
+
+          {patient && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <Link
+                href={`/facility/patients/${patient}`}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to patient
+              </Link>
+
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 font-medium text-indigo-800 ring-1 ring-indigo-200">
+                <FlaskConical className="h-3.5 w-3.5" />
+                Showing lab orders for patient #{patient}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => updateQuery({ patient: "" })}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
         </div>
         {isSuperAdmin && (
           <Link
