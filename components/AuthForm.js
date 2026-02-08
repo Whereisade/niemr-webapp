@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react"; // Add eye icons
 
-export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
+export default function AuthForm({ role, roleKey, portal, redirectTo = "/dashboard" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,10 +12,9 @@ export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
   const [err, setErr] = useState("");
   const [showPassword, setShowPassword] = useState(false); // Add state for password visibility
 
-  // derive a lowercase role param if provided
-  const roleParam =
-    roleKey?.toString().toLowerCase() ||
-    (typeof role === "string" ? role.toLowerCase() : undefined);
+  // Optional: a small hint to the backend about which portal login page is being used.
+  // This enables strict access boundaries across the different login types.
+  const portalParam = portal?.toString().toLowerCase();
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -24,7 +23,7 @@ export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
 
     try {
       const payload = { email, password };
-      if (roleParam) payload.role = roleParam; // pass role hint if available
+      if (portalParam) payload.portal = portalParam;
 
       const r = await fetch("/api/auth/login", {
         method: "POST",
@@ -32,8 +31,17 @@ export default function AuthForm({ role, roleKey, redirectTo = "/dashboard" }) {
         body: JSON.stringify(payload),
       });
 
-      // Treat any 2xx as success — cookies set server-side may mean no JSON body
+      // Treat any 2xx as success, but prefer an explicit { ok: true }
       if (r.ok) {
+        try {
+          const data = await r.clone().json();
+          if (data && data.ok !== true) {
+            throw new Error(data?.detail || data?.message || "Login failed");
+          }
+        } catch (_) {
+          // If there's no JSON body, assume cookies were set and proceed.
+        }
+
         // soft client-side transition
         router.push(redirectTo);
         // hard fallback in case the router is blocked by something

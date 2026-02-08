@@ -384,7 +384,7 @@ export default function HomePage() {
     () => ({
       facility: {
         label: "Facility",
-        title: "Run your Hospital/Healthcare like a modern system — not a paper pile.",
+        title: "Run your Hospital/Healthcare/Facility like a modern system — not a paper pile.",
         desc: "Multi-role workflows, location-aware permissions, and operations that scale.",
         bullets: [
           "Multi-site support with role permissions",

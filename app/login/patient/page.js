@@ -77,7 +77,7 @@ export default function PatientLoginPage() {
               </div>
             </div>
 
-            <AuthForm role="Patient" redirectTo="/patient" />
+            <AuthForm role="Patient" portal="patient" redirectTo="/patient" />
 
             <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
               <span className="inline-flex items-center gap-1">

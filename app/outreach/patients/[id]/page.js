@@ -813,6 +813,7 @@ function SurgicalsTab({ patientId, eventId, rows, setRows, canCreate }) {
     procedure_category: "",
     procedure_name: "",
     indication: "",
+    notes: "",
     consent_obtained: "NA",
     status: "PLANNED",
   });
@@ -842,6 +843,7 @@ function SurgicalsTab({ patientId, eventId, rows, setRows, canCreate }) {
         procedure_category: (form.procedure_category || "").trim(),
         procedure_name: (form.procedure_name || "").trim(),
         indication: form.indication || "",
+        notes: form.notes || "",
         consent_obtained: form.consent_obtained,
         status: form.status,
       };
@@ -851,7 +853,7 @@ function SurgicalsTab({ patientId, eventId, rows, setRows, canCreate }) {
         body: JSON.stringify(payload),
       });
       setRows([created, ...(rows || [])]);
-      setForm({ procedure_category: "", procedure_name: "", indication: "", consent_obtained: "NA", status: "PLANNED" });
+      setForm({ procedure_category: "", procedure_name: "", indication: "", notes: "", consent_obtained: "NA", status: "PLANNED" });
     } catch (e2) {
       setErr(e2?.message || "Failed to save surgical record.");
     } finally {
@@ -895,6 +897,14 @@ function SurgicalsTab({ patientId, eventId, rows, setRows, canCreate }) {
               value={form.indication}
               onChange={(e) => setForm((s) => ({ ...s, indication: e.target.value }))}
               placeholder="Clinical reason / indication…"
+            />
+          </Field>
+
+          <Field label="Surgical note (optional)">
+            <TextArea
+              value={form.notes}
+              onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
+              placeholder="Extra notes about the procedure…"
             />
           </Field>
 
@@ -965,8 +975,15 @@ function SurgicalsTab({ patientId, eventId, rows, setRows, canCreate }) {
 
                 <div className="mt-3">
                   <div className="text-xs font-medium text-slate-500">Indication</div>
-                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.indication || (r.notes ? r.notes : "—")}</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.indication || "—"}</div>
                 </div>
+
+                {r.notes ? (
+                  <div className="mt-3">
+                    <div className="text-xs font-medium text-slate-500">Surgical note</div>
+                    <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{r.notes}</div>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -1742,7 +1759,9 @@ function LabTab({
   canOrder,
   canResult,
 }) {
+  const [orderMode, setOrderMode] = useState("catalog"); // catalog | manual
   const [selectedTestIds, setSelectedTestIds] = useState([]);
+  const [manualTests, setManualTests] = useState([{ key: `${Date.now()}-0`, name: "" }]);
   const [notes, setNotes] = useState("");
   const [testSearch, setTestSearch] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1764,13 +1783,35 @@ function LabTab({
     e.preventDefault();
     if (!canOrder) return;
     setErr("");
-    if (!selectedTestIds.length) {
-      setErr("Select at least one test.");
-      return;
+    const manualNames = (manualTests || [])
+      .map((t) => String(t?.name || "").trim())
+      .filter(Boolean);
+
+    if (orderMode === "catalog") {
+      if (!selectedTestIds.length) {
+        setErr("Select at least one test from the catalog.");
+        return;
+      }
+    } else {
+      if (!manualNames.length) {
+        setErr("Add at least one manual test name.");
+        return;
+      }
     }
     setBusy(true);
     try {
-      const payload = { patient_id: Number(patientId), test_ids: selectedTestIds.map(Number), notes: notes || "" };
+      const payload = {
+        patient_id: Number(patientId),
+        notes: notes || "",
+      };
+
+      if (orderMode === "catalog") {
+        payload.test_ids = selectedTestIds.map(Number);
+        payload.manual_tests = [];
+      } else {
+        payload.test_ids = [];
+        payload.manual_tests = manualNames;
+      }
       const created = await outreachFetch("/outreach/labs/orders/", {
         eventId,
         method: "POST",
@@ -1778,7 +1819,9 @@ function LabTab({
       });
       setLabOrders([created, ...(labOrders || [])]);
       setSelectedTestIds([]);
+      setManualTests([{ key: `${Date.now()}-0`, name: "" }]);
       setNotes("");
+      setTestSearch("");
     } catch (e2) {
       setErr(e2?.message || "Failed to create lab order.");
     } finally {
@@ -1942,7 +1985,32 @@ return (
           ) : null}
 
           <form onSubmit={createOrder} className="grid gap-3">
-            <Field label="Select tests">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm font-semibold text-slate-800">Order mode</div>
+              <div className="inline-flex w-full rounded-xl border border-slate-200 bg-slate-50 p-1 shadow-sm sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setOrderMode("catalog")}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold sm:flex-none ${
+                    orderMode === "catalog" ? "bg-white text-slate-900 shadow" : "text-slate-700 hover:bg-white/60"
+                  }`}
+                >
+                  Use catalog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderMode("manual")}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold sm:flex-none ${
+                    orderMode === "manual" ? "bg-white text-slate-900 shadow" : "text-slate-700 hover:bg-white/60"
+                  }`}
+                >
+                  Manual
+                </button>
+              </div>
+            </div>
+
+            {orderMode === "catalog" ? (
+              <Field label="Select tests from catalog">
                 <div className="grid gap-2">
                   <TextInput
                     value={testSearch}
@@ -1956,7 +2024,9 @@ return (
                       return (
                         <label
                           key={t.id}
-                          className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${checked ? "border-blue-200 bg-blue-50/60" : "border-slate-200"}`}
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${
+                            checked ? "border-blue-200 bg-blue-50/60" : "border-slate-200"
+                          }`}
                         >
                           <input
                             type="checkbox"
@@ -1982,11 +2052,58 @@ return (
                     })}
                   </div>
 
-                  {!filteredTests.length ? (
-                    <div className="text-xs text-slate-500">No tests match your search.</div>
-                  ) : null}
+                  {!filteredTests.length ? <div className="text-xs text-slate-500">No tests match your search.</div> : null}
                 </div>
               </Field>
+            ) : (
+              <Field label="Manual tests">
+                <div className="grid gap-2">
+                  <div className="text-xs text-slate-500">
+                    Type the test name(s) you want to order. These won’t be added to the catalog.
+                  </div>
+
+                  <div className="grid gap-2">
+                    {(manualTests || []).map((t, idx) => (
+                      <div key={t.key} className="flex items-start gap-2">
+                        <div className="flex-1">
+                          <TextInput
+                            value={t.name}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setManualTests((prev) =>
+                                (prev || []).map((x) => (x.key === t.key ? { ...x, name: v } : x))
+                              );
+                            }}
+                            placeholder={idx === 0 ? "e.g., Blood sugar" : "Another test…"}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManualTests((prev) => {
+                              const next = (prev || []).filter((x) => x.key !== t.key);
+                              return next.length ? next : [{ key: `${Date.now()}-0`, name: "" }];
+                            });
+                          }}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setManualTests((prev) => [...(prev || []), { key: `${Date.now()}-${Math.random()}`, name: "" }])}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add another test
+                  </button>
+                </div>
+              </Field>
+            )}
 
             <Field label="Notes (optional)">
               <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />

@@ -77,7 +77,7 @@ export default function FacilityLoginPage() {
               </div>
             </div>
 
-            <AuthForm role="Healthcare Facility" redirectTo="/facility" />
+            <AuthForm role="Healthcare Facility" portal="facility" redirectTo="/facility" />
 
             <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
               <span className="inline-flex items-center gap-1">

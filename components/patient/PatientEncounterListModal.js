@@ -91,8 +91,8 @@ export default function PatientEncounterListModal({
         setLoading(true);
         setError("");
 
-        // Backend orders by -occurred_at, -id by default
-        const data = await apiFetch(`/encounters/?patient=${patientId}`);
+        // System-wide patient timeline (not facility-scoped)
+        const data = await apiFetch(`/patients/${patientId}/encounters/?limit=50`);
         if (cancelled) return;
         setPayload(data);
       } catch (err) {
@@ -144,7 +144,7 @@ export default function PatientEncounterListModal({
 
       // Refresh list (best effort)
       try {
-        const data = await apiFetch(`/encounters/?patient=${patientId}`);
+        const data = await apiFetch(`/patients/${patientId}/encounters/?limit=50`);
         setPayload(data);
       } catch {
         // ignore
@@ -189,7 +189,7 @@ export default function PatientEncounterListModal({
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
                 <p className="text-xs text-slate-500">
-                  Recent clinical encounters recorded in this facility.
+                  Recent clinical encounters across all facilities and providers.
                 </p>
               </div>
             </div>
@@ -345,9 +345,26 @@ export default function PatientEncounterListModal({
                           <button
                             type="button"
                             onClick={() => goToEncounter(enc.id)}
-                            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                            disabled={enc?.can_view_detail === false}
+                            title={
+                              enc?.can_view_detail === false
+                                ? "You don’t have access to open this encounter."
+                                : "Open"
+                            }
+                            className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+                              enc?.can_view_detail === false
+                                ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            }`}
                           >
-                            Open
+                            {enc?.can_view_detail === false ? (
+                              <>
+                                <Lock className="mr-1 h-3.5 w-3.5" />
+                                Restricted
+                              </>
+                            ) : (
+                              "Open"
+                            )}
                           </button>
                         </td>
                       </tr>

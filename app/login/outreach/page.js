@@ -75,7 +75,7 @@ export default function OutreachLoginPage() {
               </div>
             </div>
 
-            <AuthForm role="Outreach" redirectTo="/outreach" />
+            <AuthForm role="Outreach" portal="outreach" redirectTo="/outreach" />
 
             <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
               <span className="inline-flex items-center gap-1">

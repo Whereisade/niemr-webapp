@@ -78,7 +78,8 @@ export default function PatientVitalsHistory({ patientId }) {
       try {
         setLoading(true);
         setError("");
-        const data = await apiFetch(`/vitals/?patient=${patientId}`);
+        // System-wide patient history (not facility-scoped)
+        const data = await apiFetch(`/patients/${patientId}/vitals/?limit=50`);
         if (cancelled) return;
 
         const items = Array.isArray(data) ? data : data?.results || [];

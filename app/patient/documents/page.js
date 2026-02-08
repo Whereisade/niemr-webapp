@@ -187,7 +187,7 @@ export default function PatientDocumentsPage() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-                    My documents
+                    My Documents
                   </h1>
                   <p className="mt-1 max-w-xl text-sm text-slate-600">
                     Upload lab results, imaging reports, and other medical
@@ -419,60 +419,66 @@ export default function PatientDocumentsPage() {
               <>
                 {/* Mobile / tablet cards */}
                 <div className="space-y-3 md:hidden">
-                  {documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                          {doc.document_type
-                            ? doc.document_type.replace(/_/g, " ")
-                            : "Unknown"}
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          {formatDate(
-                            doc.created_at ||
-                              doc.uploaded_at ||
-                              doc.timestamp
+                  {documents.map((doc) => {
+                    const isSystemSynced = Boolean(doc?.source_file_id || doc?.is_system_synced);
+                    return (
+                      <div
+                        key={doc.id}
+                        className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            {doc.document_type
+                              ? doc.document_type.replace(/_/g, " ")
+                              : "Unknown"}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            {formatDate(
+                              doc.created_at ||
+                                doc.uploaded_at ||
+                                doc.timestamp
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="mt-2">
+                          <a
+                            href={doc.file || doc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block text-sm font-medium text-blue-600 hover:underline"
+                          >
+                            {doc.title || "View document"}
+                          </a>
+                          {doc.notes && (
+                            <p className="mt-1 text-xs text-slate-500">{doc.notes}</p>
                           )}
-                        </span>
-                      </div>
+                        </div>
 
-                      <div className="mt-2">
-                        <a
-                          href={doc.file || doc.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-sm font-medium text-blue-600 hover:underline"
-                        >
-                          {doc.title || "View document"}
-                        </a>
-                        {doc.notes && (
-                          <p className="mt-1 text-xs text-slate-500">
-                            {doc.notes}
-                          </p>
-                        )}
-                      </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                          <span>
+                            {doc.uploaded_by_role || doc.uploaded_by || "PATIENT"}
+                          </span>
 
-                      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                        <span>
-                          {doc.uploaded_by_role ||
-                            doc.uploaded_by ||
-                            "PATIENT"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(doc.id)}
-                          className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-100"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </button>
+                          {!isSystemSynced ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(doc.id)}
+                              className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-100"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                              Added by care team
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Desktop table */}
@@ -498,7 +504,9 @@ export default function PatientDocumentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {documents.map((doc) => (
+                    {documents.map((doc) => {
+                      const isSystemSynced = Boolean(doc?.source_file_id || doc?.is_system_synced);
+                      return (
                       <tr
                         key={doc.id}
                         className="align-top transition hover:bg-slate-50/70"
@@ -545,7 +553,8 @@ export default function PatientDocumentsPage() {
                           </span>
                         </td>
                         <td className="px-3 py-2 align-middle text-right">
-                          <button
+{!isSystemSynced ? (
+                                                    <button
                             type="button"
                             onClick={() => handleDelete(doc.id)}
                             className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-100"
@@ -553,9 +562,15 @@ export default function PatientDocumentsPage() {
                             <Trash2 className="h-3.5 w-3.5" />
                             Delete
                           </button>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                            Added by care team
+                          </span>
+                        )}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                   </table>
                 </div>

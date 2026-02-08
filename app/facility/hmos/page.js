@@ -51,9 +51,9 @@ function normalizeList(payload) {
 // Tier badge component
 function TierBadge({ tier }) {
   const config = {
-    GOLD: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", icon: "🥇" },
-    SILVER: { bg: "bg-slate-50", border: "border-slate-300", text: "text-slate-600", icon: "🥈" },
-    BRONZE: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", icon: "🥉" },
+    GOLD: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", icon: "ðŸ¥‡" },
+    SILVER: { bg: "bg-slate-50", border: "border-slate-300", text: "text-slate-600", icon: "ðŸ¥ˆ" },
+    BRONZE: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", icon: "ðŸ¥‰" },
   };
   const c = config[tier] || config.BRONZE;
   return (
@@ -871,9 +871,9 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
           <div className="text-3xl font-bold text-purple-900">{tierStats.total}</div>
           <div className="text-sm font-medium text-purple-700">Total Tiers</div>
           <div className="mt-2 flex items-center gap-2 text-[10px] text-purple-600">
-            <span>🥇 {tierStats.byType.GOLD}</span>
-            <span>🥈 {tierStats.byType.SILVER}</span>
-            <span>🥉 {tierStats.byType.BRONZE}</span>
+            <span>ðŸ¥‡ {tierStats.byType.GOLD}</span>
+            <span>ðŸ¥ˆ {tierStats.byType.SILVER}</span>
+            <span>ðŸ¥‰ {tierStats.byType.BRONZE}</span>
           </div>
         </div>
 
@@ -1012,7 +1012,7 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
                           {(h.contract_start_date || h.contract_end_date) && (
                             <div className="mt-0.5 text-slate-500">
                               {h.contract_start_date && new Date(h.contract_start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                              {h.contract_start_date && h.contract_end_date && " â€“ "}
+                              {h.contract_start_date && h.contract_end_date && " – "}
                               {h.contract_end_date && new Date(h.contract_end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                             </div>
                           )}
@@ -1493,7 +1493,7 @@ function AppointmentPricingTab({
           <div>
             <h2 className="text-sm font-semibold text-slate-900">Services Catalog</h2>
             <p className="text-xs text-slate-500">
-              {catalog.length} service{catalog.length !== 1 ? "s" : ""} · Set HMO-specific prices
+              {catalog.length} service{catalog.length !== 1 ? "s" : ""} Â· Set HMO-specific prices
             </p>
           </div>
 
@@ -1577,7 +1577,7 @@ function AppointmentPricingTab({
                         <div className="font-medium text-slate-900">{name || code}</div>
                         <div className="text-[11px] font-mono text-slate-500">{code}</div>
                         <div className="mt-1 text-xs text-slate-600">
-                          Duration: {item.duration || "â€”"}
+                          Duration: {item.duration || "—"}
                         </div>
                       </div>
                       <div className="text-right">
@@ -1591,7 +1591,7 @@ function AppointmentPricingTab({
                             {discount > 0 ? "-" : "+"}{Math.abs(discount)}%
                           </span>
                         ) : (
-                          <span className="text-[10px] text-slate-400">â€”</span>
+                          <span className="text-[10px] text-slate-400">—</span>
                         )}
                       </div>
                     </div>
@@ -1600,7 +1600,7 @@ function AppointmentPricingTab({
                       <div>
                         <div className="text-slate-500">Catalog</div>
                         <div className="font-semibold text-slate-900">
-                          â‚¦{catalogPrice.toLocaleString()}
+                          ₦{catalogPrice.toLocaleString()}
                         </div>
                       </div>
                       <div className="text-right">
@@ -1643,7 +1643,7 @@ function AppointmentPricingTab({
                         ) : (
                           <div className="mt-1 flex items-center justify-end gap-1">
                             <span className="font-semibold text-slate-900">
-                              â‚¦{hmoPrice.toLocaleString()}
+                              ₦{hmoPrice.toLocaleString()}
                             </span>
                             <button
                               type="button"
@@ -1973,7 +1973,7 @@ function CatalogSection({
             {isPharmacy ? "Pharmacy" : "Lab"} Catalog
           </h2>
           <p className="text-xs text-slate-500">
-            {catalog.length} item{catalog.length !== 1 ? "s" : ""} · Set HMO-specific prices
+            {catalog.length} item{catalog.length !== 1 ? "s" : ""} Â· Set HMO-specific prices
           </p>
         </div>
 
@@ -2059,7 +2059,7 @@ function CatalogSection({
                       <div className="font-medium text-slate-900">{name || code}</div>
                       <div className="text-[11px] font-mono text-slate-500">{code}</div>
                       <div className="mt-1 text-xs text-slate-600">
-                        {detailLabel}: {detailValue || "â€”"}
+                        {detailLabel}: {detailValue || "—"}
                       </div>
                     </div>
                     <div className="text-right">
@@ -2073,7 +2073,7 @@ function CatalogSection({
                           {discount > 0 ? "-" : "+"}{Math.abs(discount)}%
                         </span>
                       ) : (
-                        <span className="text-[10px] text-slate-400">â€”</span>
+                        <span className="text-[10px] text-slate-400">—</span>
                       )}
                     </div>
                   </div>
@@ -2082,7 +2082,7 @@ function CatalogSection({
                     <div>
                       <div className="text-slate-500">Catalog</div>
                       <div className="font-semibold text-slate-900">
-                        â‚¦{catalogPrice.toLocaleString()}
+                        ₦{catalogPrice.toLocaleString()}
                       </div>
                     </div>
                     <div className="text-right">
@@ -2125,7 +2125,7 @@ function CatalogSection({
                       ) : (
                         <div className="mt-1 flex items-center justify-end gap-1">
                           <span className="font-semibold text-slate-900">
-                            â‚¦{hmoPrice.toLocaleString()}
+                            ₦{hmoPrice.toLocaleString()}
                           </span>
                           <button
                             type="button"
