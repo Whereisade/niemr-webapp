@@ -51,9 +51,9 @@ function normalizeList(payload) {
 // Tier badge component
 function TierBadge({ tier }) {
   const config = {
-    GOLD: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", icon: "ðŸ¥‡" },
-    SILVER: { bg: "bg-slate-50", border: "border-slate-300", text: "text-slate-600", icon: "ðŸ¥ˆ" },
-    BRONZE: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", icon: "ðŸ¥‰" },
+    GOLD: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", icon: "🥇" },
+    SILVER: { bg: "bg-slate-50", border: "border-slate-300", text: "text-slate-600", icon: "🥈" },
+    BRONZE: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", icon: "🥉" },
   };
   const c = config[tier] || config.BRONZE;
   return (
@@ -871,9 +871,9 @@ function HMOsTab({ hmos, loading, isSuperAdmin, busy, toggleActive, disableHmo, 
           <div className="text-3xl font-bold text-purple-900">{tierStats.total}</div>
           <div className="text-sm font-medium text-purple-700">Total Tiers</div>
           <div className="mt-2 flex items-center gap-2 text-[10px] text-purple-600">
-            <span>ðŸ¥‡ {tierStats.byType.GOLD}</span>
-            <span>ðŸ¥ˆ {tierStats.byType.SILVER}</span>
-            <span>ðŸ¥‰ {tierStats.byType.BRONZE}</span>
+            <span>🥇 {tierStats.byType.GOLD}</span>
+            <span>🥈 {tierStats.byType.SILVER}</span>
+            <span>🥉 {tierStats.byType.BRONZE}</span>
           </div>
         </div>
 

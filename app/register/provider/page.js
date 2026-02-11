@@ -356,14 +356,14 @@ export default function ProviderRegisterPage() {
                   onChange={(e) => upd("years_experience", e.target.value)}
                   placeholder="10"
                 />
-                <Field
+                {/* <Field
                   label="Consultation Fee"
                   type="number"
                   value={form.consultation_fee}
                   onChange={(e) => upd("consultation_fee", e.target.value)}
                   icon={Banknote}
                   placeholder="2500"
-                />
+                /> */}
               </div>
             </section>
 
