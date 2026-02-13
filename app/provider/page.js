@@ -15,7 +15,8 @@ import {
   Clock,
   TrendingUp,
   CheckCircle2,
-  User
+  User,
+  HelpCircle
 } from "lucide-react";
 import {
   requireIndependentProvider,
@@ -702,6 +703,7 @@ export default async function ProviderPage() {
     { href: "/provider/patients", label: "Patients", icon: Users },
     { href: "/settings/profile", label: "Settings", icon: User },
     { href: "/provider/notifications", label: `Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`, icon: Bell },
+    { href: "/provider/faq", label: "Help", icon: HelpCircle },
   ];
 
   const displayName =

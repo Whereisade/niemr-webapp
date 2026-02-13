@@ -30,6 +30,7 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
+  HelpCircle,
 } from "lucide-react";
 
 const BACKEND = process.env.NIEMR_BACKEND_URL || "http://localhost:8000";
@@ -295,7 +296,10 @@ export default async function PatientDashboard() {
       {/* Animated background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-96 w-96 animate-pulse rounded-full bg-gradient-to-br from-blue-400/20 to-indigo-400/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-96 w-96 animate-pulse rounded-full bg-gradient-to-tr from-violet-400/20 to-purple-400/20 blur-3xl" style={{ animationDelay: "1s" }} />
+        <div
+          className="absolute -bottom-40 -left-40 h-96 w-96 animate-pulse rounded-full bg-gradient-to-tr from-violet-400/20 to-purple-400/20 blur-3xl"
+          style={{ animationDelay: "1s" }}
+        />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -313,13 +317,14 @@ export default async function PatientDashboard() {
                 className="text-3xl font-bold tracking-tight text-slate-900 lg:text-4xl"
               />
               <p className="mt-2 text-base text-slate-600">
-                Your health information, appointments, and care all in one place.
+                Your health information, appointments, and care all in one
+                place.
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <NotificationsBell href="/patient/notifications" />
-              
+
               <div className="flex flex-wrap gap-2">
                 <Link
                   href="/patient/appointments/new"
@@ -342,15 +347,21 @@ export default async function PatientDashboard() {
               className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:ring-slate-300"
             >
               {/* Gradient accent */}
-              <div className={`absolute right-0 top-0 h-32 w-32 bg-gradient-to-br ${stat.accent} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
-              
+              <div
+                className={`absolute right-0 top-0 h-32 w-32 bg-gradient-to-br ${stat.accent} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`}
+              />
+
               {/* Content */}
               <div className="relative">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600">{stat.label}</p>
+                    <p className="text-sm font-medium text-slate-600">
+                      {stat.label}
+                    </p>
                     <div className="mt-2 flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-slate-900">{stat.value}</span>
+                      <span className="text-3xl font-bold text-slate-900">
+                        {stat.value}
+                      </span>
                       {stat.trend && (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -368,7 +379,9 @@ export default async function PatientDashboard() {
                       <ChevronRight className="h-4 w-4" />
                     </div>
                   </div>
-                  <div className={`grid h-12 w-12 place-items-center rounded-xl ${stat.bgAccent} ring-1 ring-black/5`}>
+                  <div
+                    className={`grid h-12 w-12 place-items-center rounded-xl ${stat.bgAccent} ring-1 ring-black/5`}
+                  >
                     <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
                   </div>
                 </div>
@@ -384,17 +397,57 @@ export default async function PatientDashboard() {
               <Sparkles className="h-5 w-5 text-blue-600" />
               <h3 className="font-semibold text-slate-900">Quick Actions</h3>
             </div>
-            <p className="mt-1 text-xs text-slate-600">Common actions for patients</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Common actions for patients
+            </p>
           </div>
           <div className="p-4 grid gap-2 sm:grid-cols-2">
-            <QuickAction href="/patient/encounters" icon={Activity} label="My Visits" primary />
-            <QuickAction href="/patient/appointments/new" icon={CalendarRange} label="Book Appointment" />
-            <QuickAction href="/patient/vitals" icon={Heart} label="My Vitals" />
-            <QuickAction href="/patient/documents" icon={FileText} label="My Medical Documents" />
-            <QuickAction href="/patient/labs" icon={FlaskConical} label="Lab Results" />
-            <QuickAction href="/patient/imaging" icon={Scan} label="Imaging Tests" />
-            <QuickAction href="/patient/pharmacy" icon={Pill} label="Prescriptions" />
-            <QuickAction href="/patient/billing" icon={CreditCard} label="Billing & Charges" />
+            <QuickAction
+              href="/patient/encounters"
+              icon={Activity}
+              label="My Visits"
+              primary
+            />
+            <QuickAction
+              href="/patient/appointments/new"
+              icon={CalendarRange}
+              label="Book Appointment"
+            />
+            <QuickAction
+              href="/patient/vitals"
+              icon={Heart}
+              label="My Vitals"
+            />
+            <QuickAction
+              href="/patient/documents"
+              icon={FileText}
+              label="My Medical Documents"
+            />
+            <QuickAction
+              href="/patient/labs"
+              icon={FlaskConical}
+              label="Lab Results"
+            />
+            <QuickAction
+              href="/patient/imaging"
+              icon={Scan}
+              label="Imaging Tests"
+            />
+            <QuickAction
+              href="/patient/pharmacy"
+              icon={Pill}
+              label="Prescriptions"
+            />
+            <QuickAction
+              href="/patient/billing"
+              icon={CreditCard}
+              label="Billing & Charges"
+            />
+            <QuickAction
+              href="/patient/faq"
+              icon={HelpCircle}
+              label="FAQ & Support"
+            />
           </div>
         </section>
 
@@ -412,7 +465,9 @@ export default async function PatientDashboard() {
             icon={FlaskConical}
             label="Pending Labs"
             value={pendingLabs}
-            sublabel={pendingLabs > 0 ? "Awaiting results" : "No pending lab orders"}
+            sublabel={
+              pendingLabs > 0 ? "Awaiting results" : "No pending lab orders"
+            }
             color="blue"
             href="/patient/labs"
           />
@@ -420,7 +475,11 @@ export default async function PatientDashboard() {
             icon={Pill}
             label="Active Prescriptions"
             value={activePrescriptions}
-            sublabel={activePrescriptions > 0 ? "Ongoing medications" : "No active prescriptions"}
+            sublabel={
+              activePrescriptions > 0
+                ? "Ongoing medications"
+                : "No active prescriptions"
+            }
             color="violet"
             href="/patient/pharmacy"
           />
@@ -428,7 +487,9 @@ export default async function PatientDashboard() {
             icon={Scan}
             label="Pending Imaging"
             value={pendingImaging}
-            sublabel={pendingImaging > 0 ? "Awaiting report" : "No pending imaging"}
+            sublabel={
+              pendingImaging > 0 ? "Awaiting report" : "No pending imaging"
+            }
             color="amber"
             href="/patient/imaging"
           />
@@ -441,7 +502,7 @@ export default async function PatientDashboard() {
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
               <CardHead
                 title="My Appointments"
-                subtitle={`${upcomingAppts.length} upcoming visit${upcomingAppts.length !== 1 ? 's' : ''}`}
+                subtitle={`${upcomingAppts.length} upcoming visit${upcomingAppts.length !== 1 ? "s" : ""}`}
                 href="/patient/appointments"
                 icon={CalendarRange}
                 actionLabel="View all"
@@ -459,14 +520,19 @@ export default async function PatientDashboard() {
                   <tbody className="divide-y divide-slate-100">
                     {appts.length ? (
                       appts.slice(0, 5).map((a) => (
-                        <tr key={a.id} className="group transition hover:bg-slate-50">
+                        <tr
+                          key={a.id}
+                          className="group transition hover:bg-slate-50"
+                        >
                           <Td>
                             <div className="flex items-center gap-2">
                               <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50">
                                 <UserRound className="h-5 w-5 text-blue-600" />
                               </div>
                               <span className="font-medium text-slate-900">
-                                {a.provider_name || a.provider?.full_name || "Provider"}
+                                {a.provider_name ||
+                                  a.provider?.full_name ||
+                                  "Provider"}
                               </span>
                             </div>
                           </Td>
@@ -516,7 +582,10 @@ export default async function PatientDashboard() {
               <ul className="divide-y divide-slate-100">
                 {dashboardUpdates.length ? (
                   dashboardUpdates.slice(0, 5).map((n, i) => (
-                    <li key={n.id || i} className="p-4 transition hover:bg-slate-50">
+                    <li
+                      key={n.id || i}
+                      className="p-4 transition hover:bg-slate-50"
+                    >
                       <div className="flex items-start gap-3">
                         <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-blue-50">
                           <BellRing className="h-5 w-5 text-blue-600" />
@@ -534,7 +603,9 @@ export default async function PatientDashboard() {
                   ))
                 ) : (
                   <li className="p-8 text-center">
-                    <p className="text-sm text-slate-500">You're all caught up!</p>
+                    <p className="text-sm text-slate-500">
+                      You're all caught up!
+                    </p>
                   </li>
                 )}
               </ul>
@@ -554,13 +625,23 @@ export default async function PatientDashboard() {
                     <Shield className="h-5 w-5 text-emerald-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-slate-900">Health Summary</h3>
+                    <h3 className="font-semibold text-slate-900">
+                      Health Summary
+                    </h3>
                     <p className="text-xs text-emerald-700">Profile complete</p>
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
-                  <SummaryItem label="Allergies" value="Updated" status="success" />
-                  <SummaryItem label="Medications" value={`${activePrescriptions} active`} status="info" />
+                  <SummaryItem
+                    label="Allergies"
+                    value="Updated"
+                    status="success"
+                  />
+                  <SummaryItem
+                    label="Medications"
+                    value={`${activePrescriptions} active`}
+                    status="info"
+                  />
                 </div>
                 <Link
                   href="/patient/allergies"

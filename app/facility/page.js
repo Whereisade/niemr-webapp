@@ -37,6 +37,7 @@ import {
   AlertCircle,
   Package,
   Boxes,
+  HelpCircle,
 } from "lucide-react";
 
 import {
@@ -1260,6 +1261,12 @@ export default async function FacilityDashboard() {
                 icon={BellRing}
                 label="All Notifications"
                 badge={unreadCount > 0 ? unreadCount : undefined}
+              />
+              <QuickLink
+                href="/facility/faq"
+                icon={HelpCircle}
+                label="FAQ & Support"
+                  
               />
             </div>
           </div>
