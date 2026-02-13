@@ -20,6 +20,7 @@ import {
 
 const PROVIDER_TYPES = [
   { value: "DOCTOR", label: "Doctor", icon: Stethoscope },
+  { value: "DENTIST", label: "Dentist", icon: Stethoscope },
   { value: "NURSE", label: "Nurse", icon: Users },
   { value: "LAB_SCIENTIST", label: "Lab Scientist", icon: FlaskConical },
   { value: "PHARMACIST", label: "Pharmacist", icon: Building2 },
@@ -890,7 +891,7 @@ export default function PatientNewAppointmentPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Select Provider Type
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                     {PROVIDER_TYPES.map((type) => {
                       const Icon = type.icon;
                       return (

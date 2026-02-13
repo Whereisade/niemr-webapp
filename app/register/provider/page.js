@@ -204,9 +204,7 @@ export default function ProviderRegisterPage() {
         });
       }
 
-      setOk(
-        "Provider registration has been submitted successfully. Await verification."
-      );
+      setOk("Provider account created successfully. You can now sign in.");
       setForm((s) => ({
         ...s,
         password: "",
@@ -239,8 +237,7 @@ export default function ProviderRegisterPage() {
               Independent Provider Registration
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Create your account and profile. Verification is required before
-              access is granted.
+              Create your account and profile. Your account will be active immediately.
             </p>
           </div>
           <a

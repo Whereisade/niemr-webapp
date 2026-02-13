@@ -128,7 +128,9 @@ export default function FacilityRegisterPage() {
         });
       }
 
-      setOk(`Your Healthcare Facility has been successfully created: ${res?.facility?.name || "Success"}. You are now the Super Admin.`);
+      const facilityName = res?.facility?.name || "your facility";
+      const detail = res?.detail || "Facility registration submitted. You will be able to sign in after platform approval.";
+      setOk(`${detail} (${facilityName})`);
       setForm(s => ({ ...s, admin_password:"" }));
       setDocuments([{ kind: "license", file: null }]);
     } catch(e){ setErr(e.message || "Error"); }
