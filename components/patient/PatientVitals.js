@@ -53,6 +53,21 @@ function VitalBadge({ value }) {
   );
 }
 
+function SourcePill({ value }) {
+  const v = String(value || "").toUpperCase();
+  const map = {
+    PATIENT: { bg: "bg-blue-50", text: "text-blue-700", label: "Patient" },
+    PROVIDER: { bg: "bg-emerald-50", text: "text-emerald-700", label: "Provider" },
+    FACILITY: { bg: "bg-indigo-50", text: "text-indigo-700", label: "Facility" },
+  };
+  const style = map[v] || { bg: "bg-slate-50", text: "text-slate-700", label: value || "—" };
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${style.bg} ${style.text}`}>
+      {style.label}
+    </span>
+  );
+}
+
 function VitalRow({ icon: Icon, label, value, unit, badge }) {
   return (
     <div className="flex items-center justify-between py-1.5">
@@ -353,8 +368,9 @@ export default function PatientVitals({ patientId, encounterId }) {
       {/* Latest vitals display */}
       {!showForm && vitals.length > 0 && latest && (
         <div>
-          <div className="mb-1 text-[10px] text-slate-500">
-            {formatDateTime(latest.measured_at)}
+          <div className="mb-1 flex items-center justify-between gap-2 text-[10px] text-slate-500">
+            <span>{formatDateTime(latest.measured_at)}</span>
+            <SourcePill value={latest.source} />
           </div>
 
           <div className="space-y-0.5 rounded-lg border border-slate-100 bg-slate-50 p-2">
@@ -429,7 +445,10 @@ export default function PatientVitals({ patientId, encounterId }) {
                     <Calendar className="h-3 w-3" />
                     {formatDateTime(vital.measured_at)}
                   </span>
-                  {vital.overall && <VitalBadge value={vital.overall} />}
+                  <div className="flex items-center gap-2">
+                    <SourcePill value={vital.source} />
+                    {vital.overall && <VitalBadge value={vital.overall} />}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
                   {vital.systolic && vital.diastolic && (

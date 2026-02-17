@@ -59,6 +59,7 @@ export default function ProviderPharmacyStockPage() {
     qty: "",
     note: "",
   });
+  const [adjustDrugSearch, setAdjustDrugSearch] = useState("");
   const [adjustSubmitting, setAdjustSubmitting] = useState(false);
   const [adjustError, setAdjustError] = useState(null);
   const [adjustSuccess, setAdjustSuccess] = useState("");
@@ -235,10 +236,30 @@ export default function ProviderPharmacyStockPage() {
           }`,
           code: d.code,
           current,
+          display: `${d.name || "Drug"}${
+            d.strength ? ` ${d.strength}` : ""
+          }${d.code ? ` (${d.code})` : ""}`,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [catalog, stockByDrugId]);
+
+  const filteredCatalogOptions = useMemo(() => {
+    const term = adjustDrugSearch.trim().toLowerCase();
+    if (!term) return catalogOptions;
+    return catalogOptions.filter((opt) => {
+      return (
+        opt.display.toLowerCase().includes(term) ||
+        String(opt.code || "").toLowerCase().includes(term)
+      );
+    });
+  }, [catalogOptions, adjustDrugSearch]);
+
+  const selectedAdjustDrug = useMemo(() => {
+    const id = Number(adjustForm.drug_id);
+    if (!id) return null;
+    return catalogOptions.find((opt) => Number(opt.id) === id) || null;
+  }, [adjustForm.drug_id, catalogOptions]);
 
   async function handleAdjustSubmit(e) {
     e.preventDefault();
@@ -513,30 +534,48 @@ export default function ProviderPharmacyStockPage() {
                 <label className="block text-[11px] font-medium text-slate-700">
                   Drug
                 </label>
-                <select
-                  required
-                  value={adjustForm.drug_id}
-                  onChange={(e) =>
-                    setAdjustForm((f) => ({
-                      ...f,
-                      drug_id: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                >
-                  <option value="">Select a drug…</option>
-                  {loadingCatalog ? (
-                    <option value="">Loading catalog…</option>
-                  ) : (
-                    catalogOptions.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                        {opt.code ? ` (${opt.code})` : ""} · Current{" "}
-                        {opt.current}
-                      </option>
-                    ))
-                  )}
-                </select>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                    <Search className="h-3.5 w-3.5 text-slate-400" />
+                  </div>
+                  <input
+                    type="search"
+                    list="adjust-drug-options"
+                    value={adjustDrugSearch}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setAdjustDrugSearch(value);
+                      const match = catalogOptions.find(
+                        (opt) =>
+                          opt.display.toLowerCase() ===
+                          value.trim().toLowerCase()
+                      );
+                      setAdjustForm((f) => ({
+                        ...f,
+                        drug_id: match ? String(match.id) : "",
+                      }));
+                    }}
+                    placeholder="Search and select a drug..."
+                    disabled={loadingCatalog}
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-7 pr-2 text-[11px] shadow-sm focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-70"
+                  />
+                </div>
+                <datalist id="adjust-drug-options">
+                  {filteredCatalogOptions.map((opt) => (
+                    <option
+                      key={opt.id}
+                      value={opt.display}
+                      label={`Current ${opt.current}`}
+                    />
+                  ))}
+                </datalist>
+                <div className="text-[10px] text-slate-500">
+                  {selectedAdjustDrug
+                    ? `Selected: ${selectedAdjustDrug.display} · Current ${selectedAdjustDrug.current}`
+                    : filteredCatalogOptions.length === 0
+                    ? "No matching drugs."
+                    : "Pick a drug from the dropdown suggestions."}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -637,9 +676,7 @@ export default function ProviderPharmacyStockPage() {
                       ? "bg-rose-50 text-rose-700"
                       : "bg-slate-50 text-slate-700";
                     const sign = q > 0 ? "+" : "";
-                    const user =
-                      txn.created_by_name
-                      "";
+                    const user = txn.created_by_name || "";
 
                     return (
                       <li
@@ -711,3 +748,4 @@ function SummaryCard({ icon: Icon, label, value, hint }) {
     </div>
   );
 }
+

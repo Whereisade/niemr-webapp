@@ -993,22 +993,7 @@ export default function ProviderEncounterDetailPage() {
       </div>
 
       {/* Independent encounter context banner */}
-      {isIndependentEncounter && (
-        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-              <Info className="h-4 w-4 text-blue-700" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-blue-900">Independent Encounter</h3>
-              <p className="mt-1 text-sm text-blue-800">
-                This encounter was conducted independently without facility association. 
-                All lab orders and prescriptions can be outsourced to your network of specialists.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      
 
       {/* Status update errors */}
       {statusUpdateError && (

@@ -63,6 +63,21 @@ function OverallBadge({ value }) {
   );
 }
 
+function SourceBadge({ value }) {
+  const v = String(value || "").toUpperCase();
+  const config = {
+    PATIENT: { bg: "bg-blue-50", text: "text-blue-700", ring: "ring-blue-200", label: "Patient" },
+    PROVIDER: { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", label: "Provider" },
+    FACILITY: { bg: "bg-indigo-50", text: "text-indigo-700", ring: "ring-indigo-200", label: "Facility" },
+  };
+  const style = config[v] || { bg: "bg-slate-50", text: "text-slate-700", ring: "ring-slate-200", label: value || "—" };
+  return (
+    <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-[10px] font-medium ring-1 ${style.bg} ${style.text} ${style.ring}`}>
+      {style.label}
+    </span>
+  );
+}
+
 export default function PatientVitalsHistory({ patientId }) {
   const [vitals, setVitals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -145,7 +160,10 @@ export default function PatientVitalsHistory({ patientId }) {
             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
               Latest Reading
             </div>
-            <OverallBadge value={vitals[0].overall} />
+            <div className="flex items-center gap-2">
+              <SourceBadge value={vitals[0].source} />
+              <OverallBadge value={vitals[0].overall} />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -231,6 +249,7 @@ export default function PatientVitalsHistory({ patientId }) {
                 {vital.heart_rate && (
                   <span className="text-slate-700">{vital.heart_rate} bpm</span>
                 )}
+                <SourceBadge value={vital.source} />
                 <OverallBadge value={vital.overall} />
               </div>
             </div>

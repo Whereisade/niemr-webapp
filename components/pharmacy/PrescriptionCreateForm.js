@@ -65,6 +65,7 @@ export default function PrescriptionCreateForm({
   const [pharmaciesLoading, setPharmaciesLoading] = useState(false);
   const [pharmaciesError, setPharmaciesError] = useState("");
   const [selectedPharmacyName, setSelectedPharmacyName] = useState("");
+  const [selectedPharmacyAddress, setSelectedPharmacyAddress] = useState("");
 
   // Selected medications with their details
   const [selectedMeds, setSelectedMeds] = useState([]);
@@ -200,6 +201,17 @@ export default function PrescriptionCreateForm({
       provider?.display_name || provider?.full_name || provider?.user_name || null;
     if (fullName) return fullName;
     return provider?.user_email || provider?.email || "External pharmacy";
+  };
+
+
+  const formatProviderAddress = (provider) => {
+    const parts = [
+      (provider?.address || "").trim(),
+      (provider?.lga || "").trim(),
+      (provider?.state || "").trim(),
+      (provider?.country || "").trim(),
+    ].filter(Boolean);
+    return parts.join(", ");
   };
 
   const patientOptions = useMemo(() => {
@@ -548,6 +560,7 @@ export default function PrescriptionCreateForm({
                       (p) => String(p?.user ?? p?.user_id ?? "") === String(v)
                     );
                     setSelectedPharmacyName(selected ? getProviderDisplayName(selected) : "");
+                    setSelectedPharmacyAddress(selected ? formatProviderAddress(selected) : "");
                   }}
                   disabled={pharmaciesLoading}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60"
@@ -567,6 +580,17 @@ export default function PrescriptionCreateForm({
                     );
                   })}
                 </select>
+
+                {outsourcedTo && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Pharmacy address
+                    </div>
+                    <div className="mt-1 text-sm text-slate-700">
+                      {selectedPharmacyAddress || "No address provided"}
+                    </div>
+                  </div>
+                )}
 
                 {pharmaciesError && (
                   <p className="mt-2 text-xs text-rose-600">{pharmaciesError}</p>

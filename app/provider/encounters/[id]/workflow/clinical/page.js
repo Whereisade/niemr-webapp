@@ -1034,22 +1034,8 @@ export default function ProviderEncounterClinicalPage() {
         </div>
       </div>
 
-      {/* Independent encounter context banner */}
-      {isIndependentEncounter && (
-        <div className="mb-4 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-              <Info className="h-4 w-4 text-blue-700" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-blue-900">Independent Encounter</h3>
-              <p className="mt-1 text-sm text-blue-800">
-                This is an independent provider encounter. Ward admission is not available, but you can complete the full SOAP documentation and outsource labs/prescriptions as needed.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      
+      
 
       {/* Ward admission messages */}
       {admissionSuccess && (

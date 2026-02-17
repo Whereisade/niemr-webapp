@@ -104,6 +104,14 @@ export default function ProviderEncounterLabsPage() {
 
   const isIndependentProvider = me && !me.facility_id;
 
+  // Independent doctors always outsource labs: force outsource mode for this view
+  useEffect(() => {
+    if (isIndependentProvider) {
+      setWantsOutsource(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isIndependentProvider]);
+
   async function loadMe() {
     try {
       const data = await apiFetch("/accounts/me/", { method: "GET" });
@@ -136,6 +144,13 @@ export default function ProviderEncounterLabsPage() {
       const params = new URLSearchParams();
       if (search?.trim()) {
         params.set("s", search.trim());
+      }
+
+      // Independent doctors do not have an in-house catalog.
+      // Avoid fetching the default catalog for them; wait until a lab scientist is selected.
+      if (isIndependentProvider && !outsourcedToUserId) {
+        setCatalog([]);
+        return;
       }
       
       // ✅ If outsourced lab is selected, fetch their catalog
@@ -304,7 +319,7 @@ export default function ProviderEncounterLabsPage() {
     }
 
     // ✅ Validate outsourcing intent
-    if ((isIndependentProvider || wantsOutsource) && !outsourcedToUserId && selectedCodes.size > 0) {
+    if ((isIndependentProvider || wantsOutsource) && !outsourcedToUserId) {
       setError(
         isIndependentProvider
           ? "Select a lab scientist to outsource to (independent providers should not run labs without a lab scientist)."
@@ -634,7 +649,7 @@ export default function ProviderEncounterLabsPage() {
                       clearAllSelections();
                       setNote("");
                       setPriority("ROUTINE");
-                      setWantsOutsource(false);
+                      setWantsOutsource(isIndependentProvider ? true : false);
                       setOutsourcedToUserId("");
                     }}
                     className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -658,29 +673,37 @@ export default function ProviderEncounterLabsPage() {
                 <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Route</div>
                   <div className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {wantsOutsource ? (outsourcedToUserId ? "Lab scientist" : "Pick one") : "Default"}
+                    {wantsOutsource
+                      ? outsourcedToUserId
+                        ? "Lab scientist"
+                        : "Select lab scientist"
+                      : isIndependentProvider
+                      ? "Outsourced"
+                      : "Default"}
                   </div>
                 </div>
               </div>
 
               <div className="mt-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Processing</div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWantsOutsource(false);
-                      setOutsourcedToUserId("");
-                    }}
-                    className={
-                      wantsOutsource
-                        ? "rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:bg-slate-50"
-                        : "rounded-xl border border-slate-900 bg-white px-3 py-2 text-left text-sm shadow-sm"
-                    }
-                  >
-                    <div className="font-semibold text-slate-900">Default Catalog</div>
-                    <div className="mt-0.5 text-xs text-slate-600">Use non-outsourced catalog</div>
-                  </button>
+                <div className={isIndependentProvider ? "mt-2 grid grid-cols-1 gap-2" : "mt-2 grid grid-cols-2 gap-2"}>
+                  {!isIndependentProvider ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWantsOutsource(false);
+                        setOutsourcedToUserId("");
+                      }}
+                      className={
+                        wantsOutsource
+                          ? "rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:bg-slate-50"
+                          : "rounded-xl border border-slate-900 bg-white px-3 py-2 text-left text-sm shadow-sm"
+                      }
+                    >
+                      <div className="font-semibold text-slate-900">Default Catalog</div>
+                      <div className="mt-0.5 text-xs text-slate-600">Use non-outsourced catalog</div>
+                    </button>
+                  ) : null}
 
                   <button
                     type="button"
@@ -694,15 +717,15 @@ export default function ProviderEncounterLabsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-slate-700" />
-                        <div className="font-semibold text-slate-900">Lab Scientist</div>
+                        <div className="font-semibold text-slate-900">Outsourced Catalog</div>
                       </div>
                       {isIndependentProvider ? (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                          Recommended
+                          Required
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-0.5 text-xs text-slate-600">See their catalog & outsource</div>
+                    <div className="mt-0.5 text-xs text-slate-600">Select a lab scientist to view their catalog</div>
                   </button>
                 </div>
 

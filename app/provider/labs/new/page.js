@@ -52,6 +52,7 @@ export default function ProviderNewLabOrderPage() {
   const [selectedTests, setSelectedTests] = useState([]);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [selectedLabName, setSelectedLabName] = useState(""); // Track selected lab's business name
+  const [selectedLabAddress, setSelectedLabAddress] = useState(""); // Track selected lab's address
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -318,6 +319,17 @@ export default function ProviderNewLabOrderPage() {
     return provider?.user_email || provider?.email || "External lab";
   };
 
+
+  const formatProviderAddress = (provider) => {
+    const parts = [
+      (provider?.address || "").trim(),
+      (provider?.lga || "").trim(),
+      (provider?.state || "").trim(),
+      (provider?.country || "").trim(),
+    ].filter(Boolean);
+    return parts.join(", ");
+  };
+
   // Determine if catalog should be shown
   const shouldShowCatalog = isIndependentLab || (isDoctorOrNurse && outsourcedTo && outsourcedTo !== "__other__");
 
@@ -429,6 +441,7 @@ export default function ProviderNewLabOrderPage() {
                   if (!v || v === "__other__") {
                     setExternalLabName("");
                     setSelectedLabName("");
+                    setSelectedLabAddress("");
                     return;
                   }
 
@@ -442,6 +455,8 @@ export default function ProviderNewLabOrderPage() {
                     const displayName = getProviderDisplayName(selected);
                     setExternalLabName(displayName);
                     setSelectedLabName(displayName);
+                  
+                    setSelectedLabAddress(formatProviderAddress(selected));
                   }
                 }}
                 disabled={loadingLabs}
@@ -463,6 +478,17 @@ export default function ProviderNewLabOrderPage() {
                 })}
                 <option value="__other__">Other (enter name manually)</option>
               </select>
+
+              {outsourcedTo && outsourcedTo !== "__other__" && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Lab address
+                  </div>
+                  <div className="mt-1 text-sm text-slate-700">
+                    {selectedLabAddress || "No address provided"}
+                  </div>
+                </div>
+              )}
 
               {outsourcedTo === "__other__" && (
                 <input

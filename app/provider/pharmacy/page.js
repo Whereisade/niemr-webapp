@@ -22,6 +22,7 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  Building2,
 } from "lucide-react";
 import PrescriptionDetailsModal from "@/components/pharmacy/PrescriptionDetailsModal";
 import { apiFetch } from "@/lib/api";
@@ -174,6 +175,8 @@ function ProviderPharmacyPageInner() {
   const meRole = (me?.role || "").toUpperCase();
   const providerType = (me?.provider?.provider_type || "").toUpperCase();
   const isPharmacyProvider = meRole === "PHARMACY" || providerType === "PHARMACIST";
+  const isDoctorOrNurse = ["DOCTOR", "NURSE"].includes(meRole) || ["DOCTOR", "NURSE"].includes(providerType);
+  const isClinicianView = isDoctorOrNurse && !isPharmacyProvider;
   
   const canDispense = isPharmacyProvider;
   const canPrescribe = ["PHARMACY", "DOCTOR", "NURSE"].includes(meRole) || 
@@ -452,7 +455,9 @@ function ProviderPharmacyPageInner() {
             Pharmacy workspace
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Manage prescriptions, track inventory, and dispense medications for your patients.
+            {isClinicianView
+              ? "Create and track prescriptions assigned to independent pharmacies."
+              : "Manage prescriptions, track inventory, and dispense medications for your patients."}
           </p>
         </div>
 
@@ -470,7 +475,8 @@ function ProviderPharmacyPageInner() {
       </header>
 
       {/* Stats Grid */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {!isClinicianView && (
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Pending prescriptions"
           value={prescriptionStats.pending + prescriptionStats.partiallyDispensed}
@@ -500,7 +506,8 @@ function ProviderPharmacyPageInner() {
           accent="from-slate-500 via-slate-600 to-slate-700"
           subtitle={`${stockStats.totalQty} units in stock`}
         />
-      </section>
+        </section>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
@@ -510,7 +517,7 @@ function ProviderPharmacyPageInner() {
           icon={ClipboardList}
         >
           Prescriptions
-          {(prescriptionStats.pending + prescriptionStats.partiallyDispensed) > 0 && (
+          {!isClinicianView && (prescriptionStats.pending + prescriptionStats.partiallyDispensed) > 0 && (
             <span className="ml-1.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">
               {prescriptionStats.pending + prescriptionStats.partiallyDispensed}
             </span>
@@ -544,6 +551,7 @@ function ProviderPharmacyPageInner() {
       {/* Tab Content */}
       {activeTab === "prescriptions" && (
         <PrescriptionsTab
+          isClinicianView={isClinicianView}
           rows={rows}
           total={total}
           page={page}
@@ -600,6 +608,7 @@ function ProviderPharmacyPageInner() {
 /* ─────────────── Tab Components ─────────────── */
 
 function PrescriptionsTab({
+  isClinicianView,
   rows,
   total,
   page,
@@ -747,6 +756,11 @@ function PrescriptionsTab({
                     } more`;
                   }
                 }
+                const pharmacyName =
+                  rx.outsourced_to_name ||
+                  rx.facility_or_provider_name ||
+                  "—";
+
 
                 return (
                   <div
@@ -785,28 +799,40 @@ function PrescriptionsTab({
                           )}
                         </div>
                       </div>
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Stock status
+                      {isClinicianView ? (
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Pharmacy
+                          </div>
+                          <div className="mt-1 flex items-start gap-2">
+                            <Building2 className="mt-0.5 h-4 w-4 text-slate-400" />
+                            <div className="text-sm font-medium text-slate-800">
+                              {pharmacyName}
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-1">
-                          {hasOutOfStock ? (
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200">
-                              <AlertTriangle className="h-3 w-3" />
-                              Out of stock
-                            </span>
-                          ) : hasLowStock ? (
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
-                              <TrendingDown className="h-3 w-3" />
-                              Low stock
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-slate-500">
-                              Stock OK
-                            </span>
-                          )}
+                      ) : (
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Stock status
+                          </div>
+                          <div className="mt-1">
+                            {hasOutOfStock ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200">
+                                <AlertTriangle className="h-3 w-3" />
+                                Out of stock
+                              </span>
+                            ) : hasLowStock ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                                <TrendingDown className="h-3 w-3" />
+                                Low stock
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">Stock OK</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     <div className="mt-4">
@@ -874,7 +900,7 @@ function PrescriptionsTab({
                   <Th>Created</Th>
                   <Th>Patient</Th>
                   <Th>Medications</Th>
-                  <Th>Stock status</Th>
+                  <Th>{isClinicianView ? "Pharmacy" : "Stock status"}</Th>
                   <Th>Status</Th>
                   <Th>Actions</Th>
                 </tr>
@@ -960,7 +986,14 @@ function PrescriptionsTab({
                           )}
                         </Td>
                         <Td>
-                          {hasOutOfStock ? (
+                          {isClinicianView ? (
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-slate-400" />
+                              <span className="text-xs font-medium text-slate-800">
+                                {rx.outsourced_to_name || rx.facility_or_provider_name || "—"}
+                              </span>
+                            </div>
+                          ) : hasOutOfStock ? (
                             <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200">
                               <AlertTriangle className="h-3 w-3" />
                               Out of stock
@@ -971,9 +1004,7 @@ function PrescriptionsTab({
                               Low stock
                             </span>
                           ) : (
-                            <span className="text-[11px] text-slate-500">
-                              Stock OK
-                            </span>
+                            <span className="text-[11px] text-slate-500">Stock OK</span>
                           )}
                         </Td>
                         <Td>

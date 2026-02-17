@@ -367,9 +367,7 @@ export default function ProviderNewAppointmentPage() {
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="Short description of why this appointment is being scheduled."
               />
-              <p className="mt-1 text-xs text-slate-500">
-                This helps other staff quickly understand the context of the visit.
-              </p>
+              
             </div>
 
             {/* Email notifications */}
@@ -459,19 +457,19 @@ export default function ProviderNewAppointmentPage() {
                     {time || "—"}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-3">
+                {/* <div className="flex justify-between gap-3">
                   <dt className="text-slate-500">Duration</dt>
                   <dd className="text-right text-slate-900">
                     {durationMins ? `${durationMins} mins` : "—"}
                   </dd>
-                </div>
+                </div> */}
               </dl>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
             <h3 className="mb-1 text-xs font-semibold text-slate-900">
-              {isFacilityBased ? "Facility-based booking" : "Independent provider"}
+              {isFacilityBased ? "Facility-based booking" : "Solo Practitioner booking"}
             </h3>
             {isFacilityBased ? (
               <ul className="space-y-1 list-disc pl-4">
@@ -481,8 +479,7 @@ export default function ProviderNewAppointmentPage() {
               </ul>
             ) : (
               <ul className="space-y-1 list-disc pl-4">
-                <li>You operate independently - no facility association.</li>
-                <li>Appointments are booked directly with you as the provider.</li>
+                <li>You operate independently</li>
                 <li>Consider scheduling follow-ups before patients leave.</li>
                 <li>Use clear reasons to help manage your own patient flow.</li>
               </ul>
