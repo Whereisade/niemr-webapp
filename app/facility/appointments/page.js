@@ -77,6 +77,14 @@ function encounterWorkflowHref(encounterId, stage) {
   return `/facility/encounters/${id}`;
 }
 
+// Doctors should always continue from the Clinical (SOAP note) screen.
+// (The workflow router is still used elsewhere where stage-aware routing is needed.)
+function encounterClinicalHref(encounterId) {
+  const id = String(encounterId || "").trim();
+  if (!id) return null;
+  return `/facility/encounters/${id}/workflow/clinical`;
+}
+
 function FacilityAppointmentsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -318,7 +326,7 @@ function FacilityAppointmentsPageInner() {
                     a.encounter_id && !["CLOSED", "CROSSED_OUT"].includes(encStatus)
                   );
                   const continueHref = hasOpenEncounter
-                    ? encounterWorkflowHref(a.encounter_id, a.encounter_stage)
+                    ? encounterClinicalHref(a.encounter_id)
                     : null;
 
                   // Use backend-computed values if available, otherwise calculate
@@ -500,7 +508,7 @@ function AppointmentCard({ appointment, isDoctor, onAction }) {
     a.encounter_id && !["CLOSED", "CROSSED_OUT"].includes(encStatus)
   );
   const continueHref = hasOpenEncounter
-    ? encounterWorkflowHref(a.encounter_id, a.encounter_stage)
+    ? encounterClinicalHref(a.encounter_id)
     : null;
 
   // Use backend-computed values if available, otherwise calculate

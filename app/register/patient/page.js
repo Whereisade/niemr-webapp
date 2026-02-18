@@ -162,7 +162,7 @@ export default function PatientRegisterPage() {
             <Field as="textarea" rows={2} label="Address" value={form.address} onChange={(e)=>upd("address", e.target.value)} />
 
             {/* Clinical */}
-            <SectionHead icon={HeartPulse} title="Clinical (optional)" subtitle="These help your providers give better care." />
+            <SectionHead icon={HeartPulse} title="Clinical" subtitle="These help your providers give better care." />
             <div className="grid md:grid-cols-3 gap-4">
               <Select label="Gender" value={form.gender} onChange={(e)=>upd("gender", e.target.value)} options={GENDER_CHOICES} />
               <Select label="Blood Group" value={form.blood_group} onChange={(e)=>upd("blood_group", e.target.value)} options={[{value:"",label:"--"}, ...BLOOD_GROUPS]} icon={Droplets} />
@@ -170,7 +170,7 @@ export default function PatientRegisterPage() {
             </div>
 
             {/* Insurance */}
-            <SectionHead icon={ShieldCheck} title="Insurance" subtitle="Self-pay or insured with an HMO." />
+            <SectionHead icon={ShieldCheck} title="Insurance" subtitle="Self-pay or insured: Please contact your facility" />
             <div className="grid md:grid-cols-3 gap-4">
               <Select label="Insurance Status" value={form.insurance_status} onChange={(e)=>upd("insurance_status", e.target.value)} options={INSURANCE_STATUSES} icon={ShieldCheck} />
               {insured ? (

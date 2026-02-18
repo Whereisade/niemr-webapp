@@ -221,8 +221,7 @@ function FacilityLabOrdersPageInner() {
 
   const meRole = (me?.role || "").toUpperCase();
   const isSuperAdmin = meRole === "SUPER_ADMIN";
-  const canCollect =
-    meRole === "LAB" || meRole === "ADMIN" || meRole === "SUPER_ADMIN";
+  const isLabRole = meRole === "LAB";
   const canCancel =
     meRole === "DOCTOR" ||
     meRole === "NURSE" ||
@@ -575,15 +574,17 @@ function FacilityLabOrdersPageInner() {
                       <Td>
                         <div className="flex flex-wrap gap-2">
                           {/* Always allow details + attachments */}
-                          <Link
-                            href={`/facility/labs/${order.id}`}
-                            className="text-xs font-medium text-blue-600 hover:underline"
-                          >
-                            View
-                          </Link>
+                          {isLabRole && (
+                            <Link
+                              href={`/facility/labs/${order.id}`}
+                              className="text-xs font-medium text-blue-600 hover:underline"
+                            >
+                              View
+                            </Link>
+                          )}
 
                           {/* 🔹 Lab workflow actions */}
-                          {statusCode === "PENDING" && canCollect && (
+                          {statusCode === "PENDING" && isLabRole && (
                             <button
                               type="button"
                               onClick={async () => {
@@ -638,7 +639,7 @@ function FacilityLabOrdersPageInner() {
                             </button>
                           )}
 
-                          {statusCode === "IN_PROGRESS" && canCollect && (
+                          {statusCode === "IN_PROGRESS" && isLabRole && (
                             <Link
                               href={`/facility/labs/${order.id}`}
                               className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"

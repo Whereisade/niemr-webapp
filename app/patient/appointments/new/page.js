@@ -13,6 +13,7 @@ import {
   Mail,
   ArrowLeft,
   Info,
+  
   FlaskConical,
   CheckCircle2,
   Users,
@@ -21,9 +22,12 @@ import {
 const PROVIDER_TYPES = [
   { value: "DOCTOR", label: "Doctor", icon: Stethoscope },
   { value: "DENTIST", label: "Dentist", icon: Stethoscope },
+  { value: "OPTOMETRIST", label: "Optometrist", icon: Stethoscope },
+  { value: "PHYSIOTHERAPIST", label: "Physiotherapist", icon: Users },
   { value: "NURSE", label: "Nurse", icon: Users },
   { value: "LAB_SCIENTIST", label: "Lab Scientist", icon: FlaskConical },
   { value: "PHARMACIST", label: "Pharmacist", icon: Building2 },
+  { value: "OTHER", label: "Other", icon: Info },
 ];
 
 // Dynamic appointment types based on provider/facility type

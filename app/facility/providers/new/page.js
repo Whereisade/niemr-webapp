@@ -605,7 +605,7 @@ export default function CreateFacilityProviderPage() {
                 </div>
               </div>
 
-              <div>
+              {/* <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">
                   Consultation Fee (₦)
                 </label>
@@ -622,7 +622,7 @@ export default function CreateFacilityProviderPage() {
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-12 pr-4 text-slate-900 placeholder:text-slate-400 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                   />
                 </div>
-              </div>
+              </div> */}
 
               {/* Specialties */}
               <div className="sm:col-span-2">

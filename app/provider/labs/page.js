@@ -123,6 +123,33 @@ function IndependentLabOrdersPageInner() {
   const viewingPatientHistory = Boolean(patient);
   const canAccessPage = isLabRole || isDoctorRole || (isNurseRole && viewingPatientHistory);
 
+  // Role-aware "Facility" column (independent providers):
+  // - Doctor/Nurse view: show outsourced lab
+  // - Lab view: show ordering clinician
+  const facilityColumnLabel = isLabRole ? "Ordered By" : "Outsourced Lab";
+  const getFacilityDisplay = (order) => {
+    if (!order) return "—";
+
+    // Lab worklist: show who ordered it (doctor/nurse)
+    if (isLabRole) {
+      return (
+        order.ordered_by_name ||
+        order?.ordered_by?.name ||
+        order?.ordered_by?.full_name ||
+        (order?.ordered_by ? `User #${order.ordered_by}` : "—")
+      );
+    }
+
+    // Doctor/Nurse: show where it's outsourced to
+    return (
+      order.outsourced_to_name ||
+      order.external_lab_name ||
+      order.facility_name ||
+      order?.facility?.name ||
+      (order?.facility ? `Facility #${order.facility}` : "—")
+    );
+  };
+
   // Load orders
   async function loadOrders() {
     setLoading(true);
@@ -432,11 +459,12 @@ async function handleCancel(orderId) {
                           </div>
                         </div>
                         <div className="mt-2 flex items-center gap-1 text-xs text-slate-600">
-                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                          {order.facility_name ||
-                            order.facility?.name ||
-                            `Facility #${order.facility}` ||
-                            "â€”"}
+                          {isLabRole ? (
+                            <UserRound className="h-3.5 w-3.5 text-slate-400" />
+                          ) : (
+                            <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          )}
+                          {getFacilityDisplay(order) || "â€”"}
                         </div>
                       </div>
 
@@ -482,12 +510,14 @@ async function handleCancel(orderId) {
                         {downloadingId === order.id ? "Generating…" : "PDF"}
                       </button>
 
-                      <Link
-                        href={`/provider/labs/${order.id}`}
-                        className="text-xs font-medium text-blue-600 hover:underline"
-                      >
-                        View
-                      </Link>
+                      {isLabRole && (
+                        <Link
+                          href={`/provider/labs/${order.id}`}
+                          className="text-xs font-medium text-blue-600 hover:underline"
+                        >
+                          View
+                        </Link>
+                      )}
 
                       {(statusNorm === "PENDING" || statusNorm === "IN_PROGRESS") && (
                         <button
@@ -507,7 +537,7 @@ async function handleCancel(orderId) {
                         </button>
                       )}
 
-                      {statusNorm === "PENDING" && (
+                      {statusNorm === "PENDING" && isLabRole && (
                         <button
                           type="button"
                           onClick={() => handleCollect(order.id)}
@@ -522,7 +552,7 @@ async function handleCancel(orderId) {
                         </button>
                       )}
 
-                      {statusNorm === "IN_PROGRESS" && (
+                      {isLabRole && statusNorm === "IN_PROGRESS" && (
                         <Link
                           href={`/provider/labs/${order.id}`}
                           className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
@@ -595,7 +625,7 @@ async function handleCancel(orderId) {
             <thead className="bg-slate-50">
               <tr>
                 <Th>Patient</Th>
-                <Th>Facility</Th>
+                <Th>{facilityColumnLabel}</Th>
                 <Th>Tests</Th>
                 <Th>Status</Th>
                 <Th>Ordered</Th>
@@ -641,11 +671,12 @@ async function handleCancel(orderId) {
 
                       <Td>
                         <div className="flex items-center gap-1 text-slate-700">
-                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                          {order.facility_name ||
-                            order.facility?.name ||
-                            `Facility #${order.facility}` ||
-                            "—"}
+                          {isLabRole ? (
+                            <UserRound className="h-3.5 w-3.5 text-slate-400" />
+                          ) : (
+                            <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          )}
+                          {getFacilityDisplay(order) || "—"}
                         </div>
                       </Td>
 
@@ -694,14 +725,16 @@ async function handleCancel(orderId) {
 
                       <Td>
                         <div className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/provider/labs/${order.id}`}
-                            className="text-xs font-medium text-blue-600 hover:underline"
-                          >
-                            View
-                          </Link>
+                          {isLabRole && (
+                            <Link
+                              href={`/provider/labs/${order.id}`}
+                              className="text-xs font-medium text-blue-600 hover:underline"
+                            >
+                              View
+                            </Link>
+                          )}
 
-                          {statusNorm === "PENDING" && (
+                          {statusNorm === "PENDING" && isLabRole && (
                             <button
                               type="button"
                               onClick={() => handleCollect(order.id)}
@@ -716,7 +749,7 @@ async function handleCancel(orderId) {
                             </button>
                           )}
 
-                          {statusNorm === "IN_PROGRESS" && (
+                          {isLabRole && statusNorm === "IN_PROGRESS" && (
                             <Link
                               href={`/provider/labs/${order.id}`}
                               className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
