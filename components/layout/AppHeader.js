@@ -26,6 +26,7 @@ import {
   FileText,
   
 } from "lucide-react";
+import Image from "next/image";
 
 import LogoutButton from "@/components/LogoutButton";
 
@@ -357,10 +358,13 @@ export default function AppHeader() {
       <div className="container h-16 flex items-center justify-between">
         {/* Brand */}
         <Link href="/" className="group inline-flex items-center gap-3">
-          <span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
-            <Activity className="h-5 w-5" />
-            <Sparkles className="absolute -right-1 -top-1 h-3 w-3 text-emerald-400" />
-          </span>
+          <Image
+            src="/logo.png"
+            alt="NIEMR Logo"
+            width={40}
+            height={40}
+            className="rounded-xl"
+          />
           <span className="font-semibold text-xl tracking-tight group-hover:text-blue-700 transition-colors">
             NIEMR
           </span>
