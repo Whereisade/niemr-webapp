@@ -98,6 +98,59 @@ function buildNavForUser(user) {
   if (hasFacility && STAFF_ROLES.includes(user.role)) {
     const base = [{ href: "/facility", label: "Home", icon: LayoutDashboard }];
 
+    // Facility-type based navigation overrides (Lab/Pharmacy facilities)
+    // This is different from the user's *role* (e.g. SUPER_ADMIN) — it represents
+    // the registered facility category. Lab/Pharmacy facilities should not see Encounters.
+    const facilityType = String(user?.facility?.facility_type || "").toUpperCase();
+    const isLabFacility = facilityType === "LABORATORY";
+    const isPharmacyFacility = facilityType === "PHARMACY";
+    const isOwnerRole = ["SUPER_ADMIN", "ADMIN"].includes(user.role);
+
+    if (isLabFacility) {
+      return [
+        ...base,
+        { href: "/facility/labs", label: "Labs", icon: FlaskConical },
+        { href: "/facility/labs/catalog", label: "Lab catalog", icon: ClipboardList },
+        { href: "/facility/billing", label: "Billing", icon: CreditCard },
+        { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/hmos", label: "HMOs", icon: Shield },
+        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+        ...(isOwnerRole
+          ? [
+              {
+                href: "/facility/providers",
+                label: "Staff",
+                icon: Users,
+                accent: true,
+              },
+            ]
+          : []),
+      ];
+    }
+
+    if (isPharmacyFacility) {
+      return [
+        ...base,
+        { href: "/facility/pharmacy", label: "Pharmacy", icon: Pill },
+        { href: "/facility/pharmacy/catalog", label: "Catalog", icon: ClipboardList },
+        { href: "/facility/pharmacy/stock", label: "Stock", icon: Boxes },
+        { href: "/facility/billing", label: "Billing", icon: CreditCard },
+        { href: "/facility/patients", label: "Patients", icon: Users },
+        { href: "/facility/hmos", label: "HMOs", icon: Shield },
+        { href: "/facility/notifications", label: "Notifications", icon: Bell },
+        ...(isOwnerRole
+          ? [
+              {
+                href: "/facility/providers",
+                label: "Staff",
+                icon: Users,
+                accent: true,
+              },
+            ]
+          : []),
+      ];
+    }
+
     if (user.role === "DOCTOR") {
       return [
         ...base,

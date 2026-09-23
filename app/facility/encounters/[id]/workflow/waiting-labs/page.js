@@ -44,6 +44,8 @@ export default function FacilityEncounterWaitingLabsPage() {
   const router = useRouter();
   const encounterId = params?.id;
 
+  const [me, setMe] = useState(null);
+
   const [encounter, setEncounter] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +54,27 @@ export default function FacilityEncounterWaitingLabsPage() {
 
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusUpdateError, setStatusUpdateError] = useState("");
+
+  // 🔒 Facility-type guard: Lab/Pharmacy facilities do not have Encounters
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiFetch("/accounts/me/", { method: "GET" });
+        if (cancelled) return;
+        setMe(data || null);
+        const ft = String(data?.facility?.facility_type || "").toUpperCase();
+        if (ft === "LABORATORY" || ft === "PHARMACY") {
+          router.replace("/facility");
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function loadAll(isRefresh = false) {
     if (!encounterId) return;

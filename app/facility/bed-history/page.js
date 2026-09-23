@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
 export default function BedHistoryPage() {
+  const router = useRouter();
   const [mode, setMode] = useState("PATIENT"); // PATIENT | WARD
 
   const [patients, setPatients] = useState([]);
@@ -17,10 +19,31 @@ export default function BedHistoryPage() {
   const [records, setRecords] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState(null);
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
-    loadPatients();
-    loadWards();
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await apiFetch("/accounts/me/");
+        const facilityType = String(me?.facility?.facility_type || "").toUpperCase();
+        if (facilityType === "LABORATORY" || facilityType === "PHARMACY") {
+          if (cancelled) return;
+          setBlocked(true);
+          router.replace("/facility");
+          return;
+        }
+        loadPatients();
+        loadWards();
+      } catch (e) {
+        // If we can't resolve facility type, proceed normally
+        loadPatients();
+        loadWards();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -175,6 +198,16 @@ export default function BedHistoryPage() {
   const headerMetricCValue = (mode === "PATIENT" ? selectedPatient : selectedWard) ? records.length : "—";
 
   const hasSelection = Boolean(mode === "PATIENT" ? selectedPatient : selectedWard);
+
+  if (blocked) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-700 shadow-sm">
+          Ward history is not available for this facility type.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50/80 p-4 md:p-6 lg:p-8">

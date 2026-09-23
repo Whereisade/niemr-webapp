@@ -275,6 +275,12 @@ export default async function FacilityDashboard() {
   const isClinical = workspace.type === FACILITY_WORKSPACE_TYPES.CLINICAL;
   const isSuperAdmin = role === "SUPER_ADMIN";
 
+  // Facility-type flags (different from user role)
+  const facilityType = String(me?.facility?.facility_type || "").toUpperCase();
+  const isLabFacility = facilityType === "LABORATORY";
+  const isPharmacyFacility = facilityType === "PHARMACY";
+  const isEncounterDisabledFacility = isLabFacility || isPharmacyFacility;
+
   // Enhanced role-based data fetching
   let labCounts = { pending: 0, inProgress: 0, completedToday: 0, cancelled: 0 };
   let rxCounts = { prescribed: 0, partial: 0, dispensed: 0, cancelled: 0 };
@@ -294,7 +300,7 @@ export default async function FacilityDashboard() {
   let openEncounters = 0;
   let completedToday = 0;
 
-  if (role === "LAB") {
+  if (role === "LAB" || isLabFacility) {
     const [pending, inProgress, completedToday, cancelled] = await Promise.all([
       safeFetchCount("/labs/orders/?status=PENDING&limit=1", 0),
       safeFetchCount("/labs/orders/?status=IN_PROGRESS&limit=1", 0),
@@ -304,7 +310,7 @@ export default async function FacilityDashboard() {
     labCounts = { pending, inProgress, completedToday, cancelled };
   }
 
-  if (role === "PHARMACY") {
+  if (role === "PHARMACY" || isPharmacyFacility) {
     const [prescribed, partial, dispensed, cancelled, stockData] = await Promise.all([
       safeFetchCount("/pharmacy/prescriptions/?status=PRESCRIBED&limit=1", 0),
       safeFetchCount("/pharmacy/prescriptions/?status=PARTIALLY_DISPENSED&limit=1", 0),
@@ -378,7 +384,11 @@ export default async function FacilityDashboard() {
 
   // Role-focused schedule
   const scheduleApptTypes =
-    role === "LAB" ? ["LAB"] : role === "PHARMACY" ? ["PHARMACY"] : null;
+    role === "LAB" || isLabFacility
+      ? ["LAB"]
+      : role === "PHARMACY" || isPharmacyFacility
+        ? ["PHARMACY"]
+        : null;
 
   function filterByApptType(list, allowedTypes) {
     if (!Array.isArray(list)) return [];
@@ -403,20 +413,24 @@ export default async function FacilityDashboard() {
   }, {});
 
   const scheduleTitle = isOwner
-    ? "Upcoming Schedule"
-    : role === "LAB"
+    ? (isLabFacility ? "Lab Queue" : isPharmacyFacility ? "Pharmacy Queue" : "Upcoming Schedule")
+    : role === "LAB" || isLabFacility
       ? "Lab Queue"
-      : role === "PHARMACY"
+      : role === "PHARMACY" || isPharmacyFacility
         ? "Pharmacy Queue"
         : role === "DOCTOR"
           ? "My Schedule"
           : "Upcoming Schedule";
 
   const scheduleSubtitle = isOwner
-    ? "Live · next 3 upcoming appointments"
-    : role === "LAB"
+    ? (isLabFacility
+        ? "Live · recent lab orders"
+        : isPharmacyFacility
+          ? "Live · recent prescriptions"
+          : "Live · next 3 upcoming appointments")
+    : role === "LAB" || isLabFacility
       ? "Live · next 3 lab visits"
-      : role === "PHARMACY"
+      : role === "PHARMACY" || isPharmacyFacility
         ? "Live · next 3 pickups"
         : "Live · next 3 upcoming appointments";
 
@@ -441,8 +455,9 @@ export default async function FacilityDashboard() {
   // Appointment statuses do not include IN_PROGRESS, so we pull encounter statuses directly.
   let facilityOpenEncountersCount = 0;
   if (
-    role === "NURSE" ||
-    (!isOwner && !isFrontdesk && !["LAB", "PHARMACY", "DOCTOR"].includes(role))
+    !isEncounterDisabledFacility &&
+    (role === "NURSE" ||
+      (!isOwner && !isFrontdesk && !["LAB", "PHARMACY", "DOCTOR"].includes(role)))
   ) {
     const [openE, inProgressE, waitingLabsE] = await Promise.all([
       safeFetchCount("/encounters/?status=OPEN", 0),
@@ -455,7 +470,73 @@ export default async function FacilityDashboard() {
 
   // ===== ENHANCED DYNAMIC STATS (Role-based, 3 stats per role) =====
   let stats;
-  if (isOwner) {
+  if (isLabFacility) {
+    stats = [
+      {
+        label: "Pending Lab Orders",
+        value: labCounts.pending,
+        icon: FlaskConical,
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
+        href: "/facility/labs?status=PENDING",
+        cta: "Review queue",
+      },
+      {
+        label: "In Progress",
+        value: labCounts.inProgress,
+        icon: Activity,
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
+        href: "/facility/labs?status=IN_PROGRESS",
+        cta: "Continue work",
+      },
+      {
+        label: "Completed Today",
+        value: labCounts.completedToday,
+        icon: CheckCircle2,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
+        href: "/facility/labs?status=COMPLETED",
+        cta: "View results",
+      },
+    ];
+  } else if (isPharmacyFacility) {
+    stats = [
+      {
+        label: "Prescribed Queue",
+        value: rxCounts.prescribed,
+        icon: Pill,
+        accent: "from-blue-500 to-indigo-600",
+        bgAccent: "bg-blue-50",
+        iconColor: "text-blue-600",
+        href: "/facility/pharmacy?status=PRESCRIBED",
+        cta: "Dispense",
+      },
+      {
+        label: "Partially Dispensed",
+        value: rxCounts.partial,
+        icon: Package,
+        accent: "from-emerald-500 to-teal-600",
+        bgAccent: "bg-emerald-50",
+        iconColor: "text-emerald-600",
+        href: "/facility/pharmacy?status=PARTIALLY_DISPENSED",
+        cta: "Continue",
+      },
+      {
+        label: "Dispensed",
+        value: rxCounts.dispensed,
+        icon: CheckCircle2,
+        accent: "from-purple-500 to-pink-600",
+        bgAccent: "bg-purple-50",
+        iconColor: "text-purple-600",
+        href: "/facility/pharmacy?status=DISPENSED",
+        cta: "View history",
+      },
+    ];
+  } else if (isOwner) {
     // ✅ FIXED: Use backend endpoint for accurate provider stats
     const activeProviders = providerStats?.active_providers || 0;
     const totalProviders = providerStats?.total_providers || 0;
@@ -743,7 +824,70 @@ export default async function FacilityDashboard() {
   // ===== ENHANCED QUICK METRICS (Role-based, 4 metrics per role) =====
   let quickMetrics = [];
   
-  if (isOwner) {
+  if (isLabFacility) {
+    quickMetrics = [
+      {
+        icon: FlaskConical,
+        label: "Pending",
+        value: labCounts.pending,
+        sublabel: "Awaiting collection",
+        color: "blue",
+      },
+      {
+        icon: Activity,
+        label: "In Progress",
+        value: labCounts.inProgress,
+        sublabel: "Being processed",
+        color: "emerald",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Completed",
+        value: labCounts.completedToday,
+        sublabel: "Ordered today",
+        color: "violet",
+      },
+      {
+        icon: XCircle,
+        label: "Cancelled",
+        value: labCounts.cancelled,
+        sublabel: "Total cancelled",
+        color: "amber",
+      },
+    ];
+  } else if (isPharmacyFacility) {
+    const toDispense = rxCounts.prescribed + rxCounts.partial;
+    quickMetrics = [
+      {
+        icon: Pill,
+        label: "To Dispense",
+        value: toDispense,
+        sublabel: `${rxCounts.prescribed} new + ${rxCounts.partial} partial`,
+        color: "blue",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Dispensed",
+        value: rxCounts.dispensed,
+        sublabel: "Completed today",
+        color: "emerald",
+      },
+      {
+        icon: AlertCircle,
+        label: "Low Stock",
+        value: stockCounts.lowStock,
+        sublabel: `${stockCounts.outOfStock} out of stock`,
+        color: "amber",
+      },
+      {
+        icon: Package,
+        label: "Catalog Items",
+        value: stockCounts.totalItems,
+        sublabel: "Tracked in inventory",
+        color: "violet",
+      },
+    ];
+  } else if (isOwner) {
     const completedCount = statusCounts.COMPLETED || 0;
     const checkedInCount = statusCounts.CHECKED_IN || 0;
     const cancelledCount = statusCounts.CANCELLED || 0;
@@ -996,6 +1140,23 @@ export default async function FacilityDashboard() {
     ];
   }
 
+  // Facility-type dashboard queues (Lab/Pharmacy facilities don't use Encounters)
+  let labQueueList = [];
+  let pharmacyQueueList = [];
+  if (isLabFacility) {
+    const [pendingOrders, inProgressOrders] = await Promise.all([
+      safeFetchJSON("/labs/orders/?status=PENDING&limit=5", []),
+      safeFetchJSON("/labs/orders/?status=IN_PROGRESS&limit=5", []),
+    ]);
+    labQueueList = [...normalizeList(pendingOrders), ...normalizeList(inProgressOrders)].slice(0, 8);
+  } else if (isPharmacyFacility) {
+    const prescribed = await safeFetchJSON(
+      "/pharmacy/prescriptions/?status=PRESCRIBED&limit=8",
+      []
+    );
+    pharmacyQueueList = normalizeList(prescribed).slice(0, 8);
+  }
+
   return (
     <main className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
       {/* Animated background elements */}
@@ -1143,9 +1304,9 @@ export default async function FacilityDashboard() {
               {/* Role-specific actions */}
               {(() => {
                 const primaryAction =
-                  role === "LAB"
+                  role === "LAB" || isLabFacility
                     ? { href: "/facility/labs/new", label: "New Lab Order" }
-                    : role === "PHARMACY"
+                    : role === "PHARMACY" || isPharmacyFacility
                       ? { href: "/facility/pharmacy/prescribe", label: "New Prescription" }
                       : {
                           href: "/facility/appointments/new",
@@ -1168,7 +1329,7 @@ export default async function FacilityDashboard() {
                   label="Manage Patients"
                 />
               )}
-              {role !== "LAB" && role !== "PHARMACY" && (
+              {!isEncounterDisabledFacility && role !== "LAB" && role !== "PHARMACY" && (
                 <QuickLink
                   href="/facility/wards"
                   icon={Bed}
@@ -1176,7 +1337,7 @@ export default async function FacilityDashboard() {
                 />
               )}
 
-              {role === "DOCTOR" && (
+              {role === "DOCTOR" && !isEncounterDisabledFacility && (
                 <QuickLink
                   href="/facility/encounters?mine=1"
                   icon={FileText}
@@ -1192,19 +1353,20 @@ export default async function FacilityDashboard() {
                 />
               )}
 
-              {(isOwner || role === "LAB") && (
-                <>
+              {(role === "LAB" || isLabFacility || (isOwner && !isPharmacyFacility)) && (
                 <QuickLink
                   href="/facility/labs?status=PENDING"
                   icon={FlaskConical}
                   label="Lab Orders"
                 />
+              )}
+
+              {(role === "PHARMACY" || isPharmacyFacility || (isOwner && !isLabFacility)) && (
                 <QuickLink
                   href="/facility/pharmacy"
                   icon={Pill}
                   label="Pharmacy"
                 />
-                </>
               )}
 
               {role === "PHARMACY" && (
@@ -1222,11 +1384,13 @@ export default async function FacilityDashboard() {
                     icon={Stethoscope}
                     label="Manage Providers"
                   />
-                  <QuickLink
-                    href="/facility/bed-history"
-                    icon={Bed}
-                    label="Ward history"
-                  />
+                  {!isEncounterDisabledFacility && (
+                    <QuickLink
+                      href="/facility/bed-history"
+                      icon={Bed}
+                      label="Ward history"
+                    />
+                  )}
                   <QuickLink
                     href="/facility/audit"
                     icon={ClipboardClock}
@@ -1290,32 +1454,129 @@ export default async function FacilityDashboard() {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Main Content: Appointments */}
           <section className="lg:col-span-2 space-y-6">
-            {/* Appointments Table */}
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <CardHead
-                title={scheduleTitle}
-                subtitle={scheduleSubtitle}
-                href="/facility/appointments"
-                icon={CalendarRange}
-                actionLabel="View all"
-              />
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b border-slate-200 bg-slate-50">
-                    <tr>
-                      <Th>Patient</Th>
-                      <Th>Provider</Th>
-                      <Th>Reason</Th>
-                      <Th>Time</Th>
-                      <Th>Status</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    <LiveUpcomingAppointmentsRows initialAppointments={visibleUpcomingAppts} onlyApptTypes={scheduleApptTypes} />
-                  </tbody>
-                </table>
+            {/* Primary Worklist (Facility-type aware) */}
+            {!isLabFacility && !isPharmacyFacility ? (
+              <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                <CardHead
+                  title={scheduleTitle}
+                  subtitle={scheduleSubtitle}
+                  href="/facility/appointments"
+                  icon={CalendarRange}
+                  actionLabel="View all"
+                />
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b border-slate-200 bg-slate-50">
+                      <tr>
+                        <Th>Patient</Th>
+                        <Th>Provider</Th>
+                        <Th>Reason</Th>
+                        <Th>Time</Th>
+                        <Th>Status</Th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      <LiveUpcomingAppointmentsRows
+                        initialAppointments={visibleUpcomingAppts}
+                        onlyApptTypes={scheduleApptTypes}
+                      />
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            ) : isLabFacility ? (
+              <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                <CardHead
+                  title="Lab Worklist"
+                  subtitle="Pending & in-progress lab orders"
+                  href="/facility/labs"
+                  icon={FlaskConical}
+                  actionLabel="View all"
+                />
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b border-slate-200 bg-slate-50">
+                      <tr>
+                        <Th>Patient</Th>
+                        <Th>Priority</Th>
+                        <Th>Status</Th>
+                        <Th>Ordered</Th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {labQueueList.length ? (
+                        labQueueList.map((o) => (
+                          <tr key={o.id} className="hover:bg-slate-50">
+                            <td className="p-4 text-sm font-medium text-slate-900">
+                              <Link href={`/facility/labs/${o.id}`} className="hover:underline">
+                                {o.patient_name || "Patient"}
+                              </Link>
+                            </td>
+                            <td className="p-4 text-sm text-slate-700">{o.priority || "-"}</td>
+                            <td className="p-4 text-sm text-slate-700">{o.status || "-"}</td>
+                            <td className="p-4 text-sm text-slate-700">
+                              {o.ordered_at ? new Date(o.ordered_at).toLocaleString() : "-"}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td className="p-8 text-center text-sm text-slate-500" colSpan={4}>
+                            No lab orders in queue.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                <CardHead
+                  title="Pharmacy Worklist"
+                  subtitle="Prescriptions awaiting dispense"
+                  href="/facility/pharmacy"
+                  icon={Pill}
+                  actionLabel="View all"
+                />
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b border-slate-200 bg-slate-50">
+                      <tr>
+                        <Th>Patient</Th>
+                        <Th>Items</Th>
+                        <Th>Status</Th>
+                        <Th>Created</Th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {pharmacyQueueList.length ? (
+                        pharmacyQueueList.map((rx) => (
+                          <tr key={rx.id} className="hover:bg-slate-50">
+                            <td className="p-4 text-sm font-medium text-slate-900">
+                              {rx.patient_name || "Patient"}
+                            </td>
+                            <td className="p-4 text-sm text-slate-700">
+                              {Array.isArray(rx.items) ? rx.items.length : "-"}
+                            </td>
+                            <td className="p-4 text-sm text-slate-700">{rx.status || "-"}</td>
+                            <td className="p-4 text-sm text-slate-700">
+                              {rx.created_at ? new Date(rx.created_at).toLocaleString() : "-"}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td className="p-8 text-center text-sm text-slate-500" colSpan={4}>
+                            No prescriptions in queue.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Recent Notifications */}
             <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">

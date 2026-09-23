@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
 function numberOrNull(value) {
@@ -9,10 +10,12 @@ function numberOrNull(value) {
 }
 
 export default function FacilityWardsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [facility, setFacility] = useState(null);
   const [wardSummary, setWardSummary] = useState([]);
   const [error, setError] = useState(null);
+  const [blocked, setBlocked] = useState(false);
   const [userRole, setUserRole] = useState(null); // ✅ Track user role
 
   // Patients (for bed assignments)
@@ -48,6 +51,16 @@ export default function FacilityWardsPage() {
   // Flash message
   const [message, setMessage] = useState(null);
 
+  if (blocked) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-700 shadow-sm">
+          Wards and ward history are not available for this facility type.
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,6 +77,15 @@ export default function FacilityWardsPage() {
       const role = me?.role; // ✅ Extract user role
 
       setUserRole(role); // ✅ Store user role
+
+      const facilityType = String(me?.facility?.facility_type || "").toUpperCase();
+      if (facilityType === "LABORATORY" || facilityType === "PHARMACY") {
+        setBlocked(true);
+        setLoading(false);
+        setLoadingPatients(false);
+        router.replace("/facility");
+        return;
+      }
 
       if (!facilityId) {
         throw new Error(

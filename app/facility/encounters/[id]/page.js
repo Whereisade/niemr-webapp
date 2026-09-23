@@ -425,6 +425,14 @@ export default function FacilityEncounterDetailPage() {
     };
   }, []);
 
+  // 🔒 Facility-type guard: Lab/Pharmacy facilities do not have Encounters
+  useEffect(() => {
+    const ft = String(me?.facility?.facility_type || "").toUpperCase();
+    if (ft === "LABORATORY" || ft === "PHARMACY") {
+      router.replace("/facility");
+    }
+  }, [me, router]);
+
   useEffect(() => {
     if (!id) return;
 

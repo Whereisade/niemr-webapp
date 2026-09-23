@@ -230,6 +230,14 @@ export default function FacilityEncounterLabsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
+  // 🔒 Facility-type guard: Lab/Pharmacy facilities do not have Encounters
+  useEffect(() => {
+    const ft = String(me?.facility?.facility_type || "").toUpperCase();
+    if (ft === "LABORATORY" || ft === "PHARMACY") {
+      router.replace("/facility");
+    }
+  }, [me, router]);
+
   // Debounced search
   useEffect(() => {
     const t = setTimeout(() => {

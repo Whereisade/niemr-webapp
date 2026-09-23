@@ -48,6 +48,7 @@ const LICENSE_COUNCILS = [
 export default function CreateFacilityProviderPage() {
   const router = useRouter();
 
+  const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -77,7 +78,50 @@ export default function CreateFacilityProviderPage() {
   // Available specialties from API
   const [availableSpecialties, setAvailableSpecialties] = useState([]);
 
+  const facilityType = String(me?.facility?.facility_type || "").toUpperCase();
+  const isLabFacility = facilityType === "LABORATORY";
+  const isPharmacyFacility = facilityType === "PHARMACY";
+
+  const providerTypeOptions = isLabFacility
+    ? PROVIDER_TYPES.filter((pt) => pt.value === "LAB_SCIENTIST")
+    : isPharmacyFacility
+      ? PROVIDER_TYPES.filter((pt) => pt.value === "PHARMACIST")
+      : PROVIDER_TYPES;
+
+    useEffect(() => {
+    let cancelled = false;
+    async function loadMe() {
+      try {
+        const res = await apiFetch("/accounts/me/", { method: "GET" });
+        if (!cancelled) setMe(res || null);
+      } catch (e) {
+        if (!cancelled) setMe(null);
+      }
+    }
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Auto-lock provider type for Lab/Pharmacy facilities
   useEffect(() => {
+    if (isLabFacility) {
+      setFormData((prev) => ({
+        ...prev,
+        provider_type: "LAB_SCIENTIST",
+        license_council: "MLSCN",
+      }));
+    } else if (isPharmacyFacility) {
+      setFormData((prev) => ({
+        ...prev,
+        provider_type: "PHARMACIST",
+        license_council: "PCN",
+      }));
+    }
+  }, [isLabFacility, isPharmacyFacility]);
+
+useEffect(() => {
     async function loadSpecialties() {
       try {
         const res = await apiFetch("/facilities/specialties/");
@@ -517,9 +561,10 @@ export default function CreateFacilityProviderPage() {
                   name="provider_type"
                   value={formData.provider_type}
                   onChange={handleChange}
+                  disabled={isLabFacility || isPharmacyFacility}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                 >
-                  {PROVIDER_TYPES.map((pt) => (
+                  {providerTypeOptions.map((pt) => (
                     <option key={pt.value} value={pt.value}>
                       {pt.icon} {pt.label}
                     </option>

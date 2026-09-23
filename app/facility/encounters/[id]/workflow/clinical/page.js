@@ -500,6 +500,14 @@ export default function FacilityEncounterClinicalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
+  // 🔒 Facility-type guard: Lab/Pharmacy facilities do not have Encounters
+  useEffect(() => {
+    const ft = String(me?.facility?.facility_type || "").toUpperCase();
+    if (ft === "LABORATORY" || ft === "PHARMACY") {
+      router.replace("/facility");
+    }
+  }, [me, router]);
+
   const role = String(me?.role || "").toUpperCase();
   const canEdit = useMemo(() => {
     return ["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(role);

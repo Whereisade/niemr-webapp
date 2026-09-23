@@ -110,6 +110,15 @@ function FacilityEncountersPageInner() {
     };
   }, []);
 
+  // 🔒 Facility-type guard: Lab/Pharmacy facilities do not have Encounters
+  useEffect(() => {
+    if (meLoading) return;
+    const ft = String(me?.facility?.facility_type || "").toUpperCase();
+    if (ft === "LABORATORY" || ft === "PHARMACY") {
+      router.replace("/facility");
+    }
+  }, [meLoading, me, router]);
+
   const { data, loading, error } = useEncounters({
     page,
     status: status || undefined,
