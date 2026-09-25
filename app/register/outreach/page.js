@@ -167,6 +167,8 @@ export default function OutreachSuperAdminRegisterPage() {
                 />
               </div>
 
+              <TermsAndConditions />
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <ShieldCheck className="h-4 w-4 text-emerald-600" />
@@ -283,3 +285,59 @@ function Field({ label, icon: Icon, as, ...props }) {
     </div>
   );
 }
+
+function TermsAndConditions() {
+  return (
+    <section className="rounded-xl border border-slate-100 bg-slate-50/50">
+      <div className="border-b border-slate-100 px-4 py-3">
+        <h2 className="font-semibold text-slate-900">Terms & Conditions</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Read Carefully
+        </p>
+      </div>
+
+      <div className="p-4">
+        <details className="rounded-lg border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800">
+            Read the Terms & Conditions
+          </summary>
+          <div className="border-t border-slate-100 px-4 py-4 text-sm leading-6 text-slate-600 space-y-4">
+            <p>
+              <strong>1. Account information.</strong> You agree to provide accurate, current, and complete information when creating your account and to keep that information updated when necessary.
+            </p>
+            <p>
+              <strong>2. Account responsibility.</strong> You are responsible for keeping your login credentials confidential and for activity performed through your account, subject to applicable law and platform security controls.
+            </p>
+            <p>
+              <strong>3. Appropriate use.</strong> You agree to use NIEMR only for lawful healthcare, administrative, patient, outreach, or other purposes supported by the platform and not to misuse, disrupt, or attempt to gain unauthorized access to the service.
+            </p>
+            <p>
+              <strong>4. Information and records.</strong> You remain responsible for the accuracy and lawful handling of information you enter into NIEMR. Do not upload information that you do not have the right or authorization to process.
+            </p>
+            <p>
+              <strong>5. Privacy and security.</strong> NIEMR may process account and service information in accordance with its privacy practices, security measures, and applicable data protection requirements.
+            </p>
+            <p>
+              <strong>6. Service availability.</strong> The platform may be updated, maintained, suspended, or changed from time to time. Reasonable efforts may be made to maintain availability, but uninterrupted service is not guaranteed.
+            </p>
+            <p>
+              <strong>7. Placeholder notice.</strong> This entire section is sample wording for development purposes only and is not intended to serve as final legal advice or the final NIEMR agreement.
+            </p>
+          </div>
+        </details>
+
+        <label className="mt-4 flex items-start gap-3 cursor-pointer text-sm text-slate-700">
+          <input
+            type="checkbox"
+            required
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600/30"
+          />
+          <span>
+            I have read and agree to the Terms & Conditions.
+          </span>
+        </label>
+      </div>
+    </section>
+  );
+}
+

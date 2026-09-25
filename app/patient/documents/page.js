@@ -331,7 +331,7 @@ export default function PatientDocumentsPage() {
                         Drop a file here or browse
                       </span>
                       <span className="text-[11px] text-slate-500">
-                        Maximum size depends on server configuration.
+                        Maximum size: 1MB
                       </span>
                     </div>
                   </div>
