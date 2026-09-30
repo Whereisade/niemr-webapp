@@ -696,9 +696,7 @@ function TermsAndConditions() {
             <p>
               <strong>6. Service availability.</strong> The platform may be updated, maintained, suspended, or changed from time to time. Reasonable efforts may be made to maintain availability, but uninterrupted service is not guaranteed.
             </p>
-            <p>
-              <strong>7. Placeholder notice.</strong> This entire section is sample wording for development purposes only and is not intended to serve as final legal advice or the final NIEMR agreement.
-            </p>
+            
           </div>
         </details>
 

@@ -6,9 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "cap:init": "cap init",
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync",
+    "cap:sync:android": "cap sync android",
+    "cap:open:android": "cap open android",
+    "cap:run:android": "cap run android"
   },
   "dependencies": {
+    "@capacitor/app": "^8.0.0",
     "@vercel/analytics": "^1.6.1",
     "lucide-react": "^0.553.0",
     "luxon": "^3.7.2",
@@ -19,6 +26,10 @@
     "swr": "^2.3.8"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
     "@tailwindcss/postcss": "^4",
     "baseline-browser-mapping": "^2.10.0",
     "eslint": "^9",

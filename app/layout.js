@@ -13,6 +13,7 @@ import SmartHomeLink from "@/components/SmartHomeLink";
 import { Analytics } from "@vercel/analytics/next"
 import LogoutButton from "@/components/LogoutButton";
 import AppHeader from "@/components/layout/AppHeader";
+import CapacitorBridge from "@/components/mobile/CapacitorBridge";
 
 export const metadata = { title: "NIEMR", description: "NIEMR Frontend" };
 
@@ -22,6 +23,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-blue-50 text-slate-800 antialiased">
+        <CapacitorBridge />
         {/* Skip link */}
         <a
           href="#main"
