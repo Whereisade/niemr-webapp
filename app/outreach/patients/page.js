@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { outreachFetch, normalizeList } from "@/lib/outreachApi";
+import { useCallback, useEffect, useState } from "react";
+import { outreachFetch } from "@/lib/outreachApi";
 import { useOutreachSession } from "@/lib/useOutreachSession";
 import OutreachEventPicker from "@/components/outreach/OutreachEventPicker";
 import { Search, UserPlus, ArrowRight, Phone, MapPin } from "lucide-react";
@@ -24,36 +24,61 @@ export default function OutreachPatientsPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
 
   const canCreate = isOutreachSuperAdmin || hasPerm(permissions, OUTREACH_PERMS.PATIENTS_CREATE);
 
-  async function load() {
+  const loadPatients = useCallback(async (pageNumber = 1, searchQuery = q) => {
     if (!selectedEventId) return;
     setBusy(true);
     setErr("");
     try {
-      const data = await outreachFetch("/outreach/patients/", { eventId: selectedEventId });
-      setRows(normalizeList(data));
+      const params = new URLSearchParams();
+      params.set("page", String(pageNumber));
+      params.set("limit", "20");
+
+      const search = String(searchQuery || "").trim();
+      if (search) params.set("q", search);
+
+      const data = await outreachFetch(`/outreach/patients/?${params.toString()}`, {
+        eventId: selectedEventId,
+      });
+      const results = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.results)
+          ? data.results
+          : [];
+
+      setRows(results);
+      setTotal(typeof data?.count === "number" ? data.count : results.length);
+      setHasNext(Boolean(data?.next));
+      setHasPrevious(Boolean(data?.previous));
+      setPage(pageNumber);
     } catch (e) {
       setErr(e?.message || "Failed to load patients.");
       setRows([]);
+      setTotal(0);
+      setHasNext(false);
+      setHasPrevious(false);
     } finally {
       setBusy(false);
     }
-  }
+  }, [selectedEventId, q]);
 
   useEffect(() => {
-    if (selectedEventId) load();
-  }, [selectedEventId]);
+    if (!selectedEventId) return;
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((p) => {
-      const hay = `${p?.patient_code || ""} ${p?.full_name || ""} ${p?.phone || ""}`.toLowerCase();
-      return hay.includes(s);
-    });
-  }, [rows, q]);
+    const timer = setTimeout(() => {
+      loadPatients(1, q);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [selectedEventId, q, loadPatients]);
+
+  const filtered = rows;
 
   if (sessionError) {
     return (
@@ -119,7 +144,7 @@ export default function OutreachPatientsPage() {
               />
             </div>
             <div className="text-sm text-slate-600">
-              {busy ? "Loading…" : `${filtered.length} patient${filtered.length === 1 ? "" : "s"}`}
+              {busy ? "Loading…" : `${total} patient${total === 1 ? "" : "s"}`}
             </div>
           </div>
         </div>
@@ -181,6 +206,36 @@ export default function OutreachPatientsPage() {
           </div>
         ) : null}
       </div>
+
+      {selectedEventId && (hasPrevious || hasNext) ? (
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm">
+          <div className="text-sm text-slate-600">
+            {busy ? "Loading…" : `${total} patient${total === 1 ? "" : "s"} found`}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={busy || !hasPrevious}
+              onClick={() => loadPatients(page - 1)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+            >
+              Previous
+            </button>
+
+            <div className="px-2 text-sm font-medium text-slate-700">Page {page}</div>
+
+            <button
+              type="button"
+              disabled={busy || !hasNext}
+              onClick={() => loadPatients(page + 1)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
